@@ -150,7 +150,7 @@ jobs:
               NEW=$(ls work/pkg/*.pkg | head -n 1)
               rm -rf /tmp/rb && mkdir -p /tmp/rb/stage /tmp/rb/out /tmp/rb/edb
               tar -xf "$NEW" -C /tmp/rb +MANIFEST
-              tar -xf "$NEW" -C /tmp/rb/stage --exclude='+*'
+              tar -xf "$NEW" -C /tmp/rb/stage --exclude '+MANIFEST' --exclude '+COMPACT_MANIFEST'
               # create-only with an isolated empty DB -> no schema skew, no extraction
               env PKG_DBDIR=/tmp/rb/edb "$OLDPKG" create -M /tmp/rb/+MANIFEST -r /tmp/rb/stage -o /tmp/rb/out
               rm -f work/pkg/*.pkg
