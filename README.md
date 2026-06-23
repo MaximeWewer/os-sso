@@ -39,11 +39,12 @@ stays available as a break-glass path.
 
 ## Install
 
-Download the latest `os-sso-*.pkg` from the [Releases](../../releases) page and
-install it on the firewall:
+Each release ships one package per FreeBSD ABI. Download the one matching your
+firewall's base from the [Releases](../../releases) page — check it with
+`pkg config ABI` (e.g. `FreeBSD:14:amd64` → the `…-FreeBSD-14.pkg`), then install:
 
 ```sh
-pkg add os-sso-*.pkg
+pkg add os-sso-devel-*-FreeBSD-14.pkg   # pick the file matching your ABI
 ```
 
 Then reload the WebGUI (or reboot). The new server types appear under

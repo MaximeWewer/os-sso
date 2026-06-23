@@ -72,9 +72,23 @@ jobs:
           echo "::notice::os-sso ${VERSION} (tag ${TAG}, release=${DO_RELEASE})"
 
   build:
-    name: Build package (FreeBSD)
+    name: Build package (${{ matrix.abi }})
     runs-on: ubuntu-latest
     needs: prepare
+    strategy:
+      fail-fast: false
+      # One leg per FreeBSD MAJOR that OPNsense targets. pkg's ABI check is on the
+      # major only (FreeBSD:14 vs FreeBSD:15), so one build per major covers every
+      # minor of that major. Pick a minor <= the OPNsense base's minor to avoid the
+      # bypassable "Newer FreeBSD version" (OSVERSION) warning. When OPNsense rebases
+      # to a new major, add a line here -- no other change needed.
+      #   OPNsense 25.7 / 26.x -> FreeBSD 14.x  |  future OPNsense -> FreeBSD 15.x
+      matrix:
+        include:
+          - freebsd: "14.3"
+            abi: "FreeBSD-14"
+          - freebsd: "15.1"
+            abi: "FreeBSD-15"
     steps:
       - name: Clone the opnsense/plugins tree
         run: git clone --depth 1 https://github.com/opnsense/plugins.git "${GITHUB_WORKSPACE}/plugins"
@@ -103,7 +117,7 @@ jobs:
         with:
           envs: "PLUGIN_NAME PLUGIN_CATEGORY"
           usesh: true
-          release: "15.1"
+          release: ${{ matrix.freebsd }}
           prepare: |
             pkg install -y git gmake
           run: |
@@ -111,10 +125,20 @@ jobs:
             cd plugins/$PLUGIN_CATEGORY/$PLUGIN_NAME
             make package
 
+      - name: Tag the .pkg filename with its ABI
+        # Both matrix legs emit the same os-sso-devel-<version>.pkg name; append the
+        # ABI so the release can carry both without a filename collision.
+        run: |
+          PKGDIR="plugins/${PLUGIN_CATEGORY}/${PLUGIN_NAME}/work/pkg"
+          for f in "${PKGDIR}"/*.pkg; do
+            mv "$f" "${PKGDIR}/$(basename "$f" .pkg)-${{ matrix.abi }}.pkg"
+          done
+          ls -la "${PKGDIR}"
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
-          name: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}
+          name: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}-${{ matrix.abi }}
           path: plugins/${{ env.PLUGIN_CATEGORY }}/${{ env.PLUGIN_NAME }}/work/pkg/*.pkg
           if-no-files-found: error
 
@@ -129,10 +153,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download the built package
+      - name: Download the built packages (all ABIs)
         uses: actions/download-artifact@v8
         with:
-          name: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}
+          pattern: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}-*
+          merge-multiple: true
           path: dist
 
       - name: Generate release notes
