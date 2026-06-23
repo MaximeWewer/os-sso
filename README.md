@@ -33,7 +33,7 @@ stays available as a break-glass path.
 
 - **OPNsense 25.7 or newer** — the login-page SSO button hook
   (`ISSOContainer` / `listSSOproviders`) landed in core in 25.7.
-- For OpenVPN login: **OpenVPN 2.5+** on the firewall (shipped) and a
+- For OpenVPN login: **OpenVPN 2.6+** on the firewall and a
   web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux, Windows 2.6+).
 - An Identity Provider you control or use (Keycloak, Authentik, Entra ID, Zitadel, …).
 
