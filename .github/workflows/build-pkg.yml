@@ -107,6 +107,7 @@ jobs:
           prepare: |
             pkg install -y git gmake
           run: |
+            git config --global --add safe.directory '*'
             cd plugins/$PLUGIN_CATEGORY/$PLUGIN_NAME
             make package
 
