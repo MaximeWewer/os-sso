@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!--
+  Re-point the existing WebGUI "Lobby > Logout" item to the os-sso unified logout
+  endpoint. The core menu merge (MenuItem::append) is an upsert keyed by item id,
+  and modules are processed alphabetically (Core before SSO), so this overrides the
+  Logout url without patching core. SSO users get Single Logout; local-password
+  users fall through to the normal core logout.
+-->
+<menu>
+    <Lobby>
+        <Logout url="/api/sso/logout"/>
+    </Lobby>
+</menu>

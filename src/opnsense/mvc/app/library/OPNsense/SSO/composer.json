@@ -1,0 +1,13 @@
+{
+  "name": "opnsense/os-sso",
+  "description": "Runtime libraries vendored into the os-sso plugin.",
+  "require": {
+    "php": ">=8.3",
+    "firebase/php-jwt": "^7.1",
+    "onelogin/php-saml": "^4.3"
+  },
+  "config": {
+    "vendor-dir": "vendor",
+    "optimize-autoloader": true
+  }
+}

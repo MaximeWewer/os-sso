@@ -1,0 +1,20 @@
+# Routes each IdP host to its container (joined via the shared os-sso-idp network).
+# reverse_proxy uses the container_name as DNS. If an IdP stack is down, only that
+# host returns 502 -- the other keeps working.
+{
+	auto_https off
+	admin off
+}
+
+authentik.test:9443 {
+	tls /certs/authentik.test.crt /certs/authentik.test.key
+	reverse_proxy authentik-server:9000
+}
+
+keycloak.test:9443 {
+	tls /certs/keycloak.test.crt /certs/keycloak.test.key
+	reverse_proxy keycloak:8080 {
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Port 9443
+	}
+}

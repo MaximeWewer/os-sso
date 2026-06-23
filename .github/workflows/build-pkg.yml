@@ -1,0 +1,188 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_version:
+        description: "Force a specific version (optional, format: YYYY.M.X)"
+        required: false
+        type: string
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  PLUGIN_NAME: sso
+  PLUGIN_CATEGORY: security
+
+jobs:
+  prepare:
+    name: Compute version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      do_release: ${{ steps.v.outputs.do_release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Version pattern: YEAR.MONTH_INDEX.RELEASE_INDEX (e.g. 2026.6.3).
+      #   - tag push  v*.*.*  -> version taken from the tag, publish a release
+      #   - workflow_dispatch -> force_version, or next auto index for this month
+      #   - push / PR         -> next auto index, build artifact only (no release)
+      - id: v
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          FORCE_VERSION: ${{ github.event.inputs.force_version }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT_NAME}" = "push" ] && [ "${REF}" != "${REF#refs/tags/}" ]; then
+            TAG="${REF#refs/tags/}"
+            VERSION="${TAG#v}"
+            DO_RELEASE=true
+          elif [ -n "${FORCE_VERSION}" ]; then
+            VERSION="${FORCE_VERSION#v}"
+            DO_RELEASE=true
+          else
+            git fetch --tags --force
+            YEAR_MONTH=$(date +'%Y.%-m')                                  # 2026.6
+            LATEST_TAG=$(git tag -l "v${YEAR_MONTH}.*" | sort -V | tail -n 1)
+            if [ -z "${LATEST_TAG}" ]; then
+              VERSION="${YEAR_MONTH}.1"
+            else
+              VERSION="${YEAR_MONTH}.$(( ${LATEST_TAG##*.} + 1 ))"
+            fi
+            [ "${EVENT_NAME}" = "workflow_dispatch" ] && DO_RELEASE=true || DO_RELEASE=false
+          fi
+
+          # Normalise each segment (strip leading zeros): 2026.06.1 -> 2026.6.1
+          VERSION=$(echo "${VERSION}" | awk -F. '{printf "%d.%d.%d", $1, $2, $3}')
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
+          echo "do_release=${DO_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "::notice::os-sso ${VERSION} (tag ${TAG}, release=${DO_RELEASE})"
+
+  build:
+    name: Build package (FreeBSD)
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - name: Clone the opnsense/plugins tree
+        run: git clone --depth 1 https://github.com/opnsense/plugins.git "${GITHUB_WORKSPACE}/plugins"
+
+      - name: Checkout os-sso into the plugins tree
+        uses: actions/checkout@v6
+        with:
+          path: plugins/${{ env.PLUGIN_CATEGORY }}/${{ env.PLUGIN_NAME }}
+
+      - name: Substitute PLUGIN_VERSION in the Makefile
+        run: |
+          MF="plugins/${PLUGIN_CATEGORY}/${PLUGIN_NAME}/Makefile"
+          sed -i "s|^PLUGIN_VERSION=.*|PLUGIN_VERSION=\t${{ needs.prepare.outputs.version }}|" "$MF"
+          grep '^PLUGIN_VERSION' "$MF"
+
+      - name: Vendor composer deps on the host
+        # The build VM stays composer-free; we vendor here and the Makefile's
+        # post-extract detects vendor/ and skips composer inside FreeBSD.
+        run: |
+          cd "plugins/${PLUGIN_CATEGORY}/${PLUGIN_NAME}/src/opnsense/mvc/app/library/OPNsense/SSO"
+          composer install --no-dev --no-interaction --classmap-authoritative --ignore-platform-reqs
+          test -f vendor/autoload.php
+
+      - name: Build the .pkg in a FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          envs: "PLUGIN_NAME PLUGIN_CATEGORY"
+          usesh: true
+          release: "15.1"
+          prepare: |
+            pkg install -y git gmake
+          run: |
+            cd plugins/$PLUGIN_CATEGORY/$PLUGIN_NAME
+            make package
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}
+          path: plugins/${{ env.PLUGIN_CATEGORY }}/${{ env.PLUGIN_NAME }}/work/pkg/*.pkg
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    if: needs.prepare.outputs.do_release == 'true'
+    steps:
+      - name: Checkout (full history for the changelog)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download the built package
+        uses: actions/download-artifact@v8
+        with:
+          name: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}
+          path: dist
+
+      - name: Generate release notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+
+          # Latest existing tag, excluding the one we are about to publish.
+          PREVIOUS_TAG=$(git tag -l --sort=-version:refname | grep -v "^${TAG}$" | head -n 1)
+
+          {
+            echo "## os-sso ${VERSION}"
+            echo ""
+          } > release_notes.md
+
+          if [ -n "${PREVIOUS_TAG}" ]; then
+            echo "### Commits" >> release_notes.md
+            echo "" >> release_notes.md
+            git log "${PREVIOUS_TAG}..HEAD" --no-merges --pretty=format:"- %h %s" --max-count=5 >> release_notes.md
+            echo "" >> release_notes.md
+            echo "" >> release_notes.md
+
+            echo "### Pull requests" >> release_notes.md
+            echo "" >> release_notes.md
+            gh pr list --repo "${REPO}" --state merged --base main --limit 5 \
+              --search "merged:>=$(git log -1 --format=%aI "${PREVIOUS_TAG}")" \
+              --json number,title --jq '.[] | "- #\(.number) \(.title)"' >> release_notes.md || true
+            echo "" >> release_notes.md
+            echo "" >> release_notes.md
+
+            echo "**Full Changelog**: https://github.com/${REPO}/compare/${PREVIOUS_TAG}...${TAG}" >> release_notes.md
+          else
+            echo "Initial release" >> release_notes.md
+          fi
+
+          cat release_notes.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.tag }}
+          body_path: release_notes.md
+          files: dist/*.pkg
+          token: ${{ secrets.GITHUB_TOKEN }}

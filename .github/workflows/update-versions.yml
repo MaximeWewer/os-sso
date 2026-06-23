@@ -1,0 +1,83 @@
+name: Update vendored libraries
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # every Monday 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  COMPOSER_JSON: src/opnsense/mvc/app/library/OPNsense/SSO/composer.json
+
+jobs:
+  update:
+    name: Check Packagist + open PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve latest stable versions on Packagist
+        id: versions
+        run: |
+          set -euo pipefail
+          # Highest stable (X.Y.Z, no dev/RC/beta) for a composer package.
+          latest() {
+            curl -fsSL "https://repo.packagist.org/p2/$1.json" \
+              | jq -r ".packages[\"$1\"][].version" \
+              | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V | tail -n 1
+          }
+          JWT=$(latest firebase/php-jwt)
+          SAML=$(latest onelogin/php-saml)
+          [ -n "$JWT" ] && [ -n "$SAML" ] || { echo "::error::could not resolve versions"; exit 1; }
+          {
+            echo "jwt=$JWT"
+            echo "saml=$SAML"
+            echo "jwt_mm=$(echo "$JWT" | cut -d. -f1,2)"     # 7.1
+            echo "saml_mm=$(echo "$SAML" | cut -d. -f1,2)"   # 4.3
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::php-jwt latest $JWT, php-saml latest $SAML"
+
+      - name: Update composer.json constraints
+        id: update
+        env:
+          JWT_MM: ${{ steps.versions.outputs.jwt_mm }}
+          SAML_MM: ${{ steps.versions.outputs.saml_mm }}
+        run: |
+          set -euo pipefail
+          # Bump each caret constraint to the latest major.minor (keeps the manifest
+          # current and surfaces a major bump for review; CI re-vendors at build time).
+          sed -i -E "s#(\"firebase/php-jwt\": \")[^\"]+(\")#\1^${JWT_MM}\2#" "$COMPOSER_JSON"
+          sed -i -E "s#(\"onelogin/php-saml\": \")[^\"]+(\")#\1^${SAML_MM}\2#" "$COMPOSER_JSON"
+          grep -E 'php-jwt|php-saml' "$COMPOSER_JSON"
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::no constraint change"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff --stat
+          fi
+
+      - name: Create pull request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-vendored-libs
+          delete-branch: true
+          commit-message: "chore: update vendored libs (php-jwt ^${{ steps.versions.outputs.jwt_mm }}, php-saml ^${{ steps.versions.outputs.saml_mm }})"
+          title: "chore: update vendored libraries"
+          labels: dependencies
+          body: |
+            Weekly check of the composer-vendored runtime libraries against Packagist.
+
+            | Library | New constraint | Latest stable |
+            |---|---|---|
+            | `firebase/php-jwt` | `^${{ steps.versions.outputs.jwt_mm }}` | `${{ steps.versions.outputs.jwt }}` |
+            | `onelogin/php-saml` | `^${{ steps.versions.outputs.saml_mm }}` | `${{ steps.versions.outputs.saml }}` |
+
+            CI re-vendors these at build time (`composer install`), so the actual
+            shipped version already tracks the latest within the major. Review any
+            **major** bump (possible breaking changes) before merging.

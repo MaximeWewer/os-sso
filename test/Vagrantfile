@@ -1,0 +1,51 @@
+# Dev/test VM for the os-sso plugin.
+#   vagrant up
+#   https://127.0.0.1:8443  (root / opnsense)   <- WebGUI
+# `vagrant up` is fully self-contained: it rsyncs the repo to /home/vagrant/os-sso
+# (vendored libs included) and runs vagrant/deploy.sh into the live tree -- no manual
+# steps. NB: the sync target is under /home/vagrant (the `vagrant` user cannot create
+# /vagrant at the FreeBSD root), which is also where deploy.sh reads its source.
+Vagrant.configure("2") do |config|
+  config.vm.box = "puzzle/opnsense"
+  config.vm.box_version = "26.1"
+  # NOTE: no config.vm.hostname -- OPNsense has no /etc/rc.conf, the standard
+  # FreeBSD hostname provisioner errors out and aborts the boot.
+
+  # WebGUI reachable from the host browser at https://localhost:8443.
+  config.vm.network "forwarded_port", guest: 443, host: 8443, id: "https"
+  # OpenVPN server (deferred web-auth lab) reachable at udp 127.0.0.1:1194.
+  config.vm.network "forwarded_port", guest: 1194, host: 1194, protocol: "udp", id: "openvpn"
+
+  # Issuer consistency without host-only networking (OPNsense can't auto-config a
+  # second NIC): split-DNS for "authentik.test" -- resolves to 127.0.0.1 on the
+  # host (browser) and to the NAT gateway 10.0.2.2 in the VM (Relying Party), so
+  # the OIDC issuer string https://authentik.test:9443 is identical on both sides.
+
+  # No rsync synced folder: the OPNsense appliance ships without rsync and its pkg
+  # is locked down, so Vagrant cannot auto-install it (it would abort `vagrant up`).
+  # Push the source over SCP via file provisioners instead -- fully self-contained,
+  # no rsync in the guest. vendor/ rides along (the appliance has no composer), so
+  # deploy.sh finds the pre-vendored runtime libs.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "opnsense-sso"
+    vb.memory = 2048
+    vb.cpus = 2
+  end
+
+  # 1. clean staging dir (idempotent across re-provisions, avoids SCP dir nesting).
+  config.vm.provision "shell", run: "always",
+    inline: "rm -rf /home/vagrant/os-sso && mkdir -p /home/vagrant/os-sso/test/idp"
+  # 2. upload the plugin source (incl. vendored libs under src/.../SSO/vendor).
+  config.vm.provision "file", run: "always",
+    source: "../src", destination: "/home/vagrant/os-sso/src"
+  # 3. upload the lab CA so deploy.sh can trust the IdP TLS (optional, guarded).
+  config.vm.provision "file", run: "always",
+    source: "../test/idp/certs", destination: "/home/vagrant/os-sso/test/idp/certs"
+  # 4. upload the lab helper scripts (authserver registration, e2e tests).
+  config.vm.provision "file", run: "always",
+    source: "vagrant", destination: "/home/vagrant/os-sso/test/vagrant"
+  # 5. deploy the plugin into the live OPNsense tree.
+  config.vm.provision "shell", path: "vagrant/deploy.sh", run: "always"
+end

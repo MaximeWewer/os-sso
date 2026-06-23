@@ -1,0 +1,16 @@
+Interactive Single Sign-On (SSO) for OPNsense.
+
+Adds OpenID Connect (OIDC), SAML 2.0 and JWT forward-auth as authentication
+types under System > Access > Servers. OPNsense acts as a pure Relying Party /
+Service Provider: MFA and passkeys live at the Identity Provider
+(Authentik, Keycloak, Entra ID, ZItadel, ...).
+
+Features:
+  * WebGUI login via an SSO button on the login page (OIDC, SAML and JWT).
+  * Captive Portal login via OIDC/SAML.
+  * OpenVPN login via the deferred web flow (WEB_AUTH / pending auth).
+  * JWT forward-auth: trust a signed JWT from a trusted upstream proxy,
+    gated to the proxy's source IP (verified signature, iss/aud/exp).
+  * IdP group -> OPNsense group mapping (privileges resolved by the ACL).
+
+The local password path (+ native TOTP) stays active as break-glass.

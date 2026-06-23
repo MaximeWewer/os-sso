@@ -1,0 +1,17 @@
+# reference clones used for development only (opnsense/core, Lachee/opnsense-oidc)
+/ref/
+
+# composer artifacts vendored at build time
+src/opnsense/mvc/app/library/OPNsense/SSO/vendor/
+composer.lock
+
+# build output
+/work/
+*.pkg
+
+# test/lab artifacts (Vagrant state, IdP secrets, lab CA private keys)
+.vagrant
+test/idp/.env
+test/idp/*/.env
+test/idp/certs/
+test/client.ovpn

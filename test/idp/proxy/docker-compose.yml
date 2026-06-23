@@ -1,0 +1,21 @@
+# Shared TLS proxy for the IdPs. Terminates https on :9443 with the lab CA certs
+# and routes by SNI to whichever IdP container is up (authentik / keycloak). Keeps
+# the issuer URLs identical (authentik.test:9443 / keycloak.test:9443) so the
+# OPNsense auth servers need no change when the IdP stacks are split.
+name: idp-proxy
+
+networks:
+  default:
+    name: os-sso-idp
+    external: true
+
+services:
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    container_name: idp-caddy
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../certs:/certs:ro
+    ports:
+      - "0.0.0.0:9443:9443"

@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Captive Portal login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; max-width: 360px; margin: 4em auto; padding: 0 1em; }
+        h2 { text-align: center; }
+        .btn { display: block; width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box;
+               border: 1px solid #ccc; border-radius: 4px; background: #f7f7f7; cursor: pointer;
+               text-align: center; text-decoration: none; color: #222; font-size: 14px; }
+        .btn:hover { background: #eee; }
+        .sep { margin: 14px 0 8px; border: 0; border-top: 1px solid #ddd; }
+        input { width: 100%; padding: 8px; margin: 4px 0; box-sizing: border-box; }
+        .hidden { display: none; }
+        .err { color: #b00; text-align: center; }
+    </style>
+</head>
+<body>
+    <h2>Sign in</h2>
+
+    <!-- SSO buttons (filled in from /api/sso/portal/providers) -->
+    <div id="sso"></div>
+
+    <!-- Standard username/password (kept as a fallback when the zone also has a
+         classic auth server; harmless if it only uses SSO). -->
+    <div id="pwform">
+        <hr class="sep">
+        <input type="text" id="u" placeholder="Username" autocapitalize="none" autocorrect="off">
+        <input type="password" id="p" placeholder="Password">
+        <button class="btn" id="signin" type="button">Sign in</button>
+    </div>
+
+    <p class="err hidden" id="err"></p>
+
+    <script>
+    (function () {
+        // The portal listens on port 8000 + zoneid, so the page knows its own zone.
+        var zoneid = '';
+        var port = parseInt(window.location.port, 10);
+        if (!isNaN(port) && port >= 8000 && port < 9000) { zoneid = String(port - 8000); }
+        var redirurl = new URL(window.location).searchParams.get('redirurl') || '';
+        // The WebGUI (and the /api/sso endpoints) live on https://<firewall>/ -- same
+        // host as the portal, standard https port. The zone must pre-auth-allow it.
+        var ssoBase = 'https://' + window.location.hostname;
+
+        function buildLoginUrl(p) {
+            return ssoBase + p.login_uri
+                + '&cp=' + encodeURIComponent(zoneid)
+                + '&cpurl=' + encodeURIComponent(redirurl);
+        }
+
+        // Render an SSO button per provider.
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', ssoBase + '/api/sso/portal/providers', true);
+        xhr.onload = function () {
+            try {
+                var data = JSON.parse(xhr.responseText);
+                (data.providers || []).forEach(function (p) {
+                    var a = document.createElement('a');
+                    a.className = 'btn';
+                    a.href = buildLoginUrl(p);
+                    a.textContent = 'Login with ' + p.name;
+                    document.getElementById('sso').appendChild(a);
+                });
+            } catch (e) { /* leave the password form */ }
+        };
+        xhr.send();
+
+        // Standard logon (unchanged core API).
+        document.getElementById('signin').addEventListener('click', function () {
+            var x = new XMLHttpRequest();
+            x.open('POST', '/api/captiveportal/access/logon/', true);
+            x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            x.onload = function () {
+                var d = {};
+                try { d = JSON.parse(x.responseText); } catch (e) {}
+                if (d.clientState === 'AUTHORIZED') {
+                    window.location = redirurl ? ('http://' + redirurl + '?refresh') : '/';
+                } else {
+                    var e = document.getElementById('err');
+                    e.textContent = 'authentication failed';
+                    e.classList.remove('hidden');
+                }
+            };
+            x.send('user=' + encodeURIComponent(document.getElementById('u').value)
+                + '&password=' + encodeURIComponent(document.getElementById('p').value));
+        });
+    })();
+    </script>
+</body>
+</html>
