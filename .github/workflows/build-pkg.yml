@@ -2,10 +2,7 @@ name: Build & Release
 
 on:
   push:
-    branches: [main]
     tags: ["v*.*.*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       force_version:
@@ -40,7 +37,6 @@ jobs:
       # Version pattern: YEAR.MONTH_INDEX.RELEASE_INDEX (e.g. 2026.6.3).
       #   - tag push  v*.*.*  -> version taken from the tag, publish a release
       #   - workflow_dispatch -> force_version, or next auto index for this month
-      #   - push / PR         -> next auto index, build artifact only (no release)
       - id: v
         env:
           EVENT_NAME: ${{ github.event_name }}
