@@ -146,7 +146,7 @@ jobs:
           git fetch --tags --force
 
           # Latest existing tag, excluding the one we are about to publish.
-          PREVIOUS_TAG=$(git tag -l --sort=-version:refname | grep -v "^${TAG}$" | head -n 1)
+          PREVIOUS_TAG=$(git tag -l --sort=-version:refname | grep -v "^${TAG}$" | head -n 1 || true)
 
           {
             echo "## os-sso ${VERSION}"
