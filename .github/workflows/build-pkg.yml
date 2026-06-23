@@ -124,33 +124,39 @@ jobs:
           envs: "PLUGIN_NAME PLUGIN_CATEGORY OPNSENSE_REL"
           usesh: true
           release: ${{ matrix.freebsd }}
-          # Align pkg with the target. The FreeBSD VM bootstraps a recent pkg (2.7.x)
-          # and the FreeBSD repo's packages are built with it; the pkg shipped by
-          # OPNsense (2.3.x) SEGFAULTS extracting any archive produced by a newer pkg.
-          # So our package must be CREATED by a pkg <= the target's.
-          # Order matters: install the build deps with the working (new) pkg FIRST,
-          # THEN downgrade to OPNsense's pkg, and only ever `pkg create` (never extract)
-          # with it -- extracting a newer-pkg archive with 2.3.x is what crashes.
-          # Drop the local DB after the downgrade so 2.3.x isn't handed a newer schema;
-          # `pkg create` reads deps from the generated manifest, not the DB.
-          # Sourced from the OLDEST supported OPNsense (newer pkg reads older archives,
-          # not vice versa). Skipped when matrix.opnsense is empty.
           prepare: |
             ASSUME_ALWAYS_YES=yes pkg bootstrap -f
             pkg install -y git gmake
             if [ -n "${OPNSENSE_REL}" ]; then
               BASE="https://pkg.opnsense.org/FreeBSD:14:amd64/${OPNSENSE_REL}/latest/All"
               PKGFILE=$(fetch -qo - "${BASE}/" | grep -oE 'pkg-[0-9][^"]*\.pkg' | sort -V | tail -n 1)
-              echo ">>> aligning with OPNsense ${OPNSENSE_REL} pkg: ${PKGFILE}"
+              echo ">>> will repackage with OPNsense ${OPNSENSE_REL} pkg: ${PKGFILE}"
               fetch -o /tmp/opnpkg.pkg "${BASE}/${PKGFILE}"
-              pkg add -f /tmp/opnpkg.pkg
-              rm -f /var/db/pkg/local.sqlite
             fi
           run: |
-            echo ">>> building with pkg $(pkg -v)"
+            set -e
+            echo ">>> make package with pkg $(pkg -v)"
             git config --global --add safe.directory '*'
             cd plugins/$PLUGIN_CATEGORY/$PLUGIN_NAME
             make package
+            ls -la work/pkg/
+            if [ -n "${OPNSENSE_REL}" ]; then
+              echo ">>> re-creating the artifact with OPNsense's pkg (so its pkg can extract it)"
+              # extract OPNsense's static pkg without touching the system pkg/DB
+              rm -rf /tmp/oldpkg && mkdir -p /tmp/oldpkg
+              tar -xf /tmp/opnpkg.pkg -C /tmp/oldpkg
+              OLDPKG=/tmp/oldpkg/usr/local/sbin/pkg-static
+              "$OLDPKG" -v
+              NEW=$(ls work/pkg/*.pkg | head -n 1)
+              rm -rf /tmp/rb && mkdir -p /tmp/rb/stage /tmp/rb/out /tmp/rb/edb
+              tar -xf "$NEW" -C /tmp/rb +MANIFEST
+              tar -xf "$NEW" -C /tmp/rb/stage --exclude='+*'
+              # create-only with an isolated empty DB -> no schema skew, no extraction
+              env PKG_DBDIR=/tmp/rb/edb "$OLDPKG" create -M /tmp/rb/+MANIFEST -r /tmp/rb/stage -o /tmp/rb/out
+              rm -f work/pkg/*.pkg
+              cp /tmp/rb/out/*.pkg work/pkg/
+              echo ">>> repackaged with $("$OLDPKG" -v):"; ls -la work/pkg/
+            fi
 
       - name: Tag the .pkg filename with its ABI
         # Both matrix legs emit the same os-sso-devel-<version>.pkg name; append the
