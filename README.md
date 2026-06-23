@@ -23,6 +23,12 @@ stays available as a break-glass path.
   are resolved by the normal ACL.
 - **Single Logout** — the WebGUI *Logout* button ends the IdP session too.
 
+## Screenshots
+
+| Authentication servers | Server configuration | WebGUI login |
+|---|---|---|
+| ![Authentication servers](assets/servers.png) | ![Server configuration](assets/server_config.png) | ![WebGUI login form](assets/login_form.png) |
+
 ## Requirements
 
 - **OPNsense 25.7 or newer** — the login-page SSO button hook
