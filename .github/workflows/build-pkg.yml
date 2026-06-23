@@ -85,10 +85,14 @@ jobs:
       #   OPNsense 25.7 / 26.x -> FreeBSD 14.x  |  future OPNsense -> FreeBSD 15.x
       matrix:
         include:
+          # opnsense: the OLDEST supported OPNsense whose pkg we align with (see the
+          # "Align pkg" note below). Empty when OPNsense has no build for that major yet.
           - freebsd: "14.3"
             abi: "FreeBSD-14"
+            opnsense: "25.7"
           - freebsd: "15.1"
             abi: "FreeBSD-15"
+            opnsense: ""
     steps:
       - name: Clone the opnsense/plugins tree
         run: git clone --depth 1 https://github.com/opnsense/plugins.git "${GITHUB_WORKSPACE}/plugins"
@@ -114,13 +118,31 @@ jobs:
 
       - name: Build the .pkg in a FreeBSD VM
         uses: vmactions/freebsd-vm@v1
+        env:
+          OPNSENSE_REL: ${{ matrix.opnsense }}
         with:
-          envs: "PLUGIN_NAME PLUGIN_CATEGORY"
+          envs: "PLUGIN_NAME PLUGIN_CATEGORY OPNSENSE_REL"
           usesh: true
           release: ${{ matrix.freebsd }}
+          # Align pkg with the target: the FreeBSD VM bootstraps a newer pkg (2.6.x)
+          # whose archives the pkg shipped by OPNsense (2.3.x) mis-reads and segfaults
+          # on during extraction. Downgrade to OPNsense's own pkg so the archive is
+          # byte-compatible, then rebuild the pkg DB so there's no schema skew. Sourced
+          # from the OLDEST supported OPNsense (forward-compat: newer pkg reads older
+          # archives, not vice versa). Skipped when matrix.opnsense is empty.
           prepare: |
+            ASSUME_ALWAYS_YES=yes pkg bootstrap -f
+            if [ -n "${OPNSENSE_REL}" ]; then
+              BASE="https://pkg.opnsense.org/FreeBSD:14:amd64/${OPNSENSE_REL}/latest/All"
+              PKGFILE=$(fetch -qo - "${BASE}/" | grep -oE 'pkg-[0-9][^"]*\.pkg' | sort -V | tail -n 1)
+              echo ">>> aligning with OPNsense ${OPNSENSE_REL} pkg: ${PKGFILE}"
+              fetch -o /tmp/opnpkg.pkg "${BASE}/${PKGFILE}"
+              pkg add -f /tmp/opnpkg.pkg
+              rm -f /var/db/pkg/local.sqlite
+            fi
             pkg install -y git gmake
           run: |
+            echo ">>> building with pkg $(pkg -v)"
             git config --global --add safe.directory '*'
             cd plugins/$PLUGIN_CATEGORY/$PLUGIN_NAME
             make package
