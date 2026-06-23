@@ -124,14 +124,20 @@ jobs:
           envs: "PLUGIN_NAME PLUGIN_CATEGORY OPNSENSE_REL"
           usesh: true
           release: ${{ matrix.freebsd }}
-          # Align pkg with the target: the FreeBSD VM bootstraps a newer pkg (2.6.x)
-          # whose archives the pkg shipped by OPNsense (2.3.x) mis-reads and segfaults
-          # on during extraction. Downgrade to OPNsense's own pkg so the archive is
-          # byte-compatible, then rebuild the pkg DB so there's no schema skew. Sourced
-          # from the OLDEST supported OPNsense (forward-compat: newer pkg reads older
-          # archives, not vice versa). Skipped when matrix.opnsense is empty.
+          # Align pkg with the target. The FreeBSD VM bootstraps a recent pkg (2.7.x)
+          # and the FreeBSD repo's packages are built with it; the pkg shipped by
+          # OPNsense (2.3.x) SEGFAULTS extracting any archive produced by a newer pkg.
+          # So our package must be CREATED by a pkg <= the target's.
+          # Order matters: install the build deps with the working (new) pkg FIRST,
+          # THEN downgrade to OPNsense's pkg, and only ever `pkg create` (never extract)
+          # with it -- extracting a newer-pkg archive with 2.3.x is what crashes.
+          # Drop the local DB after the downgrade so 2.3.x isn't handed a newer schema;
+          # `pkg create` reads deps from the generated manifest, not the DB.
+          # Sourced from the OLDEST supported OPNsense (newer pkg reads older archives,
+          # not vice versa). Skipped when matrix.opnsense is empty.
           prepare: |
             ASSUME_ALWAYS_YES=yes pkg bootstrap -f
+            pkg install -y git gmake
             if [ -n "${OPNSENSE_REL}" ]; then
               BASE="https://pkg.opnsense.org/FreeBSD:14:amd64/${OPNSENSE_REL}/latest/All"
               PKGFILE=$(fetch -qo - "${BASE}/" | grep -oE 'pkg-[0-9][^"]*\.pkg' | sort -V | tail -n 1)
@@ -140,7 +146,6 @@ jobs:
               pkg add -f /tmp/opnpkg.pkg
               rm -f /var/db/pkg/local.sqlite
             fi
-            pkg install -y git gmake
           run: |
             echo ">>> building with pkg $(pkg -v)"
             git config --global --add safe.directory '*'
