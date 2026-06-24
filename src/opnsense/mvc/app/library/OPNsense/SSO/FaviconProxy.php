@@ -40,16 +40,26 @@ final class FaviconProxy
         if (self::isBlockedHost($host)) {
             throw new \RuntimeException('icon: refusing non-public issuer host');
         }
+        // Resolve the host once and vet every address, then pin curl to those IPs.
+        // Closes the DNS-rebinding window the effective-URL host check alone cannot:
+        // a hostname that resolves to an internal/loopback IP is refused here, and
+        // curl is not allowed a second (attacker-timed) resolution.
+        $ips = self::resolveHostIps($host);
+        if (empty($ips)) {
+            throw new \RuntimeException('icon: issuer host does not resolve to a public address');
+        }
+        $port = (int)($p['port'] ?? 443);
+        $resolve = [sprintf('%s:%d:%s', $host, $port, implode(',', $ips))];
         $origin = 'https://' . $host . (isset($p['port']) ? ':' . $p['port'] : '');
 
         // 1. the conventional /favicon.ico
-        $icon = self::get($origin . '/favicon.ico', $host);
+        $icon = self::get($origin . '/favicon.ico', $host, $resolve);
         if ($icon !== null && str_starts_with($icon['type'], 'image/')) {
             return $icon;
         }
 
         // 2. parse the home page for a <link rel="icon" href="...">
-        $home = self::get($origin . '/', $host);
+        $home = self::get($origin . '/', $host, $resolve);
         if ($home !== null && preg_match(
             '/<link[^>]+rel=["\'][^"\']*icon[^"\']*["\'][^>]*>/i',
             $home['data'],
@@ -57,7 +67,7 @@ final class FaviconProxy
         ) && preg_match('/href=["\']([^"\']+)["\']/i', $m[0], $h)) {
             $href = self::resolveHref($h[1], $origin, $host);
             if ($href !== null) {
-                $icon = self::get($href, $host);
+                $icon = self::get($href, $host, $resolve);
                 if ($icon !== null && str_starts_with($icon['type'], 'image/')) {
                     return $icon;
                 }
@@ -96,7 +106,7 @@ final class FaviconProxy
      *                            still resolve to it, otherwise the response is dropped
      * @return array{type:string,data:string}|null
      */
-    private static function get(string $url, string $allowedHost): ?array
+    private static function get(string $url, string $allowedHost, array $resolve = []): ?array
     {
         if (stripos($url, 'https://') !== 0) {
             return null;
@@ -114,6 +124,8 @@ final class FaviconProxy
             // http://, file://, gopher:// and friends as redirect targets.
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+            // Pin the issuer host to the pre-vetted IPs (no attacker-timed re-resolve).
+            CURLOPT_RESOLVE => $resolve,
             CURLOPT_NOPROGRESS => false,
             CURLOPT_PROGRESSFUNCTION => fn($c, $dt, $dn) => $dn > self::MAX_BYTES ? 1 : 0,
         ]);
@@ -141,6 +153,43 @@ final class FaviconProxy
      * Hostnames that resolve via DNS are not pre-resolved here -- the effective-URL
      * host pin in get() is what bounds redirect-based abuse.
      */
+    /**
+     * Resolve a host (A + AAAA) to vetted IP literals. A literal IP is returned as-is
+     * if public. A hostname is resolved and EVERY address must be public -- if it has
+     * none, or any is private/loopback/reserved, the whole fetch is refused (returns
+     * []). The result is pinned into curl via CURLOPT_RESOLVE so the connection cannot
+     * be rebound to an internal address after this check.
+     *
+     * @return string[] vetted IP literals (empty => refuse)
+     */
+    private static function resolveHostIps(string $host): array
+    {
+        $host = trim($host, '[]');
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return self::isBlockedHost($host) ? [] : [$host];
+        }
+        $ips = [];
+        foreach (@dns_get_record($host, DNS_A) ?: [] as $rec) {
+            if (!empty($rec['ip'])) {
+                $ips[] = (string)$rec['ip'];
+            }
+        }
+        foreach (@dns_get_record($host, DNS_AAAA) ?: [] as $rec) {
+            if (!empty($rec['ipv6'])) {
+                $ips[] = (string)$rec['ipv6'];
+            }
+        }
+        if (empty($ips)) {
+            return [];
+        }
+        foreach ($ips as $ip) {
+            if (self::isBlockedHost($ip)) {
+                return []; // any non-public address poisons the whole host
+            }
+        }
+        return array_values(array_unique($ips));
+    }
+
     private static function isBlockedHost(string $host): bool
     {
         $host = trim($host, '[]'); // strip IPv6 brackets
