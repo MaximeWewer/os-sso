@@ -104,7 +104,7 @@ class SamlController extends ApiControllerBase
                 return CaptivePortalAuthorizer::donePage($cpRes['username'], (string)($state['cpurl'] ?? ''));
             }
 
-            $username = (new IdentityMapper(new GroupMapper()))->resolve(
+            $username = (new IdentityMapper(new GroupMapper(GroupMapper::parseMap((string)$auth->ssoGroupMap))))->resolve(
                 $identity,
                 (bool)$auth->ssoCreateUsers,
                 (array)$auth->ssoDefaultGroups

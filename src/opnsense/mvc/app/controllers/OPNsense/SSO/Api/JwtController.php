@@ -67,7 +67,7 @@ class JwtController extends ApiControllerBase
             $identity = $protocol->verify($token);
             $identity->authServer = (string)$this->request->get('provider');
 
-            $username = (new IdentityMapper(new GroupMapper()))->resolve(
+            $username = (new IdentityMapper(new GroupMapper(GroupMapper::parseMap((string)$auth->ssoGroupMap))))->resolve(
                 $identity,
                 (bool)$auth->ssoCreateUsers,
                 (array)$auth->ssoDefaultGroups

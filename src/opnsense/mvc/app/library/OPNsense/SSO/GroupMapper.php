@@ -38,6 +38,30 @@ final class GroupMapper
     }
 
     /**
+     * Parse an operator group-map text field into an idp => opnsense name map.
+     * Accepts "idpGroup:opnsenseGroup" (or "=") pairs, comma- or newline-
+     * separated; blank or malformed entries are ignored.
+     *
+     * @return array<string,string>
+     */
+    public static function parseMap(string $spec): array
+    {
+        $map = [];
+        foreach (preg_split('/[,\r\n]+/', $spec) as $pair) {
+            $parts = preg_split('/\s*[:=]\s*/', trim($pair), 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+            $idp = trim($parts[0]);
+            $opn = trim($parts[1]);
+            if ($idp !== '' && $opn !== '') {
+                $map[$idp] = $opn;
+            }
+        }
+        return $map;
+    }
+
+    /**
      * Ensure $userNode is a member of every resolved OPNsense group.
      *
      * @param \SimpleXMLElement $userNode config.xml system/user node (has <uid>)

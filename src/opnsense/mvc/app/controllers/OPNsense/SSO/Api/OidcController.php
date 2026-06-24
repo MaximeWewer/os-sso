@@ -103,7 +103,7 @@ class OidcController extends ApiControllerBase
                 return CaptivePortalAuthorizer::donePage($cpRes['username'], $cpurl);
             }
 
-            $mapper = new IdentityMapper(new GroupMapper());
+            $mapper = new IdentityMapper(new GroupMapper(GroupMapper::parseMap((string)$auth->ssoGroupMap)));
             $username = $mapper->resolve(
                 $identity,
                 (bool)$auth->ssoCreateUsers,

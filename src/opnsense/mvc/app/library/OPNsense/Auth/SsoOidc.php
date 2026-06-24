@@ -28,6 +28,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoUsePkce = true;
     public $ssoCreateUsers = false;
     public $ssoDefaultGroups = [];
+    public $ssoGroupMap = null;
     public $ssoButtonLabel = null;
     public $ssoBaseUrl = null;
     public $ssoLoginRedirect = null;
@@ -53,6 +54,7 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_button_label' => 'ssoButtonLabel',
             'sso_base_url' => 'ssoBaseUrl',
             'sso_login_redirect' => 'ssoLoginRedirect',
+            'sso_group_map' => 'ssoGroupMap',
         ];
         foreach ($map as $k => $prop) {
             if (!empty($config[$k]) && property_exists($this, $prop)) {
@@ -123,6 +125,14 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_default_groups' => [
                 'name' => gettext('Default groups'),
                 'help' => gettext('Comma separated OPNsense groups granted to mapped users.'),
+                'type' => 'text',
+            ],
+            'sso_group_map' => [
+                'name' => gettext('Group mapping'),
+                'help' => gettext('Optional explicit IdP-group to OPNsense-group map, comma separated '
+                    . 'as "idpGroup:opnsenseGroup". Mapped groups are trusted and may target privileged '
+                    . 'groups (e.g. admins). Unmapped IdP groups fall back to a 1:1 name match that '
+                    . 'refuses privileged groups.'),
                 'type' => 'text',
             ],
             'sso_button_label' => [
