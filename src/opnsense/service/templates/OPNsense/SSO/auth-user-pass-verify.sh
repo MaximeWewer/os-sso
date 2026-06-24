@@ -9,6 +9,9 @@
 # We hand the client a WEB_AUTH url to our OIDC login and defer (exit 2). The
 # os-sso OIDC callback writes the final verdict (1/0) into $auth_control_file.
 set -eu
+# Create the state dir/files private from the start (the session file holds the
+# auth-control path + client IP); the explicit chmods below are belt-and-suspenders.
+umask 077
 
 CONF=/usr/local/etc/sso/vpn.conf
 [ -r "$CONF" ] && . "$CONF"
@@ -42,7 +45,9 @@ if [ -z "${auth_pending_file:-}" ] || [ -z "${auth_control_file:-}" ]; then
 fi
 
 mkdir -p "$STATE_DIR"
-chmod 700 "$STATE_DIR" 2>/dev/null || true
+# Fail closed: a state dir we cannot lock down (e.g. pre-existing world-readable)
+# must not hold the per-session control-file path + client IP.
+chmod 700 "$STATE_DIR" || { echo "os-sso vpn: cannot secure $STATE_DIR" >&2; exit 1; }
 
 # One-time, unguessable session id mapped to this attempt's control file + the
 # client's source IP. The web callback resolves + consumes it (single use); the
@@ -54,7 +59,7 @@ CLIENT_IP="${untrusted_ip:-${trusted_ip:-}}"
     printf '%s\n' "$auth_control_file"
     printf '%s\n' "$CLIENT_IP"
 } > "$STATE_DIR/$SID"
-chmod 600 "$STATE_DIR/$SID" 2>/dev/null || true
+chmod 600 "$STATE_DIR/$SID" || { rm -f "$STATE_DIR/$SID"; echo "os-sso vpn: cannot secure session file" >&2; exit 1; }
 
 # Defer and point the client at the browser SSO login.
 {
