@@ -214,6 +214,11 @@ final class OidcProtocol implements ProtocolInterface
      */
     private function validateIdToken(array $disco, string $idToken, string $sessionNonce): object
     {
+        // An OIDC ID token MUST be asymmetrically signed. decode() pins the key's
+        // alg to the header alg (blocking alg-confusion), but would still accept a
+        // symmetric HS* alg if the issuer's JWKS ever exposed an "oct" key -- so
+        // reject HS*/none on the header up front, mirroring the JWT forward-auth path.
+        $this->assertAsymmetricAlg($idToken);
         // decode() enforces signature + exp/nbf/iat and rejects alg:none. The key
         // set carries each key's algorithm, so a JWKS public key can never be
         // abused as an HMAC secret (alg-confusion) -- we never pass a string key.
@@ -259,6 +264,23 @@ final class OidcProtocol implements ProtocolInterface
         }
 
         return $claims;
+    }
+
+    /**
+     * Reject a non-asymmetric (or "none") id_token signature by inspecting the JWS
+     * header alg before verification. Everything the vendored lib supports other
+     * than the HS family and "none" is asymmetric (RS, PS, ES, EdDSA), so an
+     * HS-prefixed or "none" alg is the only thing to refuse here.
+     */
+    private function assertAsymmetricAlg(string $jwt): void
+    {
+        $dot = strpos($jwt, '.');
+        $header = $dot === false ? null
+            : json_decode((string)base64_decode(strtr(substr($jwt, 0, $dot), '-_', '+/')), true);
+        $alg = is_array($header) ? (string)($header['alg'] ?? '') : '';
+        if ($alg === '' || stripos($alg, 'HS') === 0 || strcasecmp($alg, 'none') === 0) {
+            throw new \RuntimeException('OIDC: id_token must use an asymmetric signature (got ' . ($alg ?: 'none') . ')');
+        }
     }
 
     private function discover(): array
