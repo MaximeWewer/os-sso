@@ -235,6 +235,15 @@ final class OidcProtocol implements ProtocolInterface
         if ($sessionNonce === '' || !hash_equals($sessionNonce, (string)($claims->nonce ?? ''))) {
             throw new \RuntimeException('OIDC: nonce mismatch (possible replay)');
         }
+        // OIDC Core requires exp (and iat) on an ID token. decode() only enforces
+        // exp WHEN present, so a token minted/replayed without exp would never
+        // expire -- require both explicitly.
+        if (!isset($claims->exp)) {
+            throw new \RuntimeException('OIDC: ID token has no exp claim');
+        }
+        if (!isset($claims->iat)) {
+            throw new \RuntimeException('OIDC: ID token has no iat claim');
+        }
 
         return $claims;
     }

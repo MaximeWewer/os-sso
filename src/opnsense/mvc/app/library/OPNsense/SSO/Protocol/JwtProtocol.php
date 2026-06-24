@@ -107,6 +107,11 @@ final class JwtProtocol
         if (!in_array($this->audience, $aud, true)) {
             throw new \RuntimeException('JWT: audience does not contain this service');
         }
+        // decode() only enforces exp WHEN present; a forward-auth token without exp
+        // would be replayable forever. Require it so the proxy-minted token expires.
+        if (!isset($claims->exp)) {
+            throw new \RuntimeException('JWT: token has no exp claim');
+        }
         return $this->toIdentity((array)$claims);
     }
 
