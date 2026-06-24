@@ -74,11 +74,27 @@ final class IdentityMapper
         $node = $subjectKey !== '' ? $this->findBySubject($subjectKey) : null;
 
         // 2. First-time linking: by the configured username claim, then by a
-        //    *verified* email -- and email may only (re)locate an SSO-managed
+        //    *verified* email -- and either may only (re)locate an SSO-managed
         //    account, never bind to a hand-created local user.
         $stamp = false;
         if ($node === null && $identity->username !== '') {
-            $node = $this->findByName($identity->username);
+            $byName = $this->findByName($identity->username);
+            if ($byName !== null) {
+                // A username-claim collision with an account that has its own local
+                // password would let anyone who can set their IdP username to an
+                // existing local name take that account over (the username claim is
+                // often a self-service IdP attribute). Bind by username only to an
+                // SSO-managed account, exactly like the email path below; otherwise
+                // refuse -- silently provisioning a duplicate name would be worse.
+                if (!$this->isSsoManaged($byName)) {
+                    throw new \RuntimeException(
+                        "SSO: username '" . (string)$byName->name . "' collides with an existing " .
+                        "local account; refusing to bind (use an immutable IdP username claim, or " .
+                        "rename/remove the local account)"
+                    );
+                }
+                $node = $byName;
+            }
         }
         if ($node === null && $identity->emailVerified && $identity->email !== '') {
             $byEmail = $this->findByEmail($identity->email);
