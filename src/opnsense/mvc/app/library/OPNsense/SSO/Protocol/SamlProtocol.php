@@ -120,6 +120,12 @@ final class SamlProtocol implements ProtocolInterface
             throw new \RuntimeException("SAML: assertion not authenticated");
         }
 
+        // Reject an assertion ID already consumed within the replay window. The
+        // single-use InResponseTo stops post-consumption replay; this additionally
+        // closes the window where an attacker replays the response before the
+        // victim's browser delivers it.
+        $this->guardAssertionReplay((string) $auth->getLastAssertionId());
+
         // Keep what Single Logout needs from the (verified) assertion.
         $this->lastNameId = (string) $auth->getNameId();
         $this->lastSessionIndex = (string) $auth->getSessionIndex();
@@ -268,6 +274,38 @@ final class SamlProtocol implements ProtocolInterface
             return null;
         }
         return $data;
+    }
+
+    /**
+     * Refuse a SAML assertion ID already accepted within the replay window.
+     * php-saml keeps no replay cache of its own. Keyed by the (verified) assertion
+     * ID; the window reuses STATE_TTL and the markers are swept by sweepStale().
+     * Expired assertions are already rejected by php-saml (NotOnOrAfter), so this
+     * only needs to cover the live window.
+     */
+    private function guardAssertionReplay(string $assertionId): void
+    {
+        if ($assertionId === "") {
+            return; // nothing to key on; single-use InResponseTo still applies
+        }
+        if (!is_dir(self::STATE_DIR)) {
+            @mkdir(self::STATE_DIR, 0700, true);
+        }
+        @chmod(self::STATE_DIR, 0700);
+        $file = self::STATE_DIR . "/seen-" . hash("sha256", $assertionId) . ".json";
+        // Drop a stale marker so a long-since-expired ID does not block forever.
+        if (is_file($file) && time() - (int) @filemtime($file) > self::STATE_TTL) {
+            @unlink($file);
+        }
+        // Exclusive create: succeeds exactly once per assertion ID in the window;
+        // a concurrent or later replay fails the open and is rejected.
+        $fp = @fopen($file, "x");
+        if ($fp === false) {
+            throw new \RuntimeException("SAML: assertion replay detected");
+        }
+        fwrite($fp, json_encode(["ts" => time()]));
+        fclose($fp);
+        @chmod($file, 0600);
     }
 
     private function saveState(string $requestId, array $data): void
