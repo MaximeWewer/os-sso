@@ -15,14 +15,23 @@ BROWSER_IP=$(printf '%s' "${3:-}" | tr -cd '0-9a-fA-F.:')
 DIR=/var/tmp/os-sso-vpn
 MAP="$DIR/$SID"
 
-if [ -z "$SID" ] || [ ! -f "$MAP" ]; then
+if [ -z "$SID" ]; then
     echo "unknown vpn session"
     exit 1
 fi
 
-CONTROL=$(sed -n 1p "$MAP")
-CLIENT_IP=$(sed -n 2p "$MAP")
-rm -f "$MAP"   # single use
+# Atomically claim the mapping: the rename is the single-use gate, so two
+# concurrent verdicts for one sid cannot both read it (the loser's mv fails).
+# mv on a missing source also fails, covering the unknown-session case.
+WORK="$MAP.$$"
+if ! mv "$MAP" "$WORK" 2>/dev/null; then
+    echo "unknown vpn session"
+    exit 1
+fi
+
+CONTROL=$(sed -n 1p "$WORK")
+CLIENT_IP=$(sed -n 2p "$WORK")
+rm -f "$WORK"   # single use
 
 case "$CONTROL" in
     /*) ;;
