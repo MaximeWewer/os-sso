@@ -156,6 +156,11 @@ class JwtController extends ApiControllerBase
                 continue;
             }
             $bits = (int)$bitsRaw;
+            // Reject a prefix length outside the address width: an over-long prefix
+            // would index past the address bytes below and spuriously over-match.
+            if ($bits < 0 || $bits > strlen($ipBin) * 8) {
+                continue;
+            }
             $bytes = intdiv($bits, 8);
             $rem = $bits % 8;
             if ($bytes > 0 && strncmp($ipBin, $netBin, $bytes) !== 0) {
