@@ -33,7 +33,7 @@ class OidcController extends ApiControllerBase
     /** GET /api/sso/oidc/login?provider=<name> */
     public function loginAction()
     {
-        if ($this->session->get('Username') != null) {
+        if ($this->session->get('Username') !== null) {
             $this->response->setStatusCode(400, 'Bad Request');
             return 'Already logged in.';
         }
@@ -70,7 +70,7 @@ class OidcController extends ApiControllerBase
     /** GET /api/sso/oidc/callback */
     public function callbackAction()
     {
-        if ($this->session->get('Username') != null) {
+        if ($this->session->get('Username') !== null) {
             $this->response->setStatusCode(400, 'Bad Request');
             return 'Already logged in.';
         }
@@ -184,6 +184,7 @@ class OidcController extends ApiControllerBase
         $auth = $auth ?? $this->authServer($provider);
         $_SESSION['sso_oidc_provider'] = (string)$provider;
         return new OidcProtocol([
+            'provider' => (string)$provider,
             'issuer' => $auth->ssoIssuer,
             'client_id' => $auth->ssoClientId,
             'client_secret' => $auth->ssoClientSecret,

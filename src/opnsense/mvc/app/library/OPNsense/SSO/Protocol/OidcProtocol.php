@@ -42,6 +42,8 @@ final class OidcProtocol implements ProtocolInterface
     private string $groupsClaim;
     private string $redirectUri;
     private bool $usePkce;
+    /** per-provider session-key prefix so concurrent flows do not clobber each other */
+    private string $sessionPrefix;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -63,6 +65,11 @@ final class OidcProtocol implements ProtocolInterface
         $this->groupsClaim = (string)($cfg['groups_claim'] ?? 'groups');
         $this->redirectUri = (string)($cfg['redirect_uri'] ?? '');
         $this->usePkce = (bool)($cfg['use_pkce'] ?? true);
+        // Namespace the in-flight session keys (state/nonce/verifier/return) by
+        // provider so two concurrent logins to different providers in one browser
+        // session cannot overwrite each other's single-use anti-replay material.
+        $provider = (string)($cfg['provider'] ?? '');
+        $this->sessionPrefix = 'sso_oidc_' . ($provider === '' ? '' : substr(hash('sha256', $provider), 0, 16) . '_');
 
         // Pull in the composer-vendored firebase/php-jwt (Makefile post-extract).
         if (!class_exists(\Firebase\JWT\JWT::class)) {
@@ -82,9 +89,9 @@ final class OidcProtocol implements ProtocolInterface
 
         $state = $this->randomToken();
         $nonce = $this->randomToken();
-        $_SESSION['sso_oidc_state'] = $state;
-        $_SESSION['sso_oidc_nonce'] = $nonce;
-        $_SESSION['sso_oidc_return'] = $this->sanitizeReturnUrl($returnUrl);
+        $_SESSION[$this->skey('state')] = $state;
+        $_SESSION[$this->skey('nonce')] = $nonce;
+        $_SESSION[$this->skey('return')] = $this->sanitizeReturnUrl($returnUrl);
 
         $params = [
             'response_type' => 'code',
@@ -97,7 +104,7 @@ final class OidcProtocol implements ProtocolInterface
 
         if ($this->usePkce) {
             $verifier = $this->randomToken(64);
-            $_SESSION['sso_oidc_verifier'] = $verifier;
+            $_SESSION[$this->skey('verifier')] = $verifier;
             $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
             $params['code_challenge'] = $challenge;
             $params['code_challenge_method'] = 'S256';
@@ -110,10 +117,10 @@ final class OidcProtocol implements ProtocolInterface
     {
         // Snapshot AND clear all single-use material up front, so a failure midway
         // can never leave reusable state/nonce/verifier behind in the session.
-        $sessionState = (string)($_SESSION['sso_oidc_state'] ?? '');
-        $sessionNonce = (string)($_SESSION['sso_oidc_nonce'] ?? '');
-        $verifier = (string)($_SESSION['sso_oidc_verifier'] ?? '');
-        unset($_SESSION['sso_oidc_state'], $_SESSION['sso_oidc_nonce'], $_SESSION['sso_oidc_verifier']);
+        $sessionState = (string)($_SESSION[$this->skey('state')] ?? '');
+        $sessionNonce = (string)($_SESSION[$this->skey('nonce')] ?? '');
+        $verifier = (string)($_SESSION[$this->skey('verifier')] ?? '');
+        unset($_SESSION[$this->skey('state')], $_SESSION[$this->skey('nonce')], $_SESSION[$this->skey('verifier')]);
 
         // state: anti-CSRF, single use.
         if ($sessionState === '' || !hash_equals($sessionState, (string)($request['state'] ?? ''))) {
@@ -159,9 +166,15 @@ final class OidcProtocol implements ProtocolInterface
 
     public function consumeReturnUrl(): string
     {
-        $url = $_SESSION['sso_oidc_return'] ?? '/';
-        unset($_SESSION['sso_oidc_return']);
+        $url = $_SESSION[$this->skey('return')] ?? '/';
+        unset($_SESSION[$this->skey('return')]);
         return $this->sanitizeReturnUrl((string)$url);
+    }
+
+    /** Per-provider session key for the in-flight single-use material. */
+    private function skey(string $name): string
+    {
+        return $this->sessionPrefix . $name;
     }
 
     public function getLastIdToken(): string
