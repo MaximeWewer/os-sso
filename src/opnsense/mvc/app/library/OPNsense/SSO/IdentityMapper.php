@@ -78,6 +78,7 @@ final class IdentityMapper
         //    account, never bind to a hand-created local user.
         $stamp = false;
         if ($node === null && $identity->username !== '') {
+            $this->assertValidUsername($identity->username);
             $byName = $this->findByName($identity->username);
             if ($byName !== null) {
                 // A username-claim collision with an account that has its own local
@@ -205,6 +206,29 @@ final class IdentityMapper
         return null;
     }
 
+    /**
+     * Enforce a strict local-username shape before the name is used to match an
+     * account or written to config.xml. We bypass the core User model (to stay
+     * dependency-light), so we must re-apply its constraint here: a username
+     * carrying control characters or newlines would forge syslog/audit lines, and
+     * leading/trailing whitespace or interior runs invite homoglyph collisions
+     * with existing accounts. Allowed: letters, digits, '.', '-', '_', and single
+     * interior spaces; 1-64 chars; no edge whitespace.
+     */
+    private function assertValidUsername(string $username): void
+    {
+        if (
+            $username !== trim($username)
+            || strlen($username) > 64
+            || !preg_match('/^[A-Za-z0-9._-]+( [A-Za-z0-9._-]+)*$/', $username)
+        ) {
+            throw new \RuntimeException(
+                "SSO: asserted username is not a valid local account name " .
+                "(allowed: letters, digits, '.', '-', '_', single interior spaces; 1-64 chars)"
+            );
+        }
+    }
+
     private function findByName(string $username): ?\SimpleXMLElement
     {
         foreach ($this->users() as $user) {
@@ -250,6 +274,7 @@ final class IdentityMapper
         if ($username === '') {
             throw new \RuntimeException("SSO: cannot provision a user without a username claim");
         }
+        $this->assertValidUsername($username);
 
         // Use the legacy config_* helpers to append a user node, mirroring how the
         // core User model serializes. We avoid the high-level Model here to keep
