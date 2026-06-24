@@ -68,13 +68,28 @@ final class GroupMapper
             if (!isset($targets[$groupName])) {
                 continue;
             }
+            // Refuse to auto-escalate into a privileged group via an unmapped IdP
+            // group name matched 1:1 -- the IdP group name is attacker-influenced
+            // (often self-service). defaultGroups and explicit operator maps are
+            // trusted and may target privileged groups on purpose.
+            if ($targets[$groupName] === 'idp' && $this->isPrivilegedGroup($group)) {
+                syslog(LOG_WARNING, sprintf(
+                    "os-sso: ignoring unmapped IdP group '%s' -> privileged OPNsense group '%s' " .
+                    "(configure an explicit mapping or default group to allow)",
+                    $groupName,
+                    (string)$group->name
+                ));
+                continue;
+            }
             $changed = $this->addMember($group, $uid) || $changed;
         }
         return $changed;
     }
 
     /**
-     * @return array<string,bool> set of lower-cased OPNsense group names to grant
+     * @return array<string,string> lower-cased OPNsense group name => provenance
+     *         ('default'|'explicit'|'idp'); only 'idp' (unmapped 1:1) is gated
+     *         against privileged groups at grant time.
      */
     private function resolveTargetGroups(NormalizedIdentity $identity, array $defaultGroups): array
     {
@@ -82,7 +97,7 @@ final class GroupMapper
         foreach ($defaultGroups as $g) {
             $g = strtolower(trim($g));
             if ($g !== '') {
-                $targets[$g] = true;
+                $targets[$g] = 'default';
             }
         }
         foreach ($identity->groups as $idpGroup) {
@@ -92,26 +107,45 @@ final class GroupMapper
             }
             if (isset($this->explicitMap[$key])) {
                 // Operator-defined mapping is trusted, even into privileged groups.
-                $targets[strtolower($this->explicitMap[$key])] = true;
+                $targets[strtolower($this->explicitMap[$key])] = 'explicit';
                 continue;
             }
-            // 1:1 fallback by name. Refuse to auto-escalate into a privileged group
-            // via an unmapped IdP group name (a self-service IdP group literally
-            // named "admins" must not grant firewall admin).
-            if (in_array($key, self::PRIVILEGED_GROUPS, true)) {
-                syslog(LOG_WARNING, sprintf(
-                    "os-sso: ignoring unmapped IdP group '%s' -> privileged OPNsense group (configure an explicit mapping to allow)",
-                    $key
-                ));
-                continue;
+            // 1:1 fallback by name -- gated against privileged groups in sync().
+            // Never downgrade a trusted (default/explicit) target to 'idp'.
+            if (!isset($targets[$key])) {
+                $targets[$key] = 'idp';
             }
-            $targets[$key] = true;
         }
         return $targets;
     }
 
-    /** OPNsense groups that the 1:1 name fallback must never grant on its own. */
-    private const PRIVILEGED_GROUPS = ['admins'];
+    /**
+     * A group is privileged if it grants full GUI access, shell access, or the
+     * ability to edit users/groups (self-escalation) -- or is the built-in admins
+     * group. Checked against the group's actual ACL privileges, not just its name,
+     * so a custom admin-equivalent group is covered too.
+     */
+    private function isPrivilegedGroup(\SimpleXMLElement $group): bool
+    {
+        if (strtolower((string)$group->name) === 'admins') {
+            return true;
+        }
+        foreach ($group->priv as $priv) {
+            foreach (array_filter(array_map('trim', explode(',', (string)$priv))) as $p) {
+                if (in_array($p, self::ESCALATION_PRIVS, true)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** ACL privileges that make a group admin-equivalent for 1:1-fallback gating. */
+    private const ESCALATION_PRIVS = [
+        'page-all',                 // unrestricted WebGUI access
+        'user-shell-access',        // shell login
+        'page-system-usermanager',  // edit users/groups -> grant self anything
+    ];
 
     private function addMember(\SimpleXMLElement $group, string $uid): bool
     {
