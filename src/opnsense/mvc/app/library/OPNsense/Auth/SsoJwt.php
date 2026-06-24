@@ -21,7 +21,11 @@ class SsoJwt extends Local implements IAuthConnector
     public $ssoJwtHeader = 'X-Auth-Request-Jwt';
     public $ssoJwtJwksUrl = null;
     public $ssoJwtPublicKey = null;
-    public $ssoJwtAlgorithms = ['RS256', 'ES256'];
+    // Common asymmetric algorithms supported out-of-the-box (the verifier rejects
+    // symmetric HS*/none regardless). RS256 stays first: it is the default applied
+    // to JWKS keys lacking an "alg" and to a static PEM key. PS384/PS512/ES512 are
+    // not in the vendored firebase/php-jwt and so are intentionally absent.
+    public $ssoJwtAlgorithms = ['RS256', 'RS384', 'RS512', 'PS256', 'ES256', 'ES384', 'EdDSA'];
     public $ssoJwtClockSkew = 60;
     public $ssoJwtTrustedProxies = [];
     public $ssoUsernameClaim = 'preferred_username';
