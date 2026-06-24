@@ -62,6 +62,10 @@ All types share a few options:
 - **Automatic user creation** — off by default. When on, matched users are created
   in `config.xml` with no local password (IdP-only login).
 - **Default groups** — OPNsense groups always granted to mapped users.
+- **Group mapping** — optional `idpGroup:opnsenseGroup` pairs (comma separated).
+  Mapped groups are trusted and may target privileged groups (e.g. `admins`). IdP
+  groups with no mapping fall back to a 1:1 name match that refuses privileged
+  groups (see Security).
 - **Base URL (override)** — set the firewall's public `https://host[:port]` when
   behind a reverse proxy or port-forward, so the URLs handed to the IdP match.
   Leave empty to auto-detect. The form shows the exact **redirect/ACS URL** live
@@ -170,11 +174,15 @@ for password sessions. Register at your IdP:
 - Privileges are **never** stored in the session — the OPNsense ACL resolves them
   from group membership on every request.
 - New sessions regenerate their ID (anti session-fixation).
-- SSO will not bind to a privileged local account (`root`/system or `admins`) that
-  it didn't create; email matching requires a verified email.
-- The 1:1 group fallback won't grant `admins` without an explicit mapping.
-- OIDC validates `iss`/`aud`/`azp`/`nonce` and pins signing algorithms; SAML
-  verifies the assertion signature and is replay-protected.
+- SSO will not bind the username claim to an existing local account that has its
+  own password (only to SSO-managed or passwordless accounts), and never to a
+  privileged account (`root`/system or `admins`) it didn't create; email matching
+  requires a verified email and an already-SSO-managed account.
+- The 1:1 group fallback won't grant a privileged group (`admins`, or any group
+  with full-GUI / shell / user-manager rights) without an explicit mapping.
+- OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp` and requires an asymmetric
+  signature; SAML verifies the assertion signature and is replay-protected
+  (single-use request id + consumed-assertion cache).
 - The local password (+ native TOTP) is always left active as a **break-glass**
   path — keep at least one local admin.
 
