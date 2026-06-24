@@ -88,17 +88,17 @@ final class IdentityMapper
             $this->assertValidUsername($identity->username);
             $byName = $this->findByName($identity->username);
             if ($byName !== null) {
-                // A username-claim collision with an account that has its own local
-                // password would let anyone who can set their IdP username to an
-                // existing local name take that account over (the username claim is
-                // often a self-service IdP attribute). Bind by username only to an
-                // SSO-managed account, exactly like the email path below; otherwise
-                // refuse -- silently provisioning a duplicate name would be worse.
-                if (!$this->isSsoManaged($byName)) {
+                // Refuse only when the match is a real human-owned account, i.e. one
+                // with a USABLE local password: binding the (often self-service,
+                // mutable) IdP username claim to it would be a takeover. SSO-managed
+                // accounts and otherwise passwordless/locked ones (no local login of
+                // their own) are safe to (re)bind -- and privileged accounts are
+                // additionally gated by guardBinding() below.
+                if (!$this->isSsoManaged($byName) && $this->hasUsableLocalPassword($byName)) {
                     throw new \RuntimeException(
                         "SSO: username '" . (string)$byName->name . "' collides with an existing " .
-                        "local account; refusing to bind (use an immutable IdP username claim, or " .
-                        "rename/remove the local account)"
+                        "local account that has its own password; refusing to bind (use an immutable " .
+                        "IdP username claim, or rename/remove the local account)"
                     );
                 }
                 $node = $byName;
@@ -201,6 +201,20 @@ final class IdentityMapper
     {
         return (string)($node->scrambled_password ?? '') === '1'
             || (string)($node->sso_subject ?? '') !== '';
+    }
+
+    /**
+     * True if the account logs in with a real local password -- i.e. a human-owned
+     * account. A scrambled password (IdP-only), an empty one, or the classic unix
+     * lock ("*" / "!...") is NOT usable, so such accounts are safe for SSO to bind.
+     */
+    private function hasUsableLocalPassword(\SimpleXMLElement $node): bool
+    {
+        if ((string)($node->scrambled_password ?? '') === '1') {
+            return false;
+        }
+        $pw = (string)($node->password ?? '');
+        return $pw !== '' && $pw !== '*' && ($pw[0] ?? '') !== '!';
     }
 
     private function findBySubject(string $subjectKey): ?\SimpleXMLElement
