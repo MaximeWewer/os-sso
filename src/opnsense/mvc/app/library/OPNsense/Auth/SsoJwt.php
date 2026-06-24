@@ -94,7 +94,11 @@ class SsoJwt extends Local implements IAuthConnector
                 'name' => gettext('Trusted proxy IPs/CIDRs'),
                 'help' => gettext('Comma separated source IPs or CIDRs of the proxy allowed to '
                     . 'present the JWT header. REQUIRED: the header is ignored from any other source '
-                    . '(otherwise anyone could forge it).'),
+                    . '(otherwise anyone could forge it). The check uses the direct TCP peer '
+                    . '(REMOTE_ADDR), never a forwardable header -- so list the IP that actually '
+                    . 'connects to the firewall. If another reverse proxy sits in front of the WebGUI, '
+                    . 'this must be that proxy IP, and that proxy must strip the JWT header from '
+                    . 'untrusted clients.'),
                 'type' => 'text',
                 'validate' => fn($v) => !empty($v) ? [] : [gettext('At least one trusted proxy IP/CIDR is required.')],
             ],

@@ -111,7 +111,10 @@ forwards a **signed JWT in a header**.
    (preferred — supports key rotation) or a static PEM public key.
 2. Set **Trusted proxy IPs/CIDRs** — *required*. The JWT header is only accepted
    when the request comes from these source IPs (the proxy), which is what prevents
-   anyone else from forging it.
+   anyone else from forging it. The match is on the **direct TCP peer**
+   (`REMOTE_ADDR`), never a forwardable header — list the IP that actually connects
+   to the firewall. If another reverse proxy fronts the WebGUI, that proxy's IP goes
+   here and it must strip the JWT header from untrusted clients.
 3. Point the proxy at `https://<opnsense>/api/sso/jwt/login?provider=<name>` and
    have it inject the token in the configured header (default `X-Auth-Request-Jwt`,
    or `Authorization: Bearer`).
@@ -143,7 +146,7 @@ A user who signs in through SSO gets their device authorized in that portal zone
 
 ### OpenVPN (deferred web-auth)
 
-OpenVPN 2.5+ “pending auth” lets the client authenticate in a browser:
+OpenVPN 2.6+ “pending auth” lets the client authenticate in a browser:
 
 1. The client connects and is shown a `WEB_AUTH` URL.
 2. It opens the URL, logs in at the IdP (passkey/MFA there).
@@ -185,10 +188,10 @@ Keycloak in Docker behind a TLS proxy. `vagrant up` is self-contained: it pushes
 the source over SCP and deploys the plugin into the live tree (no manual steps).
 
 ```sh
-cd test && vagrant up                      # boot the OPNsense VM + deploy the plugin
-cd test/idp && ./up.sh                      # start Authentik + Keycloak (+ TLS proxy)
-bash keycloak/setup-keycloak.sh             # create realm, clients, test user
-bash authentik/setup.sh                     # create OIDC/SAML providers + mappings
+cd test && vagrant up                 # boot the OPNsense VM + deploy the plugin
+cd test/idp && ./up.sh                # start Authentik + Keycloak (+ TLS proxy)
+bash keycloak/setup-keycloak.sh       # create realm, clients, test user
+bash authentik/setup.sh               # create OIDC/SAML providers + mappings
 ```
 
 Helper scripts under `test/vagrant/` register the auth servers and run the JWT /
