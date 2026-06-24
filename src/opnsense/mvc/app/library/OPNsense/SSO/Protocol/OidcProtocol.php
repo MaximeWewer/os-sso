@@ -355,14 +355,24 @@ final class OidcProtocol implements ProtocolInterface
     private function toIdentity(array $claims): NormalizedIdentity
     {
         $id = new NormalizedIdentity('');
-        $id->subject = (string)($claims['sub'] ?? '');
-        $id->username = (string)($claims[$this->usernameClaim] ?? '');
-        $id->email = (string)($claims['email'] ?? '');
+        $id->subject = self::scalarClaim($claims['sub'] ?? '');
+        $id->username = self::scalarClaim($claims[$this->usernameClaim] ?? '');
+        $id->email = self::scalarClaim($claims['email'] ?? '');
         $id->emailVerified = filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOL);
-        $id->displayName = (string)($claims['name'] ?? '');
+        $id->displayName = self::scalarClaim($claims['name'] ?? '');
         $id->groups = $this->extractGroups($claims);
         $id->raw = $claims;
         return $id;
+    }
+
+    /**
+     * An identity claim usable as a string: scalars only. A multi-valued (array)
+     * or object claim returns '' instead of degrading to the literal "Array",
+     * which would otherwise collide every such user onto one local account.
+     */
+    private static function scalarClaim($value): string
+    {
+        return is_scalar($value) ? (string)$value : '';
     }
 
     private function extractGroups(array $claims): array
