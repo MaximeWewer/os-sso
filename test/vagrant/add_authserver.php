@@ -30,7 +30,16 @@ $as->addChild('refid', uniqid());
 $as->addChild('type', $type);
 $as->addChild('name', $name);
 $as->addChild('sso_create_users', '1');
-$as->addChild('sso_default_groups', 'admins');
+// AS_DEFAULT_GROUPS may be set to '' to register with no default groups (e.g. to
+// exercise the privilege-gated 1:1 group fallback); unset defaults to 'admins'.
+$dg = getenv('AS_DEFAULT_GROUPS');
+$as->addChild('sso_default_groups', $dg === false ? 'admins' : $dg);
+// Optional operator group map ("idpGroup:opnsenseGroup,...") -- trusted, may target
+// privileged groups (see GroupMapper::parseMap / the sso_group_map field).
+$gm = getenv('AS_GROUP_MAP');
+if ($gm !== false && $gm !== '') {
+    $as->addChild('sso_group_map', $gm);
+}
 $as->addChild('sso_button_label', getenv('AS_LABEL') ?: ucfirst($name));
 
 if ($type === 'oidc') {

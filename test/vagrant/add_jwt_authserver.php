@@ -36,13 +36,19 @@ $set = function ($k, $v) use ($node) {
 };
 
 $set('sso_create_users', '1');
-$set('sso_default_groups', getenv('JWT_GROUPS') ?: 'admins');
+// JWT_GROUPS may be '' to register with no default groups (to exercise the
+// privilege-gated 1:1 fallback); unset defaults to 'admins'.
+$jg = getenv('JWT_GROUPS');
+$set('sso_default_groups', $jg === false ? 'admins' : $jg);
 $set('sso_jwt_issuer', getenv('JWT_ISS') ?: 'https://idp.test');
 $set('sso_jwt_audience', getenv('JWT_AUD') ?: 'opnsense');
 $set('sso_jwt_trusted_proxies', getenv('JWT_TRUSTED') ?: '127.0.0.1');
 $set('sso_jwt_algorithms', 'RS256');
 $set('sso_username_claim', getenv('JWT_CLAIM') ?: 'preferred_username');
 $set('sso_groups_claim', 'groups');
+// Optional operator group map ("idpGroup:opnsenseGroup,..."); '' clears it.
+$gm = getenv('JWT_GROUP_MAP');
+$set('sso_group_map', $gm === false ? '' : $gm);
 $set('sso_jwt_public_key', getenv('JWT_PUBKEY') ?: '');
 
 Config::getInstance()->save();
