@@ -75,6 +75,14 @@ final class CaptivePortalAuthorizer
         if ($username === '') {
             throw new \RuntimeException('no username in the SSO identity');
         }
+        // The captive-portal path does NOT run through IdentityMapper (no local
+        // account), so the username claim skips its charset validation -- yet it is
+        // logged below and handed to configd. Refuse control characters / newlines
+        // so a crafted claim cannot forge audit-log lines (CWE-117); a legitimate
+        // username (email, preferred_username, subject) never carries them.
+        if (preg_match('/[\x00-\x1f\x7f]/', $username)) {
+            throw new \RuntimeException('invalid characters in the SSO username');
+        }
 
         $ip = preg_replace('/[^0-9a-fA-F.:]/', '', $clientIp);
         if ($ip === '') {
