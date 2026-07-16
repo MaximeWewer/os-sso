@@ -45,7 +45,7 @@ final class SessionEstablisher
         $userNode = $this->findEnabledUser($cnf, $localUsername);
         if ($userNode === null) {
             throw new \RuntimeException(
-                sprintf("SSO: refusing to establish session, local user '%s' is missing or disabled", $localUsername)
+                sprintf("SSO: refusing to establish session, local user '%s' is missing, disabled or expired", $localUsername)
             );
         }
 
@@ -80,7 +80,17 @@ final class SessionEstablisher
         }
         foreach ($cnf->system->user as $user) {
             if ((string)$user->name === $username) {
-                if ((string)$user->disabled === '1') {
+                if (!empty((string)$user->disabled)) {
+                    return null;
+                }
+                // Parity with core Local::_authenticate(): a local account past its
+                // <expires> date is refused on the password path, so SSO must not be
+                // a way around an operator's expiry. Same m/d/Y, one-day-grace parse
+                // as core (an SSO-managed account normally has no <expires> at all).
+                if (
+                    !empty($user->expires)
+                    && strtotime('-1 day') > strtotime(date('m/d/Y', strtotime((string)$user->expires)))
+                ) {
                     return null;
                 }
                 return $user;
