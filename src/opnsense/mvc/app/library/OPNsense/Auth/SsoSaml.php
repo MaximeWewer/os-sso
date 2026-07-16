@@ -26,6 +26,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoCreateUsers = false;
     public $ssoDefaultGroups = [];
     public $ssoGroupMap = null;
+    public $ssoGroupSync = false;
     public $ssoButtonLabel = null;
     public $ssoBaseUrl = null;
     public $ssoLoginRedirect = null;
@@ -62,6 +63,7 @@ class SsoSaml extends Local implements IAuthConnector
             }
         }
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
+        $this->ssoGroupSync = !empty($config['sso_group_sync']);
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
         $this->ssoDefaultGroups = array_filter(array_map('trim', explode(',', $config['sso_default_groups'] ?? '')));
     }
@@ -145,6 +147,15 @@ class SsoSaml extends Local implements IAuthConnector
                     . 'groups (e.g. admins). Unmapped IdP groups fall back to a 1:1 name match that '
                     . 'refuses privileged groups.'),
                 'type' => 'text',
+            ],
+            'sso_group_sync' => [
+                'name' => gettext('Strict group sync'),
+                'help' => gettext('Reconcile group membership on every login: remove the user from '
+                    . 'groups os-sso previously granted but the IdP no longer asserts. Only groups '
+                    . 'os-sso itself granted are touched (manual assignments are kept), and the last '
+                    . 'member of a privileged group is never removed. Off = additive (memberships are '
+                    . 'only ever added).'),
+                'type' => 'checkbox',
             ],
             'sso_button_label' => [
                 'name' => gettext('Login button label'),
