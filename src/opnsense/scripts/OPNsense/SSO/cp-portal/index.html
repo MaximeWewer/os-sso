@@ -41,6 +41,20 @@
         var port = parseInt(window.location.port, 10);
         if (!isNaN(port) && port >= 8000 && port < 9000) { zoneid = String(port - 8000); }
         var redirurl = new URL(window.location).searchParams.get('redirurl') || '';
+        // Core hands the captive client's original destination as a scheme-less
+        // host[/path]; we prepend http:// below. Refuse anything that could retarget
+        // the redirect off that shape -- an embedded scheme, protocol-relative "//",
+        // backslashes, a userinfo "@", or whitespace/control chars -- so a crafted
+        // portal link cannot turn this into an off-site/JS redirect (open redirect).
+        function safeRedir(v) {
+            if (!v) { return ''; }
+            if (/[\s\\]/.test(v) || v.indexOf('//') === 0
+                || v.indexOf('@') !== -1 || /^[a-z][a-z0-9+.-]*:/i.test(v)) {
+                return '';
+            }
+            return v;
+        }
+        redirurl = safeRedir(redirurl);
         // The WebGUI (and the /api/sso endpoints) live on https://<firewall>/ -- same
         // host as the portal, standard https port. The zone must pre-auth-allow it.
         var ssoBase = 'https://' + window.location.hostname;
