@@ -51,6 +51,9 @@ final class OidcProtocol implements ProtocolInterface
     /** @var string raw id_token from the last successful callback (for RP logout) */
     private string $lastIdToken = '';
 
+    /** @var string state minted by the last startLogin() (correlation key for the flow) */
+    private string $lastState = '';
+
     /**
      * @param array $cfg issuer, client_id, client_secret, scopes[], username_claim,
      *                    groups_claim, redirect_uri, use_pkce
@@ -89,6 +92,7 @@ final class OidcProtocol implements ProtocolInterface
 
         $state = $this->randomToken();
         $nonce = $this->randomToken();
+        $this->lastState = $state;
         $_SESSION[$this->skey('state')] = $state;
         $_SESSION[$this->skey('nonce')] = $nonce;
         $_SESSION[$this->skey('return')] = $this->sanitizeReturnUrl($returnUrl);
@@ -180,6 +184,13 @@ final class OidcProtocol implements ProtocolInterface
     public function getLastIdToken(): string
     {
         return $this->lastIdToken;
+    }
+
+    /** The OIDC `state` minted by the last startLogin(); the controller keys its
+     *  in-flight flow record by this so the callback can recover it by returned state. */
+    public function getLastState(): string
+    {
+        return $this->lastState;
     }
 
     /**

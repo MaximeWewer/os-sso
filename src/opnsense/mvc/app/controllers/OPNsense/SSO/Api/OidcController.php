@@ -42,23 +42,31 @@ class OidcController extends ApiControllerBase
         // protocol's anti-replay state (state/nonce/PKCE verifier) actually persists.
         $this->startSession();
         try {
-            $protocol = $this->protocolFor($this->request->get('provider'));
+            $provider = $this->request->get('provider');
+            $protocol = $this->protocolFor($provider);
             $returnUrl = (string)($this->request->get('url') ?? '/');
             $url = $protocol->startLogin($returnUrl);
-            // OpenVPN deferred web-auth: carry the one-time VPN session id through
-            // the OIDC ceremony so the callback can authorize the tunnel.
+
+            // OpenVPN deferred web-auth: the one-time VPN session id, and Captive
+            // Portal deferred login: the zone id + the client's original destination.
+            // Both ride through the OIDC ceremony so the callback can authorize the
+            // tunnel / captive client instead of opening a WebGUI session.
             $vpn = preg_replace('/[^a-f0-9]/', '', (string)$this->request->get('vpn'));
-            if ($vpn !== '') {
-                $_SESSION['sso_oidc_vpn'] = $vpn;
-            }
-            // Captive Portal deferred login: carry the zone id + the client's original
-            // destination through the OIDC ceremony so the callback can authorize the
-            // captive client instead of opening a WebGUI session.
             $cp = preg_replace('/[^0-9]/', '', (string)$this->request->get('cp'));
-            if ($cp !== '') {
-                $_SESSION['sso_oidc_cp'] = $cp;
-                $_SESSION['sso_oidc_cpurl'] = (string)($this->request->get('cpurl') ?? '');
-            }
+            $cpurl = $cp !== '' ? (string)($this->request->get('cpurl') ?? '') : '';
+
+            // Record this in-flight login keyed by its OIDC state. Keying by state
+            // (not a single shared session key) means two concurrent logins to
+            // different providers in one browser no longer clobber each other's
+            // provider / vpn / cp -- the callback recovers the right one by the
+            // state it gets back. The per-provider state/nonce/verifier the protocol
+            // stores are already namespaced; this closes the last shared keys.
+            $_SESSION['sso_oidc_flows'][$protocol->getLastState()] = [
+                'provider' => (string)$provider,
+                'vpn' => $vpn,
+                'cp' => $cp,
+                'cpurl' => $cpurl,
+            ];
         } catch (\Throwable $e) {
             return $this->fail($e);
         }
@@ -76,9 +84,17 @@ class OidcController extends ApiControllerBase
         }
         $this->startSession();
         try {
-            // Trust the provider we stored at startLogin over any query param, so a
-            // crafted callback URL cannot steer which provider's validation applies.
-            $provider = ($_SESSION['sso_oidc_provider'] ?? '') ?: $this->request->get('provider');
+            // Recover this login's in-flight record by the state the IdP echoes back
+            // (single use). Trust the provider recorded at startLogin over any query
+            // param, so a crafted callback URL cannot steer which provider validates.
+            $state = (string)($_GET['state'] ?? '');
+            $flow = $_SESSION['sso_oidc_flows'][$state] ?? null;
+            if (is_array($flow)) {
+                unset($_SESSION['sso_oidc_flows'][$state]);
+            }
+            $provider = is_array($flow) && $flow['provider'] !== ''
+                ? (string)$flow['provider']
+                : $this->request->get('provider');
             $auth = $this->authServer($provider);
             $protocol = $this->protocolFor($provider, $auth);
 
@@ -88,9 +104,8 @@ class OidcController extends ApiControllerBase
             // Captive Portal path: authorize the captive client's IP in its zone. No
             // local account and no WebGUI session -- evaluated straight from the
             // verified identity (and the zone's group policy) before any mapping.
-            $cp = (string)($_SESSION['sso_oidc_cp'] ?? '');
-            $cpurl = (string)($_SESSION['sso_oidc_cpurl'] ?? '');
-            unset($_SESSION['sso_oidc_cp'], $_SESSION['sso_oidc_cpurl']);
+            $cp = is_array($flow) ? (string)($flow['cp'] ?? '') : '';
+            $cpurl = is_array($flow) ? (string)($flow['cpurl'] ?? '') : '';
             if ($cp !== '') {
                 $cpRes = CaptivePortalAuthorizer::authorize(
                     $cp,
@@ -112,8 +127,7 @@ class OidcController extends ApiControllerBase
 
             // OpenVPN deferred web-auth path: authorize the tunnel, do NOT open a
             // WebGUI admin session (different security context).
-            $vpn = (string)($_SESSION['sso_oidc_vpn'] ?? '');
-            unset($_SESSION['sso_oidc_vpn']);
+            $vpn = is_array($flow) ? (string)($flow['vpn'] ?? '') : '';
             if ($vpn !== '') {
                 VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
                 session_write_close();
@@ -182,7 +196,6 @@ class OidcController extends ApiControllerBase
     private function protocolFor($provider, $auth = null): OidcProtocol
     {
         $auth = $auth ?? $this->authServer($provider);
-        $_SESSION['sso_oidc_provider'] = (string)$provider;
         return new OidcProtocol([
             'provider' => (string)$provider,
             'issuer' => $auth->ssoIssuer,
