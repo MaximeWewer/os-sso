@@ -66,6 +66,11 @@ All types share a few options:
   Mapped groups are trusted and may target privileged groups (e.g. `admins`). IdP
   groups with no mapping fall back to a 1:1 name match that refuses privileged
   groups (see Security).
+- **Strict group sync** — off by default (membership is additive: groups are only
+  ever added). When on, each login also *revokes* groups os-sso previously granted
+  but the IdP no longer asserts. Only groups os-sso itself granted are touched
+  (hand-assigned groups are kept), and the last member of a privileged group is
+  never removed.
 - **Base URL (override)** — set the firewall's public `https://host[:port]` when
   behind a reverse proxy or port-forward, so the URLs handed to the IdP match.
   Leave empty to auto-detect. The form shows the exact **redirect/ACS URL** live
@@ -180,6 +185,11 @@ for password sessions. Register at your IdP:
   requires a verified email and an already-SSO-managed account.
 - The 1:1 group fallback won't grant a privileged group (`admins`, or any group
   with full-GUI / shell / user-manager rights) without an explicit mapping.
+- Group membership is additive by default; **Strict group sync** additionally
+  revokes IdP-unasserted groups it earlier granted, but only those (never a
+  hand-assigned group) and never the last member of a privileged group.
+- A **disabled or expired** local account is refused an SSO session, matching the
+  local-password path (SSO is not a way around an account's expiry).
 - OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp` and requires an asymmetric
   signature; SAML verifies the assertion signature and is replay-protected
   (single-use request id + consumed-assertion cache).
