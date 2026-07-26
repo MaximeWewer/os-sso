@@ -9,12 +9,19 @@ namespace OPNsense\SSO;
 
 use OPNsense\Base\IndexController;
 
-/** UI shell for the os-sso settings form (System > Access > SSO Settings). */
+/**
+ * UI shell for the OpenVPN web-auth form (System > Access > SSO VPN web-auth).
+ *
+ * The model behind it is called "settings" because it is the plugin's settings
+ * document, but the only thing in it today is the OpenVPN deferred web-auth wiring --
+ * everything else in os-sso is configured per authentication server. The page is
+ * named after what it actually holds, not after the model.
+ */
 class SettingsController extends IndexController
 {
     public function indexAction()
     {
-        $this->view->title = gettext('SSO Settings');
+        $this->view->title = gettext('OpenVPN web-auth');
         $this->view->formSettings = $this->getForm('settings');
         $this->view->pick('OPNsense/SSO/settings');
     }

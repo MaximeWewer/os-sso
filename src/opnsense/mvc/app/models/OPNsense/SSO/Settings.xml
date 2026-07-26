@@ -24,10 +24,16 @@
                     <saml>SAML 2.0</saml>
                 </OptionValues>
             </protocol>
-            <provider type="TextField">
+            <!-- The list of configured authentication servers, narrowed to the ones
+                 os-sso handles: a free-text server name was a typo away from a VPN
+                 that defers every login to a provider that does not exist. Stores the
+                 server name, same as before. -->
+            <provider type="AuthenticationServerField">
                 <Required>N</Required>
-                <Mask>/^([a-zA-Z0-9._\- ]{1,64})$/u</Mask>
-                <ValidationMessage>Enter the name of a configured SSO authentication server.</ValidationMessage>
+                <Filters>
+                    <type>/^(oidc|saml)$/</type>
+                </Filters>
+                <ValidationMessage>Select a configured OIDC or SAML authentication server.</ValidationMessage>
             </provider>
             <host type="TextField">
                 <Required>N</Required>

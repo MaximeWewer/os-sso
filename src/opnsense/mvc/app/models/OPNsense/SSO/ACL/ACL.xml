@@ -1,12 +1,13 @@
 <?xml version="1.0"?>
 <!--
-  Privilege for the SSO diagnostics page. Deliberately its own privilege rather than
-  folded into page-system-usermanager: the page exposes IdP endpoints and the list of
-  open SSO sessions, which is read-only but not something every operator needs.
+  Privileges for the two os-sso pages. Deliberately their own rather than folded into
+  page-system-usermanager: diagnostics exposes IdP endpoints and the list of open SSO
+  sessions (read-only, but not something every operator needs), and the VPN page
+  decides how tunnels get authenticated.
 -->
 <acl>
     <page-system-sso-settings>
-        <name>System: Access: SSO Settings</name>
+        <name>System: Access: SSO VPN web-auth</name>
         <patterns>
             <pattern>ui/sso/settings*</pattern>
             <pattern>api/sso/settings/*</pattern>

@@ -10,7 +10,7 @@
 #
 # Prerequisites: `openvpn` on the host, the lab VPN server started in the VM
 #   (vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/setup-vpn-server.sh'),
-# and vpn.conf pointing at a working provider (System > Access > SSO Settings).
+# and vpn.conf pointing at a working provider (System > Access > SSO VPN web-auth).
 #
 # Usage: SSO_GUI_PORT=8444 ./vpn-client.sh
 set -uo pipefail

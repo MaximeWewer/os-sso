@@ -19,10 +19,10 @@
     <field>
         <id>settings.vpn.provider</id>
         <label>Authentication server</label>
-        <type>text</type>
+        <type>dropdown</type>
         <help>
-            Name of the SSO authentication server to use, exactly as it appears under
-            System - Access - Servers (and on the SSO Diagnostics page).
+            Which SSO authentication server drives the VPN login. The list holds the
+            OIDC and SAML servers configured under System - Access - Servers.
         </help>
     </field>
     <field>

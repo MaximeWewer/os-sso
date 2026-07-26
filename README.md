@@ -221,8 +221,9 @@ OpenVPN 2.6+ “pending auth” lets the client authenticate in a browser:
 2. It opens the URL, logs in at the IdP (passkey/MFA there).
 3. The tunnel comes up once the login succeeds.
 
-Configure it under **System ▸ Access ▸ SSO Settings**: protocol, authentication
-server, the host the client's browser opens, and the web-auth timeout. Saving writes
+Configure it under **System ▸ Access ▸ SSO VPN web-auth**: protocol, the
+authentication server (picked from the configured OIDC/SAML servers), the host the
+client's browser opens, and the web-auth timeout. Saving writes
 `/usr/local/etc/sso/vpn.conf` (no more editing it over SSH). Then point the OpenVPN
 server at the script:
 
