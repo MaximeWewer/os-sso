@@ -309,9 +309,28 @@ final class OidcProtocol implements ProtocolInterface
             if (stripos($doc['issuer'], 'https://') !== 0) {
                 throw new \RuntimeException('OIDC: discovered issuer is not https');
             }
+            $this->assertIssuerMatches($doc);
             $this->cacheSet('disco_' . $this->issuer, $doc);
         }
+        // Re-check on the cached path too: everything downstream (the iss claim
+        // comparison) trusts this value, so it must never come back unverified.
+        $this->assertIssuerMatches($doc);
         return $this->discovery = $doc;
+    }
+
+    /**
+     * OIDC Discovery 1.0 section 4.3: the issuer in the document MUST equal the
+     * issuer the well-known URL was built from. Without this the operator pins one
+     * issuer and the ID token's `iss` is then compared against whatever the document
+     * claimed -- so a multi-tenant IdP where a tenant controls its own metadata could
+     * hand us a document naming a different issuer, and tokens minted for that other
+     * issuer would validate.
+     */
+    private function assertIssuerMatches(array $doc): void
+    {
+        if (rtrim((string)($doc['issuer'] ?? ''), '/') !== $this->issuer) {
+            throw new \RuntimeException('OIDC: discovery issuer does not match the configured issuer');
+        }
     }
 
     /**
