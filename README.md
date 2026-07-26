@@ -420,7 +420,7 @@ SSO_GUI_URL=https://192.168.60.10 ./run-all.sh oidc saml      # a subset
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
 | `oidc.sh` | host | 28 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, rate limiting, required groups, deprovisioning, session expiry, back-channel logout |
-| `saml.sh` | host | 21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off), POST binding, metadata import, SLO |
+| `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only, skipped on Authentik), POST binding, metadata import, SLO |
 | `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
 | `scim.sh` | host | 42-45 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and against Authentik its real SCIM client |
