@@ -324,22 +324,32 @@ Whatever `SSO_GUI_PORT` you pick must be the `SP_BASE` given to the IdP setup an
 the **Base URL** registered on the auth server - it is what ends up in the OIDC
 `redirect_uri` and the SAML ACS.
 
-Five end-to-end suites, 84 checks in total:
+Seven end-to-end suites under `test/e2e/`, run against either IdP:
 
 ```sh
-# host-side (they drive a real browser ceremony against Keycloak)
-SSO_GUI_PORT=8444 ./oidc-e2e.sh    # 28 checks
-SSO_GUI_PORT=8444 ./saml-e2e.sh    # 20 checks
-# VM-side
-vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/jwt-e2e.sh'   # 17
-vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/cp-e2e.sh'    #  6
-vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/vpn-e2e.sh'   # 13
+cd test/e2e
+SSO_GUI_PORT=8444 ./run-all.sh                  # everything, against Keycloak
+SSO_GUI_PORT=8444 IDP=authentik ./run-all.sh    # same, against Authentik
+SSO_GUI_PORT=8444 ./run-all.sh oidc saml        # a subset
 ```
 
-They cover the full ceremonies (login, callback, session) plus the security
-behaviour: Host-header hardening, assertion replay, single-use JWTs, the
-required-groups gate, deprovisioning (and its refusal on privileged accounts),
-session expiry, rate limiting, cross-site logout and IdP-initiated SAML.
+| Suite | Where | Checks | Covers |
+|---|---|---|---|
+| `oidc.sh` | host | 28 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, rate limiting, required groups, deprovisioning, session expiry, back-channel logout |
+| `saml.sh` | host | 21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off), POST binding, metadata import, SLO |
+| `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
+| `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
+| `jwt.sh` | VM | 17 | source gate, signature/aud, `iat`, max-age, single-use, group mapping |
+| `cp.sh` | VM | 6 | the authorizer gates and a real configd allow |
+| `vpn.sh` | VM | 13 | the hook and the verdict writer, IP binding, single-use session ids |
+
+The host-side suites drive the whole browser ceremony through
+`lib/idp_login.py`, which speaks both IdP dialects: Keycloak renders a login form,
+Authentik drives a flow-executor API.
+
+`vpn-client.sh` needs `openvpn` on the host and the lab VPN server started with
+`vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/setup-vpn-server.sh'`;
+it skips itself when openvpn is missing.
 
 ## Build
 

@@ -18,7 +18,9 @@ IDP="${IDP:-keycloak}"
 PROVIDER="${SSO_PROVIDER:-keycloak}"
 IDP_USER="${IDP_USER:-kctest}"
 IDP_PASS="${IDP_PASS:-Test12345!}"
-ZONE="${CP_ZONE:-0}"
+# A zone bound to the provider under test: the zone<->provider binding is a gate, so
+# a zone that lists another provider would (correctly) refuse this login.
+ZONE=""
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 pass=0; fail=0
@@ -35,7 +37,13 @@ portal_login() { # $1 = zone, $2 = original destination, $3 = body file
         --body "$3" 2>/dev/null | tail -1
 }
 
-echo "=== os-sso Captive Portal from a client browser ($GUI, idp=$IDP, zone=$ZONE) ==="
+echo "=== os-sso Captive Portal from a client browser ($GUI, idp=$IDP) ==="
+
+ZONE=$(vm "env CP_DESC=sso-portal-$PROVIDER CP_AUTH=$PROVIDER php /home/vagrant/os-sso/test/vagrant/add_cp_zone.php")
+case "$ZONE" in
+    [0-9]*) echo ">>> using captive portal zone $ZONE (bound to $PROVIDER)" ;;
+    *) echo "  FAIL could not create a captive portal zone ($ZONE)"; exit 1 ;;
+esac
 
 echo ">>> case 1: the portal page lists the SSO providers"
 curl -sk -o "$W/prov.json" "$GUI/api/sso/portal/providers"
@@ -51,7 +59,8 @@ grep -q 'Connected' "$W/done.html" 2>/dev/null && ok "page confirms network acce
 grep -q 'http://example.com/welcome' "$W/done.html" 2>/dev/null \
     && ok "the original destination is offered as a link" \
     || ko "the destination was not carried through"
-vm "grep -a 'os-sso cp: authorized' /var/log/system/*.log | tail -1" | grep -q "zone $ZONE" \
+vm "grep -a os-sso /var/log/system/system_*.log | grep -a authorized | grep -av COMMAND | tail -1" \
+    | grep -q "zone $ZONE" \
     && ok "the firewall logged the authorization" || ko "no authorization in the log"
 
 echo ">>> case 3: an unbound zone is refused"
