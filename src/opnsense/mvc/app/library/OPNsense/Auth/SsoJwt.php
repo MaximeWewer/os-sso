@@ -35,6 +35,7 @@ class SsoJwt extends Local implements IAuthConnector
     public $ssoSessionLifetime = 0;
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
+    public $ssoDeprovision = false;
     public $ssoDefaultGroups = [];
     public $ssoGroupMap = null;
     public $ssoGroupSync = false;
@@ -71,6 +72,7 @@ class SsoJwt extends Local implements IAuthConnector
             }
         }
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
+        $this->ssoDeprovision = !empty($config['sso_deprovision']);
         if (isset($config['sso_session_lifetime']) && $config['sso_session_lifetime'] !== '') {
             $this->ssoSessionLifetime = (int)$config['sso_session_lifetime'];
         }
@@ -204,6 +206,15 @@ class SsoJwt extends Local implements IAuthConnector
                     . 'Evaluated on the IdP-asserted groups, before any local account is matched, created or '
                     . 'updated. Leave empty to let every account the IdP authenticates log in.'),
                 'type' => 'text',
+            ],
+            'sso_deprovision' => [
+                'name' => gettext('Deprovision on refused login'),
+                'help' => gettext('When a login is refused by the required groups above, also disable the '
+                    . 'local account it belongs to and end its open sessions. This is how a revocation at the '
+                    . 'IdP reaches the firewall: a login attempt is the only moment we hear about it. Only '
+                    . 'os-sso-managed accounts are touched, never a privileged one, and they are disabled, '
+                    . 'not deleted. Needs a required-groups list to be of any use.'),
+                'type' => 'checkbox',
             ],
             'sso_default_groups' => [
                 'name' => gettext('Default groups'),

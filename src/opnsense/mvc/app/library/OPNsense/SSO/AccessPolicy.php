@@ -25,10 +25,15 @@ final class AccessPolicy
     /**
      * @param string[] $requiredGroups IdP group names, any one of which grants access
      * @param NormalizedIdentity $identity the verified identity
+     * @param bool $deprovision also deactivate the local account behind a refusal --
+     *             the only moment a login-driven plugin learns of a revocation
      * @throws \RuntimeException when the identity holds none of the required groups
      */
-    public static function assert(array $requiredGroups, NormalizedIdentity $identity): void
-    {
+    public static function assert(
+        array $requiredGroups,
+        NormalizedIdentity $identity,
+        bool $deprovision = false
+    ): void {
         $required = [];
         foreach ($requiredGroups as $group) {
             $group = strtolower(trim((string)$group));
@@ -44,6 +49,10 @@ final class AccessPolicy
             if (isset($required[strtolower(trim((string)$asserted))])) {
                 return;
             }
+        }
+
+        if ($deprovision) {
+            Deprovisioner::disableFor($identity);
         }
 
         // The identity is authentic; it is simply not allowed here. Name the subject

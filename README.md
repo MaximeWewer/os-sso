@@ -69,6 +69,12 @@ All types share a few options:
   Portal and VPN alike). Checked on the IdP-asserted groups before any local
   account is matched, created or updated. Empty means every account the IdP
   authenticates may log in - set it unless that is what you want.
+- **Deprovision on refused login** - when the required groups above refuse a login,
+  also disable the local account behind it and end its open sessions. A login attempt
+  is the only moment a firewall plugin hears about a revocation at the IdP, so this is
+  what makes "removed from the group there" reach the account here. Only
+  os-sso-managed accounts are touched, never a privileged one, and they are disabled,
+  not deleted.
 - **Default groups** - OPNsense groups always granted to mapped users.
 - **Group mapping** - optional `idpGroup:opnsenseGroup` pairs (comma separated).
   Mapped groups are trusted and may target privileged groups (e.g. `admins`). IdP
@@ -217,7 +223,7 @@ for password sessions. Register at your IdP:
 
 **Back-channel logout (OIDC).** Register
 `https://<opnsense>/api/sso/oidc/backchannel?provider=<name>` as the client's
-back-channel logout URI and the IdP can end the firewall session by itself — when the
+back-channel logout URI and the IdP can end the firewall session by itself - when the
 user logs out elsewhere, or when you disable the account. Without it (and without a
 maximum session lifetime) an open session survives until it idles out. The endpoint
 takes only a signed `logout_token`: issuer, audience, `iat` freshness, the

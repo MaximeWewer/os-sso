@@ -71,7 +71,7 @@ class JwtController extends ApiControllerBase
             $identity->authServer = (string)$this->request->get('provider');
 
             // Provider-level door policy, before any local account is touched or created.
-            AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity);
+            AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity, (bool)$auth->ssoDeprovision);
 
             $username = (new IdentityMapper(new GroupMapper(
                 GroupMapper::parseMap((string)$auth->ssoGroupMap),

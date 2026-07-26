@@ -110,7 +110,7 @@ class SamlController extends ApiControllerBase
 
             // Provider-level door policy, before ANY path below (captive portal, VPN
             // or WebGUI) and before any local account is touched or created.
-            AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity);
+            AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity, (bool)$auth->ssoDeprovision);
 
             // Captive Portal path: authorize the captive client's IP in its zone
             // straight from the verified assertion (no local account, no WebGUI
