@@ -27,6 +27,8 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoEmailAttribute = null;
     public $ssoDisplayNameAttribute = null;
     public $ssoWantMessagesSigned = false;
+    public $ssoWantAssertionsEncrypted = false;
+    public $ssoWantNameIdEncrypted = false;
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
     public $ssoDefaultGroups = [];
@@ -74,6 +76,8 @@ class SsoSaml extends Local implements IAuthConnector
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
+        $this->ssoWantAssertionsEncrypted = !empty($config['sso_want_assertions_encrypted']);
+        $this->ssoWantNameIdEncrypted = !empty($config['sso_want_nameid_encrypted']);
         $this->ssoRequiredGroups = array_filter(array_map('trim', explode(',', $config['sso_required_groups'] ?? '')));
         $this->ssoDefaultGroups = array_filter(array_map('trim', explode(',', $config['sso_default_groups'] ?? '')));
     }
@@ -170,6 +174,18 @@ class SsoSaml extends Local implements IAuthConnector
             'sso_want_messages_signed' => [
                 'name' => gettext('Require signed response'),
                 'help' => gettext('Require the SAML Response (message) itself to be signed, not only the assertion. Enable when the IdP supports it (mitigates signature-wrapping).'),
+                'type' => 'checkbox',
+            ],
+            'sso_want_assertions_encrypted' => [
+                'name' => gettext('Require encrypted assertions'),
+                'help' => gettext('Require the IdP to encrypt the assertion to the SP certificate. Needs an '
+                    . 'SP certificate and private key above, and the IdP configured to encrypt. Decryption '
+                    . 'works whenever the SP key is set; this makes an unencrypted assertion a failure.'),
+                'type' => 'checkbox',
+            ],
+            'sso_want_nameid_encrypted' => [
+                'name' => gettext('Require encrypted NameID'),
+                'help' => gettext('Same, for the NameID element alone.'),
                 'type' => 'checkbox',
             ],
             'sso_create_users' => [

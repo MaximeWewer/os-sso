@@ -154,7 +154,10 @@ class SamlController extends ApiControllerBase
     {
         try {
             $auth = $this->authServer($this->request->get('provider'));
-            $icon = FaviconProxy::fetch((string)($auth->ssoIdpSsoUrl ?: $auth->ssoIdpEntityId));
+            // Via idpSettings so a metadata-only provider (nothing typed in the form)
+            // still has a host to take the icon from; both lookups are cached.
+            $idp = $this->idpSettings($auth);
+            $icon = FaviconProxy::fetch($idp['sso_url'] ?: $idp['entity_id']);
         } catch (\Throwable $e) {
             $this->response->setStatusCode(404, 'Not Found');
             return '';
@@ -371,6 +374,8 @@ class SamlController extends ApiControllerBase
             'email_attribute' => $auth->ssoEmailAttribute,
             'display_name_attribute' => $auth->ssoDisplayNameAttribute,
             'want_messages_signed' => (bool)$auth->ssoWantMessagesSigned,
+            'want_assertions_encrypted' => (bool)$auth->ssoWantAssertionsEncrypted,
+            'want_nameid_encrypted' => (bool)$auth->ssoWantNameIdEncrypted,
         ]);
     }
 

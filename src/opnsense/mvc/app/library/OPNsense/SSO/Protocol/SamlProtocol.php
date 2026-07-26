@@ -419,12 +419,24 @@ final class SamlProtocol implements ProtocolInterface
      */
     private function settings(bool $forSlo = false): array
     {
+        // Encryption is decided by the IdP (it encrypts to our SP certificate) and
+        // merely REQUIRED here; php-saml decrypts with the SP private key either way.
+        // Requiring it without a key would reject every assertion, so say why.
+        $wantEncrypted = !empty($this->cfg["want_assertions_encrypted"]);
+        $wantNameIdEncrypted = !empty($this->cfg["want_nameid_encrypted"]);
+        if (($wantEncrypted || $wantNameIdEncrypted) && empty($this->cfg["sp_key"])) {
+            throw new \RuntimeException(
+                "SAML: encrypted assertions require an SP certificate and private key"
+            );
+        }
+
         $security = [
             "wantAssertionsSigned" => true,
             // The assertion is always required signed; optionally also require the
             // response message signed (stronger, mitigates XSW) when the IdP supports it.
             "wantMessagesSigned" => !empty($this->cfg["want_messages_signed"]),
-            "wantNameIdEncrypted" => false,
+            "wantAssertionsEncrypted" => $wantEncrypted,
+            "wantNameIdEncrypted" => $wantNameIdEncrypted,
             "requestedAuthnContext" => false,
             "signatureAlgorithm" =>
                 "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
