@@ -72,9 +72,21 @@ final class SamlProtocol implements ProtocolInterface
 
     public function startLogin(string $returnUrl, string $vpn = '', string $cp = '', string $cpurl = ''): string
     {
+        return (string) $this->beginLogin($returnUrl, $vpn, $cp, $cpurl)["url"];
+    }
+
+    /**
+     * Build the AuthnRequest and record its in-flight state.
+     *
+     * @return array{binding:string,url:string,html:string} binding "redirect" (send
+     *         the browser to url) or "post" (render html, a self-submitting form --
+     *         some IdPs only accept the request over HTTP-POST)
+     */
+    public function beginLogin(string $returnUrl, string $vpn = '', string $cp = '', string $cpurl = ''): array
+    {
         $auth = new Saml2Auth($this->settings());
         // login() with stay=true returns the redirect URL instead of redirecting.
-        $url = $auth->login(null, [], false, false, true);
+        $url = (string) $auth->login(null, [], false, false, true);
         // Persist {provider, return, vpn, cp} keyed by the AuthnRequest id for
         // recovery + single-use InResponseTo replay protection at the ACS. The vpn
         // sid / captive-portal zone ride here (not in the session) because the ACS
@@ -87,7 +99,33 @@ final class SamlProtocol implements ProtocolInterface
             "cpurl" => $cpurl,
             "ts" => time(),
         ]);
-        return (string) $url;
+
+        if (empty($this->cfg["authn_post_binding"])) {
+            return ["binding" => "redirect", "url" => $url, "html" => ""];
+        }
+        // HTTP-POST binding: same request, base64 of the raw XML (the redirect
+        // binding's DEFLATE is a property of that binding, not of the message).
+        return [
+            "binding" => "post",
+            "url" => (string) ($this->cfg["idp_sso_url"] ?? ""),
+            "html" => $this->postBindingForm(
+                (string) ($this->cfg["idp_sso_url"] ?? ""),
+                base64_encode((string) $auth->getLastRequestXML())
+            ),
+        ];
+    }
+
+    /** Self-submitting form carrying the AuthnRequest over the HTTP-POST binding. */
+    private function postBindingForm(string $ssoUrl, string $samlRequest): string
+    {
+        $u = htmlspecialchars($ssoUrl, ENT_QUOTES);
+        $r = htmlspecialchars($samlRequest, ENT_QUOTES);
+        return "<!doctype html><html><head><meta charset='utf-8'><title>Signing in</title></head>"
+            . "<body onload='document.forms[0].submit()'>"
+            . "<form method='post' action='{$u}'>"
+            . "<input type='hidden' name='SAMLRequest' value='{$r}'>"
+            . "<noscript><button type='submit'>Continue to the identity provider</button></noscript>"
+            . "</form></body></html>";
     }
 
     /**
@@ -102,7 +140,11 @@ final class SamlProtocol implements ProtocolInterface
         // Stash the recovered return URL so consumeReturnUrl() satisfies the
         // ProtocolInterface contract uniformly with the OIDC protocol.
         $this->returnUrl = $this->sanitizeReturnUrl((string) ($state["return"] ?? "/"));
-        if ($requestId === "") {
+        if ($requestId === "" && empty($this->cfg["allow_idp_initiated"])) {
+            // No AuthnRequest of ours to tie this to. Unless the operator opted into
+            // IdP-initiated SSO, that is an unsolicited response and we refuse it:
+            // accepting one means anyone able to obtain an assertion can post it into
+            // a victim's browser and silently log them in as somebody else.
             throw new \RuntimeException(
                 "SAML: no in-flight request id (possible unsolicited response)",
             );
@@ -110,7 +152,10 @@ final class SamlProtocol implements ProtocolInterface
         $auth = new Saml2Auth($this->settings());
         // processResponse validates signature, conditions, destination and that the
         // response InResponseTo equals $requestId.
-        $auth->processResponse($requestId);
+        // null => IdP-initiated: php-saml then still refuses a response that carries
+        // an InResponseTo (rejectUnsolicitedResponsesWithInResponseTo), so a real
+        // reply to somebody else's AuthnRequest cannot slip in through this door.
+        $auth->processResponse($requestId !== "" ? $requestId : null);
 
         $errors = $auth->getErrors();
         if (!empty($errors)) {

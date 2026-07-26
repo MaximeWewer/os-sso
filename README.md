@@ -118,7 +118,11 @@ All types share a few options:
    - ACS: `https://<opnsense>/api/sso/saml/acs?provider=<name>`
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
    - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
-3. The IdP must **sign the assertion**. Map the NameID to the username.
+3. The IdP must **sign the assertion**. Map the NameID to the username. Optional:
+   **HTTP-POST binding** for the AuthnRequest (when the IdP does not take a redirect),
+   **encrypted assertions** (needs the SP certificate + key), and **IdP-initiated
+   login** — the last one off by default, since an unsolicited assertion proves
+   nothing about who asked to log in.
 4. The IdP must send **at least one attribute** (configure attribute / property
    mappings — e.g. groups, email). An empty `<AttributeStatement/>` is invalid per
    the SAML schema and is rejected by the strict validation — and you need the

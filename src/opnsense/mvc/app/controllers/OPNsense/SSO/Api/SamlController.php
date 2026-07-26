@@ -65,11 +65,16 @@ class SamlController extends ApiControllerBase
             // Validated here, at the door: the portal page filters it too, but a
             // crafted login link never goes through the portal page.
             $cpurl = CaptivePortalAuthorizer::sanitizeRedirect((string)($this->request->get('cpurl') ?? ''));
-            $url = $protocol->startLogin((string)($this->request->get('url') ?? '/'), $vpn, $cp, $cpurl);
+            $begin = $protocol->beginLogin((string)($this->request->get('url') ?? '/'), $vpn, $cp, $cpurl);
+            if ($begin['binding'] === 'post') {
+                // HTTP-POST binding: the request travels in a self-submitting form.
+                $this->response->setContentType('text/html', 'UTF-8');
+                return $begin['html'];
+            }
         } catch (\Throwable $e) {
             return $this->fail($e);
         }
-        $this->response->redirect($url, true);
+        $this->response->redirect($begin['url'], true);
         return 'Redirecting to identity provider...';
     }
 
@@ -85,7 +90,15 @@ class SamlController extends ApiControllerBase
             $inResponseTo = SamlProtocol::peekInResponseTo($_POST);
             $state = SamlProtocol::consumeState($inResponseTo);
             if ($state === null) {
-                throw new \RuntimeException('unknown or replayed SAML response');
+                // No state: either a replay, or an IdP-initiated response -- which has
+                // no InResponseTo at all and is only accepted when the provider named
+                // on our own per-provider ACS URL opted into it.
+                $provider = $this->knownSamlProvider((string)($this->request->get('provider') ?? ''));
+                if ($inResponseTo !== '' || $provider === '' || empty($this->authServer($provider)->ssoAllowIdpInitiated)) {
+                    throw new \RuntimeException('unknown or replayed SAML response');
+                }
+                $inResponseTo = '';
+                $state = ['provider' => $provider, 'return' => '/'];
             }
             $provider = $state['provider'];
             $auth = $this->authServer($provider);
@@ -374,6 +387,8 @@ class SamlController extends ApiControllerBase
             'email_attribute' => $auth->ssoEmailAttribute,
             'display_name_attribute' => $auth->ssoDisplayNameAttribute,
             'want_messages_signed' => (bool)$auth->ssoWantMessagesSigned,
+            'authn_post_binding' => (bool)$auth->ssoAuthnPostBinding,
+            'allow_idp_initiated' => (bool)$auth->ssoAllowIdpInitiated,
             'want_assertions_encrypted' => (bool)$auth->ssoWantAssertionsEncrypted,
             'want_nameid_encrypted' => (bool)$auth->ssoWantNameIdEncrypted,
         ]);
