@@ -20,4 +20,6 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
     ports:
-      - "0.0.0.0:8081:8080"   # http admin (host convenience / kcadm)
+      # Host convenience only (kcadm runs through docker exec, and the proxy reaches
+      # the container over the shared network). Overridable: 8081 is a popular port.
+      - "0.0.0.0:${KC_HTTP_PORT:-8081}:8080"

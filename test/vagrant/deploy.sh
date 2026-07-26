@@ -46,10 +46,14 @@ cp    "$SRC/library/OPNsense/Auth/SsoJwt.php"              "$DST/library/OPNsens
 cp    "$SRC/library/OPNsense/Auth/SSOProviders/SsoProviderContainer.php" \
       "$DST/library/OPNsense/Auth/SSOProviders/"
 cp -R "$SRC/controllers/OPNsense/SSO"                      "$DST/controllers/OPNsense/"
-mkdir -p "$DST/models/OPNsense"
+mkdir -p "$DST/models/OPNsense" "$DST/views/OPNsense"
 cp -R "$SRC/models/OPNsense/SSO"                           "$DST/models/OPNsense/"
-# Re-pointed Logout menu item -> drop the cached menu so it rebuilds.
+# Diagnostics + settings pages (volt views).
+cp -R "$SRC/views/OPNsense/SSO"                            "$DST/views/OPNsense/"
+# Re-pointed Logout menu item + two new menu entries -> drop the cached menu and
+# the ACL cache so both rebuild.
 rm -f /var/lib/php/tmp/opnsense_menu_cache.xml /tmp/opnsense_menu_cache.xml 2>/dev/null || true
+rm -f /tmp/opnsense_acl_cache.json /var/lib/php/tmp/opnsense_acl_cache.json 2>/dev/null || true
 
 echo ">>> os-sso: runtime libs"
 # The appliance PHP CLI has no phar + allow_url_fopen=off, so composer cannot run
@@ -61,19 +65,29 @@ else
     echo "!! vendor/autoload.php missing -- OIDC will fail until php-jwt is vendored"
 fi
 
-echo ">>> os-sso: deploying VPN deferred-auth bits"
+echo ">>> os-sso: deploying scripts, service templates and configd actions"
 SVC_SRC=/home/vagrant/os-sso/src/opnsense
-# OpenVPN auth-user-pass-verify hook + its lab config
+# Service templates: vpn.conf is generated from these by "configctl template reload",
+# driven by the settings model (System > Access > SSO Settings).
+mkdir -p /usr/local/opnsense/service/templates/OPNsense/SSO
+cp -R "$SVC_SRC/service/templates/OPNsense/SSO/." /usr/local/opnsense/service/templates/OPNsense/SSO/
+# OpenVPN auth-user-pass-verify hook (installed by the template targets on a real
+# package install; copied straight here so the lab does not need a template run).
 mkdir -p /usr/local/etc/sso
 cp "$SVC_SRC/service/templates/OPNsense/SSO/auth-user-pass-verify.sh" /usr/local/etc/sso/
 chmod 0700 /usr/local/etc/sso/auth-user-pass-verify.sh
 if [ ! -f /usr/local/etc/sso/vpn.conf ]; then
     printf 'PROTOCOL=oidc\nPROVIDER=keycloak\nHOST=localhost:8443\nTIMEOUT=180\n' > /usr/local/etc/sso/vpn.conf
 fi
-# privileged verdict writer + configd action
+# Privileged helpers + configd actions (verdict writer, session expiry, cp template).
 mkdir -p /usr/local/opnsense/scripts/OPNsense/SSO
 cp "$SVC_SRC/scripts/OPNsense/SSO/vpn_verdict.sh" /usr/local/opnsense/scripts/OPNsense/SSO/
-chmod 0755 /usr/local/opnsense/scripts/OPNsense/SSO/vpn_verdict.sh
+cp "$SVC_SRC/scripts/OPNsense/SSO/build_cp_template.sh" /usr/local/opnsense/scripts/OPNsense/SSO/
+cp "$SVC_SRC/scripts/OPNsense/SSO/expire_sessions.php" /usr/local/opnsense/scripts/OPNsense/SSO/
+cp -R "$SVC_SRC/scripts/OPNsense/SSO/cp-portal" /usr/local/opnsense/scripts/OPNsense/SSO/
+chmod 0755 /usr/local/opnsense/scripts/OPNsense/SSO/vpn_verdict.sh \
+           /usr/local/opnsense/scripts/OPNsense/SSO/build_cp_template.sh \
+           /usr/local/opnsense/scripts/OPNsense/SSO/expire_sessions.php
 cp "$SVC_SRC/service/conf/actions.d/actions_sso.conf" /usr/local/opnsense/service/conf/actions.d/
 service configd restart >/dev/null 2>&1 || true
 

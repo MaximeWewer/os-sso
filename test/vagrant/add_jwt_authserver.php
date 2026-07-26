@@ -50,6 +50,13 @@ $set('sso_groups_claim', 'groups');
 $gm = getenv('JWT_GROUP_MAP');
 $set('sso_group_map', $gm === false ? '' : $gm);
 $set('sso_jwt_public_key', getenv('JWT_PUBKEY') ?: '');
+// Knobs the e2e script flips to exercise the newer gates. Each one is set on every
+// run (including back to '') so a case cannot inherit the previous case's state.
+$set('sso_required_groups', getenv('JWT_REQUIRED_GROUPS') ?: '');
+$set('sso_deprovision', getenv('JWT_DEPROVISION') === '1' ? '1' : '0');
+$set('sso_jwt_max_age', getenv('JWT_MAX_AGE') ?: '0');
+$set('sso_jwt_single_use', getenv('JWT_SINGLE_USE') === '1' ? '1' : '0');
+$set('sso_session_lifetime', getenv('JWT_SESSION_LIFETIME') ?: '0');
 
 Config::getInstance()->save();
 echo "jwt authserver '$name' set (trusted=" . (getenv('JWT_TRUSTED') ?: '127.0.0.1') . ")\n";

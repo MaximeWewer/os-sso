@@ -14,9 +14,12 @@ $name = $argv[1] ?? '';
 $cfg = Config::getInstance()->object();
 
 $uid = null;
+$disabled = '0';
 foreach ($cfg->system->user as $u) {
     if ((string)$u->name === $name) {
         $uid = (string)$u->uid;
+        // Reported so a test can tell a deprovisioned account from a missing one.
+        $disabled = ((string)($u->disabled ?? '')) !== '' ? '1' : '0';
         break;
     }
 }
@@ -32,5 +35,5 @@ foreach ($cfg->system->group as $g) {
         }
     }
 }
-echo 'uid=' . $uid . ' groups=' . implode(',', $groups) . "\n";
+echo 'uid=' . $uid . ' disabled=' . $disabled . ' groups=' . implode(',', $groups) . "\n";
 exit(0);

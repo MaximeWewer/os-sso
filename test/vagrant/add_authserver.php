@@ -41,6 +41,23 @@ if ($gm !== false && $gm !== '') {
     $as->addChild('sso_group_map', $gm);
 }
 $as->addChild('sso_button_label', getenv('AS_LABEL') ?: ucfirst($name));
+// Base URL is required now: every URL handed to the IdP (OIDC redirect_uri, SAML
+// EntityID/ACS/SLO) is built from it instead of the request Host header. In the lab
+// it has to be the host-side forwarded port, since that is what the browser -- and
+// therefore the IdP's registered redirect URI -- uses.
+$as->addChild('sso_base_url', getenv('AS_BASE_URL') ?: 'https://localhost:8443');
+// Optional access gate / lifetime knobs, exercised by the e2e scripts.
+$rg = getenv('AS_REQUIRED_GROUPS');
+if ($rg !== false && $rg !== '') {
+    $as->addChild('sso_required_groups', $rg);
+}
+if (getenv('AS_DEPROVISION') === '1') {
+    $as->addChild('sso_deprovision', '1');
+}
+$sl = getenv('AS_SESSION_LIFETIME');
+if ($sl !== false && $sl !== '') {
+    $as->addChild('sso_session_lifetime', $sl);
+}
 
 if ($type === 'oidc') {
     $as->addChild('sso_issuer', getenv('AS_ISSUER'));

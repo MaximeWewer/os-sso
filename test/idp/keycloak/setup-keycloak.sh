@@ -5,6 +5,12 @@ cd "$(dirname "$0")"
 PW=$(grep KC_ADMIN_PASSWORD .env | cut -d= -f2)
 KC=(docker exec keycloak /opt/keycloak/bin/kcadm.sh)
 R=opnsense
+# The SP base URL the browser (and therefore the IdP) uses. Overridable because the
+# lab's forwarded WebGUI port is overridable -- see test/Vagrantfile SSO_GUI_PORT.
+SP_BASE="${SP_BASE:-https://localhost:8443}"
+# os-sso gives every SAML server its own SP identity, so the EntityID/ACS/SLO all
+# carry ?provider=<auth server name>. Must match the name registered in OPNsense.
+SAML_PROVIDER="${SAML_PROVIDER:-keycloak-saml}"
 
 "${KC[@]}" config credentials --server http://localhost:8080 --realm master --user admin --password "$PW" >/dev/null
 
@@ -18,7 +24,7 @@ if [ -z "$CID" ]; then
   CID=$("${KC[@]}" create clients -r "$R" \
     -s clientId=opnsense-oidc -s protocol=openid-connect \
     -s publicClient=false -s standardFlowEnabled=true \
-    -s 'redirectUris=["https://localhost:8443/api/sso/oidc/callback"]' \
+    -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" \
     -s 'webOrigins=["+"]' -i 2>/dev/null | tr -d '\r')
 fi
 SECRET=$("${KC[@]}" get "clients/$CID/client-secret" -r "$R" 2>/dev/null | grep -o '"value"[^,]*' | cut -d'"' -f4)
@@ -27,7 +33,7 @@ echo "oidc_client_secret=$SECRET"
 
 # --- SAML client (SP) ---
 # Keycloak signs the assertion with the realm key; SP request signature not required.
-SAML_ENTITY="https://localhost:8443/api/sso/saml/metadata"
+SAML_ENTITY="$SP_BASE/api/sso/saml/metadata?provider=$SAML_PROVIDER"
 SCID=$("${KC[@]}" get clients -r "$R" -q clientId="$SAML_ENTITY" --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
 if [ -z "$SCID" ]; then
   # Fine-grained ACS + SLO URLs instead of adminUrl (the Master SAML Processing URL
@@ -35,17 +41,17 @@ if [ -z "$SCID" ]; then
   # to /acs). Keep the SLO endpoint distinct so the round-trip lands on /slo.
   SCID=$("${KC[@]}" create clients -r "$R" \
     -s clientId="$SAML_ENTITY" -s protocol=saml \
-    -s 'redirectUris=["https://localhost:8443/api/sso/saml/acs"]' \
+    -s "redirectUris=[\"$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER\"]" \
     -s frontchannelLogout=true \
     -s 'attributes."saml.assertion.signature"=true' \
     -s 'attributes."saml.server.signature"=true' \
     -s 'attributes."saml.client.signature"=false' \
     -s 'attributes."saml_name_id_format"=username' \
     -s 'attributes."saml_force_name_id_format"=true' \
-    -s 'attributes."saml_assertion_consumer_url_post"=https://localhost:8443/api/sso/saml/acs' \
-    -s 'attributes."saml_assertion_consumer_url_redirect"=https://localhost:8443/api/sso/saml/acs' \
-    -s 'attributes."saml_single_logout_service_url_redirect"=https://localhost:8443/api/sso/saml/slo' \
-    -s 'attributes."saml_single_logout_service_url_post"=https://localhost:8443/api/sso/saml/slo' \
+    -s "attributes.\"saml_assertion_consumer_url_post\"=$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER" \
+    -s "attributes.\"saml_assertion_consumer_url_redirect\"=$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER" \
+    -s "attributes.\"saml_single_logout_service_url_redirect\"=$SP_BASE/api/sso/saml/slo?provider=$SAML_PROVIDER" \
+    -s "attributes.\"saml_single_logout_service_url_post\"=$SP_BASE/api/sso/saml/slo?provider=$SAML_PROVIDER" \
     -i 2>/dev/null | tr -d '\r')
 fi
 echo "saml_client_uuid=$SCID"
