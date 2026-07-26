@@ -24,6 +24,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoGroupsAttribute = 'groups';
     public $ssoWantMessagesSigned = false;
     public $ssoCreateUsers = false;
+    public $ssoRequiredGroups = [];
     public $ssoDefaultGroups = [];
     public $ssoGroupMap = null;
     public $ssoGroupSync = false;
@@ -65,6 +66,7 @@ class SsoSaml extends Local implements IAuthConnector
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
+        $this->ssoRequiredGroups = array_filter(array_map('trim', explode(',', $config['sso_required_groups'] ?? '')));
         $this->ssoDefaultGroups = array_filter(array_map('trim', explode(',', $config['sso_default_groups'] ?? '')));
     }
 
@@ -134,6 +136,14 @@ class SsoSaml extends Local implements IAuthConnector
                 'name' => gettext('Automatic user creation'),
                 'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local password.'),
                 'type' => 'checkbox',
+            ],
+            'sso_required_groups' => [
+                'name' => gettext('Required groups'),
+                'help' => gettext('Access gate: comma separated IdP group names, at least one of which the '
+                    . 'user must hold to log in through this provider (WebGUI, Captive Portal and VPN alike). '
+                    . 'Evaluated on the IdP-asserted groups, before any local account is matched, created or '
+                    . 'updated. Leave empty to let every account the IdP authenticates log in.'),
+                'type' => 'text',
             ],
             'sso_default_groups' => [
                 'name' => gettext('Default groups'),

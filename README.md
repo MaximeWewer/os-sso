@@ -61,6 +61,11 @@ All types share a few options:
   Use an immutable, IdP-administered value (e.g. `preferred_username`).
 - **Automatic user creation** — off by default. When on, matched users are created
   in `config.xml` with no local password (IdP-only login).
+- **Required groups** — access gate: comma separated IdP group names, at least one
+  of which the user must hold to get in through this provider (WebGUI, Captive
+  Portal and VPN alike). Checked on the IdP-asserted groups before any local
+  account is matched, created or updated. Empty means every account the IdP
+  authenticates may log in — set it unless that is what you want.
 - **Default groups** — OPNsense groups always granted to mapped users.
 - **Group mapping** — optional `idpGroup:opnsenseGroup` pairs (comma separated).
   Mapped groups are trusted and may target privileged groups (e.g. `admins`). IdP

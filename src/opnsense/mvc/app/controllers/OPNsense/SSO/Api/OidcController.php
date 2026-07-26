@@ -9,6 +9,7 @@ namespace OPNsense\SSO\Api;
 
 use OPNsense\Auth\AuthenticationFactory;
 use OPNsense\Base\ApiControllerBase;
+use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
@@ -101,6 +102,10 @@ class OidcController extends ApiControllerBase
 
             $identity = $protocol->handleCallback($_GET);
             $identity->authServer = (string)$provider;
+
+            // Provider-level door policy, before ANY path below (captive portal, VPN
+            // or WebGUI) and before any local account is touched or created.
+            AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity);
 
             // Captive Portal path: authorize the captive client's IP in its zone. No
             // local account and no WebGUI session -- evaluated straight from the

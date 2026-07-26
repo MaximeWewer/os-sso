@@ -9,6 +9,7 @@ namespace OPNsense\SSO\Api;
 
 use OPNsense\Auth\AuthenticationFactory;
 use OPNsense\Base\ApiControllerBase;
+use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
@@ -66,6 +67,9 @@ class JwtController extends ApiControllerBase
             ]);
             $identity = $protocol->verify($token);
             $identity->authServer = (string)$this->request->get('provider');
+
+            // Provider-level door policy, before any local account is touched or created.
+            AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity);
 
             $username = (new IdentityMapper(new GroupMapper(
                 GroupMapper::parseMap((string)$auth->ssoGroupMap),
