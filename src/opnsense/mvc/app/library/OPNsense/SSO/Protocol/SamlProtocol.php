@@ -459,7 +459,7 @@ final class SamlProtocol implements ProtocolInterface
                 "x509cert" => $this->cfg["sp_cert"] ?? "",
                 "privateKey" => $this->cfg["sp_key"] ?? "",
             ],
-            "idp" => [
+            "idp" => array_merge([
                 "entityId" => $this->cfg["idp_entity_id"] ?? "",
                 "singleSignOnService" => [
                     "url" => $this->cfg["idp_sso_url"] ?? "",
@@ -473,9 +473,23 @@ final class SamlProtocol implements ProtocolInterface
                 ],
                 // Full x509 certificate, NOT a fingerprint.
                 "x509cert" => $this->cfg["idp_x509"] ?? "",
-            ],
+            ], $this->idpSigningCerts()),
             "security" => $security,
         ];
+    }
+
+    /**
+     * Several signing certificates (from IdP metadata) instead of one: php-saml then
+     * accepts a signature from any of them, which is how a key rotation stops being
+     * an outage. Only used when no single certificate was pinned by hand.
+     */
+    private function idpSigningCerts(): array
+    {
+        $certs = array_values(array_filter((array)($this->cfg["idp_x509_signing"] ?? [])));
+        if (count($certs) < 2) {
+            return [];
+        }
+        return ["x509certMulti" => ["signing" => $certs]];
     }
 
     private function sanitizeReturnUrl(string $url): string

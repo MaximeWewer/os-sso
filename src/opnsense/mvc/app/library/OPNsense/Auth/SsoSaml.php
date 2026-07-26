@@ -14,6 +14,7 @@ namespace OPNsense\Auth;
  */
 class SsoSaml extends Local implements IAuthConnector
 {
+    public $ssoIdpMetadataUrl = null;
     public $ssoIdpEntityId = null;
     public $ssoIdpSsoUrl = null;
     public $ssoIdpSloUrl = null;
@@ -48,6 +49,7 @@ class SsoSaml extends Local implements IAuthConnector
     public function setProperties($config)
     {
         $map = [
+            'sso_idp_metadata_url' => 'ssoIdpMetadataUrl',
             'sso_idp_entity_id' => 'ssoIdpEntityId',
             'sso_idp_sso_url' => 'ssoIdpSsoUrl',
             'sso_idp_slo_url' => 'ssoIdpSloUrl',
@@ -86,18 +88,28 @@ class SsoSaml extends Local implements IAuthConnector
             gettext('metadata at') . ' <code>' . $b . '/api/sso/saml/metadata?provider={name}</code> ' .
             gettext('({name} = this server\'s name; the live URLs are shown under Base URL).');
         return [
+            'sso_idp_metadata_url' => [
+                'name' => gettext('IdP metadata URL'),
+                'help' => gettext('Optional https URL of the IdP SAML metadata document. When set, the '
+                    . 'EntityID, SSO/SLO endpoints and signing certificate below may be left empty and are '
+                    . 'read from it (cached 24h) -- which also means an IdP signing-key rotation is picked '
+                    . 'up on its own. Anything you fill in by hand wins over the document.'),
+                'type' => 'text',
+                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
+                    ? [] : [gettext('Metadata URL must be a valid https URL.')],
+            ],
             'sso_idp_entity_id' => [
                 'name' => gettext('IdP EntityID'),
-                'help' => $acs,
+                'help' => $acs . ' ' . gettext('Required unless an IdP metadata URL is set above.'),
                 'type' => 'text',
-                'validate' => fn($v) => !empty($v) ? [] : [gettext('IdP EntityID is required.')],
             ],
             'sso_idp_sso_url' => [
                 'name' => gettext('IdP SSO URL'),
-                'help' => gettext('IdP Single Sign-On endpoint (HTTP-Redirect binding).'),
+                'help' => gettext('IdP Single Sign-On endpoint (HTTP-Redirect binding). '
+                    . 'Required unless an IdP metadata URL is set.'),
                 'type' => 'text',
-                'validate' => fn($v) => filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
-                    ? [] : [gettext('A valid https SSO URL is required.')],
+                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
+                    ? [] : [gettext('SSO URL must be a valid https URL.')],
             ],
             'sso_idp_slo_url' => [
                 'name' => gettext('IdP SLO URL'),
@@ -108,11 +120,12 @@ class SsoSaml extends Local implements IAuthConnector
             ],
             'sso_idp_x509' => [
                 'name' => gettext('IdP x509 certificate'),
-                'help' => gettext('PEM certificate (or the bare base64 body) of the IdP signing cert, NOT a fingerprint.'),
+                'help' => gettext('PEM certificate (or the bare base64 body) of the IdP signing cert, NOT a '
+                    . 'fingerprint. Required unless an IdP metadata URL is set; pinning one here also stops '
+                    . 'the metadata document from rotating it.'),
                 // 'text' so the legacy form renders an input at all; the script
                 // field below upgrades it to a multi-line textarea.
                 'type' => 'text',
-                'validate' => fn($v) => !empty($v) ? [] : [gettext('IdP certificate is required.')],
             ],
             'sso_sp_cert' => [
                 'name' => gettext('SP certificate'),

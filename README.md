@@ -106,8 +106,12 @@ All types share a few options:
 
 ### SAML 2.0
 
-1. In OPNsense fill **IdP EntityID**, **IdP SSO URL** (HTTP-Redirect) and the
-   **IdP x509 certificate** (full PEM of the signing cert — not a fingerprint).
+1. In OPNsense either set the **IdP metadata URL** (https) and leave the rest empty —
+   the EntityID, SSO/SLO endpoints and signing certificate are read from it and
+   cached for 24 h, so an IdP **signing-key rotation is picked up on its own** — or
+   fill **IdP EntityID**, **IdP SSO URL** (HTTP-Redirect) and the **IdP x509
+   certificate** (full PEM of the signing cert — not a fingerprint) by hand. Anything
+   filled in by hand wins over the document.
 2. Give your IdP the SP URLs (shown live in the form). Each SAML server is its own
    SP identity, so every endpoint carries `?provider=<server name>` — two IdPs never
    share an EntityID or ACS:

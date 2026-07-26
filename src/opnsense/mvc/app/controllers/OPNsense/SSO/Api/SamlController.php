@@ -300,6 +300,46 @@ class SamlController extends ApiControllerBase
         return '';
     }
 
+    /**
+     * The IdP half of the trust relationship: whatever the operator typed in the
+     * form, with anything left empty filled in from the IdP metadata document when
+     * one is configured. Typed values win -- an operator pinning a certificate by
+     * hand must not have it silently replaced by a fetched document.
+     *
+     * @return array{entity_id:string,sso_url:string,slo_url:string,x509:string,x509_signing:string[]}
+     */
+    private function idpSettings($auth): array
+    {
+        $idp = [
+            'entity_id' => trim((string)$auth->ssoIdpEntityId),
+            'sso_url' => trim((string)$auth->ssoIdpSsoUrl),
+            'slo_url' => trim((string)$auth->ssoIdpSloUrl),
+            'x509' => trim((string)$auth->ssoIdpX509),
+            'x509_signing' => [],
+        ];
+        $url = trim((string)($auth->ssoIdpMetadataUrl ?? ''));
+        if ($url !== '') {
+            $meta = SamlMetadata::fetch($url, $idp['entity_id']);
+            foreach (['entity_id', 'sso_url', 'slo_url', 'x509'] as $key) {
+                if ($idp[$key] === '') {
+                    $idp[$key] = (string)$meta[$key];
+                }
+            }
+            // Only take the multi-cert list when the operator pinned no certificate:
+            // it is what lets an IdP key rotation land without an edit here.
+            if (trim((string)$auth->ssoIdpX509) === '') {
+                $idp['x509_signing'] = $meta['x509_signing'];
+            }
+        }
+        if ($idp['entity_id'] === '' || $idp['sso_url'] === '' || ($idp['x509'] === '' && empty($idp['x509_signing']))) {
+            throw new \RuntimeException(
+                'SAML provider is incomplete: set an IdP metadata URL, or fill the ' .
+                'IdP EntityID, SSO URL and x509 certificate by hand'
+            );
+        }
+        return $idp;
+    }
+
     private function protocolFor($provider, $auth = null): SamlProtocol
     {
         $auth = $auth ?? $this->authServer($provider);
@@ -309,18 +349,20 @@ class SamlController extends ApiControllerBase
         // longer say WHICH trust relationship an assertion was minted for, and the SLO
         // endpoint could not tell whose logout it is answering.
         $suffix = '?provider=' . rawurlencode((string)$provider);
+        $idp = $this->idpSettings($auth);
         return new SamlProtocol([
             'provider_name' => (string)$provider,
             'base_url' => $base,
             'endpoint_suffix' => $suffix,
             'sp_entity_id' => $base . '/api/sso/saml/metadata' . $suffix,
             'acs_url' => $base . '/api/sso/saml/acs' . $suffix,
-            'idp_entity_id' => $auth->ssoIdpEntityId,
-            'idp_sso_url' => $auth->ssoIdpSsoUrl,
+            'idp_entity_id' => $idp['entity_id'],
+            'idp_sso_url' => $idp['sso_url'],
             // Default the SLO endpoint to the SSO URL (Keycloak/Authentik serve both
-            // at /protocol/saml) when the operator left it empty.
-            'idp_slo_url' => $auth->ssoIdpSloUrl ?: $auth->ssoIdpSsoUrl,
-            'idp_x509' => $auth->ssoIdpX509,
+            // at /protocol/saml) when neither the form nor the metadata names one.
+            'idp_slo_url' => $idp['slo_url'] ?: $idp['sso_url'],
+            'idp_x509' => $idp['x509'],
+            'idp_x509_signing' => $idp['x509_signing'],
             'sp_cert' => $auth->ssoSpCert,
             'sp_key' => $auth->ssoSpKey,
             'name_id_format' => $auth->ssoNameIdFormat,
