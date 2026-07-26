@@ -67,12 +67,12 @@ class OidcController extends ApiControllerBase
             // provider / vpn / cp -- the callback recovers the right one by the
             // state it gets back. The per-provider state/nonce/verifier the protocol
             // stores are already namespaced; this closes the last shared keys.
-            $_SESSION['sso_oidc_flows'][$protocol->getLastState()] = [
+            $this->recordFlow($protocol->getLastState(), [
                 'provider' => (string)$provider,
                 'vpn' => $vpn,
                 'cp' => $cp,
                 'cpurl' => $cpurl,
-            ];
+            ]);
         } catch (\Throwable $e) {
             return $this->fail($e);
         }
@@ -94,10 +94,7 @@ class OidcController extends ApiControllerBase
             // (single use). Trust the provider recorded at startLogin over any query
             // param, so a crafted callback URL cannot steer which provider validates.
             $state = (string)($_GET['state'] ?? '');
-            $flow = $_SESSION['sso_oidc_flows'][$state] ?? null;
-            if (is_array($flow)) {
-                unset($_SESSION['sso_oidc_flows'][$state]);
-            }
+            $flow = $this->consumeFlow($state);
             $provider = is_array($flow) && $flow['provider'] !== ''
                 ? (string)$flow['provider']
                 : $this->request->get('provider');
@@ -205,6 +202,46 @@ class OidcController extends ApiControllerBase
     }
 
     /* ------------------------------------------------------------------ */
+
+    /** How long an unfinished login stays recoverable, and how many may pile up. */
+    private const FLOW_TTL = 600;
+    private const FLOW_MAX = 5;
+
+    /**
+     * Remember an in-flight login, keyed by its OIDC state.
+     *
+     * Bounded on purpose: /login is pre-auth, so anyone holding a session cookie can
+     * start arbitrarily many ceremonies and each used to leave a record behind for
+     * good. Expired entries go on every write and only the newest FLOW_MAX survive,
+     * which is well past any real "several tabs at once" case.
+     */
+    private function recordFlow(string $state, array $flow): void
+    {
+        $flows = is_array($_SESSION['sso_oidc_flows'] ?? null) ? $_SESSION['sso_oidc_flows'] : [];
+        $now = time();
+        foreach ($flows as $key => $known) {
+            if (!is_array($known) || ($now - (int)($known['ts'] ?? 0)) > self::FLOW_TTL) {
+                unset($flows[$key]);
+            }
+        }
+        $flow['ts'] = $now;
+        $flows[$state] = $flow;
+        if (count($flows) > self::FLOW_MAX) {
+            $flows = array_slice($flows, -self::FLOW_MAX, null, true);
+        }
+        $_SESSION['sso_oidc_flows'] = $flows;
+    }
+
+    /** Single-use lookup of an in-flight login; null when unknown or expired. */
+    private function consumeFlow(string $state): ?array
+    {
+        $flow = $_SESSION['sso_oidc_flows'][$state] ?? null;
+        if (!is_array($flow)) {
+            return null;
+        }
+        unset($_SESSION['sso_oidc_flows'][$state]);
+        return (time() - (int)($flow['ts'] ?? 0)) > self::FLOW_TTL ? null : $flow;
+    }
 
     private function protocolFor($provider, $auth = null): OidcProtocol
     {
