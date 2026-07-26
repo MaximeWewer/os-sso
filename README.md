@@ -29,17 +29,17 @@ same IdP so account lifecycle does not wait for a login. The local password
 
 ## Screenshots
 
-| Authentication servers | Server configuration | WebGUI login |
+| Authentication servers | Server configuration | SCIM provisioning |
 |---|---|---|
-| ![Authentication servers](assets/servers.png) | ![Server configuration](assets/server_config.png) | ![WebGUI login form](assets/login_form.png) |
+| ![Authentication servers](assets/servers.png) | ![Server configuration](assets/server_config.png) | ![SCIM settings](assets/scim_settings.png) |
 
-| Captive Portal login | OpenVPN web-auth settings | SSO diagnostics |
+| WebGUI login | Captive Portal login | OpenVPN web-auth settings |
 |---|---|---|
-| ![Captive portal login page](assets/cp_portal.png) | ![OpenVPN web-auth settings](assets/vpn_settings.png) | ![SSO diagnostics](assets/sso_diagnostics.png) |
+| ![WebGUI login form](assets/login_form.png) | ![Captive portal login page](assets/cp_portal.png) | ![OpenVPN web-auth settings](assets/vpn_settings.png) |
 
-| SCIM provisioning, on the authentication server |
+| SSO diagnostics |
 |---|
-| ![SCIM settings](assets/scim_settings.png) |
+| ![SSO diagnostics](assets/sso_diagnostics.png) |
 
 ## Requirements
 
@@ -81,9 +81,6 @@ All types share a few options:
   Portal and VPN alike). Checked on the IdP-asserted groups before any local
   account is matched, created or updated. Empty means every account the IdP
   authenticates may log in - set it unless that is what you want.
-- **SCIM provisioning** - lets the IdP push account lifecycle instead of os-sso
-  waiting for a login. Needs a bearer token and, strongly recommended, the source
-  addresses the IdP connects from. See [SCIM provisioning](#scim-provisioning).
 - **Deprovision on refused login** - when the required groups above refuse a login,
   also disable the local account behind it and end its open sessions. A login attempt
   is the only moment a firewall plugin hears about a revocation at the IdP, so this is
@@ -100,6 +97,9 @@ All types share a few options:
   but the IdP no longer asserts. Only groups os-sso itself granted are touched
   (hand-assigned groups are kept), and the last member of a privileged group is
   never removed.
+- **SCIM provisioning** - lets the IdP push account lifecycle instead of os-sso
+  waiting for a login. Needs a bearer token and, strongly recommended, the source
+  addresses the IdP connects from. See [SCIM provisioning](#scim-provisioning).
 - **Base URL** (required, OIDC/SAML) - the firewall's public `https://host[:port]`.
   Every URL handed to the IdP is built from it: the OIDC redirect/callback, the SAML
   SP EntityID/ACS/SLO. Mind a reverse proxy or port-forward. It is required because
@@ -273,7 +273,17 @@ takes only a signed `logout_token`: issuer, audience, `iat` freshness, the
 backchannel-logout event, absence of a `nonce` and single-use `jti` are all checked
 before any session is ended.
 
-### SCIM provisioning
+### API access (not SSO)
+
+The OPNsense **API** keeps using its own key/secret credentials - os-sso does not
+turn an IdP token into API access, and cannot: API authentication is handled by core
+before any plugin sees the request, so bearer-token support would have to land in
+core, not here. What does work is the useful half: an account provisioned by SSO is a
+normal local account, so you can issue it an API key under *System ▸ Access ▸ Users*
+and the ACL applies the groups os-sso mapped. Its local *password* stays unusable -
+API keys are separate credentials, not the password.
+
+## SCIM provisioning
 
 Without it, os-sso only learns that someone was revoked when they try to log in --
 until then a disabled directory account keeps working here. SCIM inverts that: the
@@ -281,13 +291,17 @@ IdP pushes creations, updates and deactivations as they happen, and pre-provisio
 accounts so they exist before the first login (which matters as soon as you reference
 a user in a rule or a certificate).
 
-Enable it on the authentication server (**Enable SCIM provisioning**, a **bearer
-token**, and the **source IPs** the IdP connects from), then register the base URL at
-the IdP:
+Enable it on any authentication server - OIDC, SAML or JWT (**Enable SCIM
+provisioning**, a **bearer token**, and the **source IPs** the IdP connects from),
+then register the base URL at the IdP:
 
 ```
 https://<opnsense>/api/sso/scim
 ```
+
+One base URL serves every provider: the bearer token is what says which one a request
+belongs to, and an account provisioned under one provider is not silently adopted by
+another.
 
 Supported: `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
 (GET/POST/PUT/PATCH/DELETE, `filter=userName eq "..."` and `externalId eq "..."`,
@@ -310,21 +324,18 @@ account database:
 Groups are never created or deleted over SCIM either; the client fills the groups
 that already exist.
 
-### API access (not SSO)
-
-The OPNsense **API** keeps using its own key/secret credentials - os-sso does not
-turn an IdP token into API access, and cannot: API authentication is handled by core
-before any plugin sees the request, so bearer-token support would have to land in
-core, not here. What does work is the useful half: an account provisioned by SSO is a
-normal local account, so you can issue it an API key under *System ▸ Access ▸ Users*
-and the ACL applies the groups os-sso mapped. Its local *password* stays unusable -
-API keys are separate credentials, not the password.
+**Authentik**, the client this was tested against: create a *SCIM Provider* with URL
+`https://<opnsense>/api/sso/scim` and the token, then attach it to the application as
+a **backchannel provider** - a SCIM provider that is not backchannel-attached syncs
+"successfully" and pushes nothing. Untick *Verify certificates* if the firewall serves
+a self-signed WebGUI certificate; that failure is just as silent.
 
 ## Diagnostics
 
 **System ▸ Access ▸ SSO Diagnostics** shows, for every configured provider, the exact
-URLs to register at the IdP, the effective policy (required groups, auto-creation,
-group sync, session lifetime), and a **Test** button that talks to the IdP live -
+URLs to register at the IdP (the SCIM base URL included, when SCIM is on), the
+effective policy (required groups, auto-creation, group sync, deprovisioning, SCIM,
+session lifetime), and a **Test** button that talks to the IdP live -
 discovery + JWKS for OIDC, the metadata document for SAML, the JWKS for forward-auth.
 It also lists the currently open SSO sessions and lets you **flush the caches**
 (discovery, JWKS, SAML metadata, icons) after changing something at the IdP instead of
