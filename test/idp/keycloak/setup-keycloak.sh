@@ -52,6 +52,7 @@ if [ -z "$SCID" ]; then
     -s "attributes.\"saml_assertion_consumer_url_redirect\"=$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER" \
     -s "attributes.\"saml_single_logout_service_url_redirect\"=$SP_BASE/api/sso/saml/slo?provider=$SAML_PROVIDER" \
     -s "attributes.\"saml_single_logout_service_url_post\"=$SP_BASE/api/sso/saml/slo?provider=$SAML_PROVIDER" \
+    -s 'attributes."saml_idp_initiated_sso_url_name"=opnsense-sso' \
     -i 2>/dev/null | tr -d '\r')
 fi
 echo "saml_client_uuid=$SCID"
