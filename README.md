@@ -71,10 +71,13 @@ All types share a few options:
   but the IdP no longer asserts. Only groups os-sso itself granted are touched
   (hand-assigned groups are kept), and the last member of a privileged group is
   never removed.
-- **Base URL (override)** — set the firewall's public `https://host[:port]` when
-  behind a reverse proxy or port-forward, so the URLs handed to the IdP match.
-  Leave empty to auto-detect. The form shows the exact **redirect/ACS URL** live
-  underneath this field — copy it into your IdP.
+- **Base URL** (required, OIDC/SAML) — the firewall's public `https://host[:port]`.
+  Every URL handed to the IdP is built from it: the OIDC redirect/callback, the SAML
+  SP EntityID/ACS/SLO. Mind a reverse proxy or port-forward. It is required because
+  the fallback would derive those URLs from the request `Host` header, which the
+  client controls — an IdP doing prefix/wildcard redirect matching could then be
+  talked into sending the authorization code elsewhere. The form shows the exact
+  **redirect/ACS URL** live underneath this field — copy it into your IdP.
 - **Default landing URL** — where users land after login when no specific page was
   requested (e.g. `/ui/dashboard`).
 

@@ -163,13 +163,14 @@ class SsoSaml extends Local implements IAuthConnector
                 'type' => 'text',
             ],
             'sso_base_url' => [
-                'name' => gettext('Base URL (override)'),
+                'name' => gettext('Base URL'),
                 'help' => gettext('Public base URL of this firewall (https://host[:port]) used to build the SP '
-                    . 'EntityID, ACS, SLO and metadata URLs. Leave empty to auto-detect from the request Host. '
-                    . 'Set it when behind a reverse proxy or port-forward so the signed Destination/ACS match.'),
+                    . 'EntityID, ACS, SLO and metadata URLs. Required: without it those URLs are derived from '
+                    . 'the request Host header, which the client controls. Set it to the public URL the IdP '
+                    . 'reaches (mind a reverse proxy or port-forward) so the signed Destination/ACS match.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
-                    ? [] : [gettext('Base URL must be a valid https URL.')],
+                'validate' => fn($v) => !empty($v) && filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
+                    ? [] : [gettext('Base URL is required and must be a valid https URL.')],
             ],
             'sso_login_redirect' => [
                 'name' => gettext('Default landing URL'),

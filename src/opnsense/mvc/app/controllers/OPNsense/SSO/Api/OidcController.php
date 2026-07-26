@@ -15,6 +15,7 @@ use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
+use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\OidcProtocol;
 
 /**
@@ -237,14 +238,10 @@ class OidcController extends ApiControllerBase
         return $url;
     }
 
-    /** Configured Base URL override for this provider, else auto-detect from Host. */
+    /** Configured Base URL override for this provider, else a vetted auto-detect. */
     private function baseUrlFor($auth): string
     {
-        $configured = trim((string)($auth->ssoBaseUrl ?? ''));
-        if ($configured !== '' && stripos($configured, 'https://') === 0) {
-            return rtrim($configured, '/');
-        }
-        return $this->baseUrl();
+        return SiteUrl::forProvider($auth);
     }
 
     private function authServer($provider)
@@ -275,20 +272,6 @@ class OidcController extends ApiControllerBase
             setcookie(session_name(), '', time() - 42000, '/', '', true, true);
         }
         @session_destroy();
-    }
-
-    private function baseUrl(): string
-    {
-        // OPNsense\Mvc\Request lacks Phalcon's getHttpHost(); read $_SERVER.
-        // Host is client-controlled: accept only a well-formed host[:port], else fall
-        // back to the server name (defeats Host-header injection into built URLs).
-        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
-        if (!preg_match('/^[A-Za-z0-9.\-]+(:\d{1,5})?$/', (string)$host)) {
-            $host = $_SERVER['SERVER_NAME'] ?? 'localhost';
-        }
-        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        return ($https ? 'https' : 'http') . '://' . $host;
     }
 
     private function fail(\Throwable $e): string
