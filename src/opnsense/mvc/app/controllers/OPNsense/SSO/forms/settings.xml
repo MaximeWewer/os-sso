@@ -1,0 +1,47 @@
+<form>
+    <field>
+        <id>settings.vpn.enabled</id>
+        <label>Enable OpenVPN web-auth</label>
+        <type>checkbox</type>
+        <help>
+            Write /usr/local/etc/sso/vpn.conf so the deferred-auth script can send VPN
+            clients to the browser SSO login. You still have to point the OpenVPN
+            server at the script: auth-user-pass-verify
+            /usr/local/etc/sso/auth-user-pass-verify.sh via-file
+        </help>
+    </field>
+    <field>
+        <id>settings.vpn.protocol</id>
+        <label>Protocol</label>
+        <type>dropdown</type>
+        <help>Which SSO flow the VPN client's browser is sent through.</help>
+    </field>
+    <field>
+        <id>settings.vpn.provider</id>
+        <label>Authentication server</label>
+        <type>text</type>
+        <help>
+            Name of the SSO authentication server to use, exactly as it appears under
+            System - Access - Servers (and on the SSO Diagnostics page).
+        </help>
+    </field>
+    <field>
+        <id>settings.vpn.host</id>
+        <label>Firewall host[:port]</label>
+        <type>text</type>
+        <help>
+            Public host the VPN client's browser opens, e.g. vpn.example.com. It must
+            resolve and be reachable from the client BEFORE the tunnel is up, and
+            match the certificate the WebGUI presents.
+        </help>
+    </field>
+    <field>
+        <id>settings.vpn.timeout</id>
+        <label>Web-auth timeout (s)</label>
+        <type>text</type>
+        <help>
+            How long OpenVPN waits for the browser login to complete before giving up
+            on the connection attempt (30-900).
+        </help>
+    </field>
+</form>

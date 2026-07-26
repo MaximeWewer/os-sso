@@ -208,9 +208,18 @@ OpenVPN 2.6+ “pending auth” lets the client authenticate in a browser:
 2. It opens the URL, logs in at the IdP (passkey/MFA there).
 3. The tunnel comes up once the login succeeds.
 
-Configure protocol/provider in `/usr/local/etc/sso/vpn.conf`
-(`PROTOCOL=oidc|saml`, `PROVIDER`, `HOST`, `TIMEOUT`). Use a web-auth-capable
-client (OpenVPN Connect, OpenVPN 3 Linux) - see `test/vpn-client/README.md`.
+Configure it under **System ▸ Access ▸ SSO Settings**: protocol, authentication
+server, the host the client's browser opens, and the web-auth timeout. Saving writes
+`/usr/local/etc/sso/vpn.conf` (no more editing it over SSH). Then point the OpenVPN
+server at the script:
+
+```
+auth-user-pass-verify /usr/local/etc/sso/auth-user-pass-verify.sh via-file
+```
+
+Use a web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux) - see
+`test/vpn-client/README.md`. With web-auth disabled the script denies the connection
+rather than deferring it.
 
 ### Logout
 
@@ -234,7 +243,7 @@ before any session is ended.
 
 **System ▸ Access ▸ SSO Diagnostics** shows, for every configured provider, the exact
 URLs to register at the IdP, the effective policy (required groups, auto-creation,
-group sync, session lifetime), and a **Test** button that talks to the IdP live —
+group sync, session lifetime), and a **Test** button that talks to the IdP live -
 discovery + JWKS for OIDC, the metadata document for SAML, the JWKS for forward-auth.
 It also lists the currently open SSO sessions and lets you **flush the caches**
 (discovery, JWKS, SAML metadata, icons) after changing something at the IdP instead of

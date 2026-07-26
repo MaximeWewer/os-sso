@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  os-sso settings. Only the OpenVPN deferred web-auth wiring lives here: everything
+  else is per-provider and belongs on the authentication server itself.
+
+  This exists so that /usr/local/etc/sso/vpn.conf, which the auth-user-pass-verify
+  script reads, stops being a file operators have to create over SSH.
+-->
+<model>
+    <mount>//OPNsense/SSO/settings</mount>
+    <version>1.0.0</version>
+    <description>Single Sign-On settings</description>
+    <items>
+        <vpn>
+            <enabled type="BooleanField">
+                <default>0</default>
+                <Required>Y</Required>
+            </enabled>
+            <protocol type="OptionField">
+                <default>oidc</default>
+                <Required>Y</Required>
+                <OptionValues>
+                    <oidc>OpenID Connect</oidc>
+                    <saml>SAML 2.0</saml>
+                </OptionValues>
+            </protocol>
+            <provider type="TextField">
+                <Required>N</Required>
+                <Mask>/^([a-zA-Z0-9._\- ]{1,64})$/u</Mask>
+                <ValidationMessage>Enter the name of a configured SSO authentication server.</ValidationMessage>
+            </provider>
+            <host type="TextField">
+                <Required>N</Required>
+                <Mask>/^([a-zA-Z0-9.\-]+(:[0-9]{1,5})?)$/u</Mask>
+                <ValidationMessage>Enter the firewall host[:port] the VPN client's browser reaches.</ValidationMessage>
+            </host>
+            <timeout type="IntegerField">
+                <default>180</default>
+                <Required>Y</Required>
+                <MinimumValue>30</MinimumValue>
+                <MaximumValue>900</MaximumValue>
+                <ValidationMessage>The web-auth timeout must be between 30 and 900 seconds.</ValidationMessage>
+            </timeout>
+        </vpn>
+    </items>
+</model>

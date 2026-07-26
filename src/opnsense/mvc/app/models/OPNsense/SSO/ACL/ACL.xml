@@ -5,6 +5,13 @@
   open SSO sessions, which is read-only but not something every operator needs.
 -->
 <acl>
+    <page-system-sso-settings>
+        <name>System: Access: SSO Settings</name>
+        <patterns>
+            <pattern>ui/sso/settings*</pattern>
+            <pattern>api/sso/settings/*</pattern>
+        </patterns>
+    </page-system-sso-settings>
     <page-system-sso-diagnostics>
         <name>System: Access: SSO Diagnostics</name>
         <patterns>

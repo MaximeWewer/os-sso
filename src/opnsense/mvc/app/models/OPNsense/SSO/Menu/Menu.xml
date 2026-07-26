@@ -12,6 +12,8 @@
     </Lobby>
     <System>
         <Access>
+            <SSOSettings VisibleName="SSO Settings" url="/ui/sso/settings"
+                         order="79" cssClass="fa fa-sign-in fa-fw"/>
             <SSODiagnostics VisibleName="SSO Diagnostics" url="/ui/sso/diagnostics"
                             order="80" cssClass="fa fa-stethoscope fa-fw"/>
         </Access>
