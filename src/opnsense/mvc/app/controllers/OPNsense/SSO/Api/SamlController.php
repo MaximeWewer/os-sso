@@ -61,7 +61,9 @@ class SamlController extends ApiControllerBase
             // carry the zone id + the client's original destination likewise.
             $vpn = (string)$this->request->get('vpn');
             $cp = (string)($this->request->get('cp') ?? '');
-            $cpurl = (string)($this->request->get('cpurl') ?? '');
+            // Validated here, at the door: the portal page filters it too, but a
+            // crafted login link never goes through the portal page.
+            $cpurl = CaptivePortalAuthorizer::sanitizeRedirect((string)($this->request->get('cpurl') ?? ''));
             $url = $protocol->startLogin((string)($this->request->get('url') ?? '/'), $vpn, $cp, $cpurl);
         } catch (\Throwable $e) {
             return $this->fail($e);

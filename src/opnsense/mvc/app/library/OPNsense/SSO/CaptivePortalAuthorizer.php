@@ -104,23 +104,73 @@ final class CaptivePortalAuthorizer
     }
 
     /**
+     * Normalise the captive client's original destination into an absolute http(s)
+     * URL, or '' if it is not one.
+     *
+     * This MUST run server-side. The portal page filters the value too, but that
+     * filter is only reached when the user came through the portal page: the login
+     * endpoint takes `cpurl` straight from the query string, so a crafted link
+     * (/api/sso/oidc/login?cp=1&cpurl=...) bypasses it entirely. Since the user has
+     * by then authenticated at the real IdP, an unchecked bounce is a convincing
+     * phishing hop -- so no scheme other than http/https, no userinfo "@" (which
+     * hides the real host), no protocol-relative "//", no backslash (browsers fold
+     * it to "/"), no whitespace or control characters, and a sane length.
+     *
+     * Core hands the destination scheme-less (host[/path]); an absolute URL is
+     * accepted too. The destination itself is by nature arbitrary -- it is wherever
+     * the client was going -- so this bounds the SHAPE, and donePage shows the target
+     * rather than bouncing silently.
+     */
+    public static function sanitizeRedirect(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '' || strlen($raw) > 512) {
+            return '';
+        }
+        if (preg_match('/[\x00-\x20\x7f"\'<>\\\\]/', $raw) || strpos($raw, '@') !== false) {
+            return '';
+        }
+        if (str_starts_with($raw, '//')) {
+            return ''; // protocol-relative: the host is not what it looks like
+        }
+        if (!preg_match('#^https?://#i', $raw)) {
+            if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $raw)) {
+                return ''; // some other scheme (javascript:, data:, ...)
+            }
+            $raw = 'http://' . ltrim($raw, '/'); // core's scheme-less host[/path]
+        }
+        $parts = parse_url($raw);
+        if (empty($parts['host']) || !preg_match('/^[A-Za-z0-9._\-\[\]:]+$/', (string)$parts['host'])) {
+            return '';
+        }
+        return $raw;
+    }
+
+    /**
      * "You are connected" page shown to the captive client's browser, optionally
      * bouncing back to the site they originally requested.
      */
     public static function donePage(string $username, string $redirUrl = ''): string
     {
         $u = htmlspecialchars($username, ENT_QUOTES);
+        // Re-validate here as well: donePage is the last thing between a verified
+        // login and the browser following a URL that came in on the query string.
+        $redirUrl = self::sanitizeRedirect($redirUrl);
         $meta = '';
-        // Only an absolute http(s) URL is allowed as a redirect target (the captive
-        // client's original destination); anything else is ignored.
-        if ($redirUrl !== '' && preg_match('#^https?://[^\s"\'<>]+$#i', $redirUrl)) {
+        $link = '';
+        if ($redirUrl !== '') {
             $r = htmlspecialchars($redirUrl, ENT_QUOTES);
-            $meta = "<meta http-equiv='refresh' content='2;url={$r}'>";
+            $meta = "<meta http-equiv='refresh' content='3;url={$r}'>";
+            // Name the destination instead of bouncing silently -- the user just typed
+            // credentials at their IdP and deserves to see where they are being sent.
+            $link = "<p>Continuing to <a href='{$r}'>{$r}</a>&hellip;</p>";
         }
         return "<!doctype html><html><head><meta charset='utf-8'><title>Connected</title>{$meta}"
-            . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em;color:#1b5e20}</style>"
+            . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em;color:#1b5e20}"
+            . "a{color:#1b5e20;word-break:break-all}</style>"
             . "</head><body><h2>&#10003; Connected</h2>"
             . "<p>Signed in as <strong>{$u}</strong>. You now have network access.</p>"
+            . $link
             . "</body></html>";
     }
 }

@@ -55,7 +55,11 @@ class OidcController extends ApiControllerBase
             // tunnel / captive client instead of opening a WebGUI session.
             $vpn = preg_replace('/[^a-f0-9]/', '', (string)$this->request->get('vpn'));
             $cp = preg_replace('/[^0-9]/', '', (string)$this->request->get('cp'));
-            $cpurl = $cp !== '' ? (string)($this->request->get('cpurl') ?? '') : '';
+            // Validated here, at the door: the portal page filters it too, but a
+            // crafted login link never goes through the portal page.
+            $cpurl = $cp !== ''
+                ? CaptivePortalAuthorizer::sanitizeRedirect((string)($this->request->get('cpurl') ?? ''))
+                : '';
 
             // Record this in-flight login keyed by its OIDC state. Keying by state
             // (not a single shared session key) means two concurrent logins to
