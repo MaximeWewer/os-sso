@@ -2,7 +2,11 @@
 # os-sso OpenVPN deferred web authentication (WEB_AUTH / pending-auth).
 #
 # Wire into an OpenVPN server with:
-#   auth-user-pass-verify /usr/local/etc/sso/auth-user-pass-verify.sh via-file
+#   auth-user-pass-verify /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh via-file
+#
+# Lives here, not under service/templates: a configd "template reload" rewrites its
+# targets with default permissions, which would strip this script's execute bit and
+# break every VPN login. Only the generated vpn.conf is a template.
 #
 # OpenVPN 2.5+ exports for a deferred auth attempt:
 #   $username, $auth_pending_file, $auth_control_file, and peer-info $IV_SSO.

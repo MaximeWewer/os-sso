@@ -7,7 +7,7 @@
             Write /usr/local/etc/sso/vpn.conf so the deferred-auth script can send VPN
             clients to the browser SSO login. You still have to point the OpenVPN
             server at the script: auth-user-pass-verify
-            /usr/local/etc/sso/auth-user-pass-verify.sh via-file
+            /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh via-file
         </help>
     </field>
     <field>

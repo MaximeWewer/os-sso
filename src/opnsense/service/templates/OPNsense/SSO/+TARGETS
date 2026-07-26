@@ -1,2 +1,1 @@
-auth-user-pass-verify.sh:/usr/local/etc/sso/auth-user-pass-verify.sh:0700
-vpn.conf:/usr/local/etc/sso/vpn.conf:0600
+vpn.conf:/usr/local/etc/sso/vpn.conf
