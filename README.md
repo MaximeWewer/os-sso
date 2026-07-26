@@ -207,8 +207,9 @@ for password sessions. Register at your IdP:
 - Group membership is additive by default; **Strict group sync** additionally
   revokes IdP-unasserted groups it earlier granted, but only those (never a
   hand-assigned group) and never the last member of a privileged group.
-- A **disabled or expired** local account is refused an SSO session, matching the
-  local-password path (SSO is not a way around an account's expiry).
+- A **disabled or expired** local account is refused, matching the local-password
+  path (SSO is not a way around an account's expiry). The check runs before group
+  sync writes anything and covers the VPN path too, not only the WebGUI session.
 - OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp` and requires an asymmetric
   signature; SAML verifies the assertion signature and is replay-protected
   (single-use request id + consumed-assertion cache).

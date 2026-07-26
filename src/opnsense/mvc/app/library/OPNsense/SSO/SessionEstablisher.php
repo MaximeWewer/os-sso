@@ -80,20 +80,9 @@ final class SessionEstablisher
         }
         foreach ($cnf->system->user as $user) {
             if ((string)$user->name === $username) {
-                if (!empty((string)$user->disabled)) {
-                    return null;
-                }
-                // Parity with core Local::_authenticate(): a local account past its
-                // <expires> date is refused on the password path, so SSO must not be
-                // a way around an operator's expiry. Same m/d/Y, one-day-grace parse
-                // as core (an SSO-managed account normally has no <expires> at all).
-                if (
-                    !empty($user->expires)
-                    && strtotime('-1 day') > strtotime(date('m/d/Y', strtotime((string)$user->expires)))
-                ) {
-                    return null;
-                }
-                return $user;
+                // Parity with core Local::_authenticate(): disabled or past <expires>
+                // is refused on the password path, so SSO is not a way around it.
+                return LocalAccount::isUsable($user) ? $user : null;
             }
         }
         return null;

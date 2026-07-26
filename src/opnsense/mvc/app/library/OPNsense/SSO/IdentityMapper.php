@@ -113,6 +113,11 @@ final class IdentityMapper
         }
 
         if ($node !== null) {
+            // Ask before writing anything. A disabled or expired account is refused
+            // downstream anyway, but until now it was refused AFTER group sync had
+            // already saved config.xml -- and on the VPN path, where no WebGUI session
+            // is opened, it was not refused at all.
+            LocalAccount::assertUsable($node);
             $this->guardBinding($node, $subjectKey);
             $stamp = $this->stampSubject($node, $subjectKey);
             $changed = $this->groupMapper->sync($node, $identity, $defaultGroups);
