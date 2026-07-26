@@ -190,10 +190,13 @@ class SamlController extends ApiControllerBase
             $redirect = '/';
             try {
                 // Prefer the provider whose IdP EntityID matches the message Issuer
-                // (correct for IdP-initiated SLO with several SAML providers); fall
-                // back to the session, then the first configured SAML provider.
+                // (correct for IdP-initiated SLO with several SAML providers), then
+                // the one named on our own per-provider SLO endpoint, then the
+                // session, then the first configured SAML provider. Only a selector:
+                // whichever we land on, the message is validated against ITS cert.
                 $provider = $this->samlProviderByIssuer(SamlProtocol::peekSloIssuer($_GET))
-                    ?: (($_SESSION['sso_logout']['provider'] ?? '') ?: $this->firstSamlProvider());
+                    ?: ($this->knownSamlProvider((string)($_GET['provider'] ?? ''))
+                        ?: (($_SESSION['sso_logout']['provider'] ?? '') ?: $this->firstSamlProvider()));
                 $protocol = $this->protocolFor($provider);
                 $reqId = (string)($_SESSION['sso_saml_logout_reqid'] ?? '');
                 $redirect = $protocol->processSlo($reqId) ?: '/';
@@ -261,6 +264,20 @@ class SamlController extends ApiControllerBase
         throw new \RuntimeException('no SAML provider configured');
     }
 
+    /** $name if it is a configured SAML auth server, '' otherwise. */
+    private function knownSamlProvider(string $name): string
+    {
+        if ($name === '') {
+            return '';
+        }
+        foreach (\OPNsense\Core\Config::getInstance()->object()->system->authserver as $as) {
+            if ((string)$as->type === 'saml' && (string)$as->name === $name) {
+                return $name;
+            }
+        }
+        return '';
+    }
+
     /** SAML auth server whose IdP EntityID matches $issuer, or '' if none. */
     private function samlProviderByIssuer(string $issuer): string
     {
@@ -279,11 +296,17 @@ class SamlController extends ApiControllerBase
     {
         $auth = $auth ?? $this->authServer($provider);
         $base = $this->baseUrlFor($auth);
+        // One EntityID/ACS/SLO per provider. Sharing them across several SAML servers
+        // would give every IdP the same SP identity: the Audience restriction would no
+        // longer say WHICH trust relationship an assertion was minted for, and the SLO
+        // endpoint could not tell whose logout it is answering.
+        $suffix = '?provider=' . rawurlencode((string)$provider);
         return new SamlProtocol([
             'provider_name' => (string)$provider,
             'base_url' => $base,
-            'sp_entity_id' => $base . '/api/sso/saml/metadata',
-            'acs_url' => $base . '/api/sso/saml/acs',
+            'endpoint_suffix' => $suffix,
+            'sp_entity_id' => $base . '/api/sso/saml/metadata' . $suffix,
+            'acs_url' => $base . '/api/sso/saml/acs' . $suffix,
             'idp_entity_id' => $auth->ssoIdpEntityId,
             'idp_sso_url' => $auth->ssoIdpSsoUrl,
             // Default the SLO endpoint to the SSO URL (Keycloak/Authentik serve both

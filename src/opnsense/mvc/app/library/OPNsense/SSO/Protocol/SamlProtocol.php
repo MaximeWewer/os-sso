@@ -431,7 +431,8 @@ final class SamlProtocol implements ProtocolInterface
                     $this->cfg["name_id_format"] ??
                     "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
                 "singleLogoutService" => [
-                    "url" => ($this->cfg["base_url"] ?? "") . "/api/sso/saml/slo",
+                    "url" => ($this->cfg["base_url"] ?? "") . "/api/sso/saml/slo"
+                        . ($this->cfg["endpoint_suffix"] ?? ""),
                     "binding" =>
                         "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
                 ],

@@ -105,9 +105,12 @@ All types share a few options:
 
 1. In OPNsense fill **IdP EntityID**, **IdP SSO URL** (HTTP-Redirect) and the
    **IdP x509 certificate** (full PEM of the signing cert — not a fingerprint).
-2. Give your IdP the SP URLs (shown live in the form):
-   - ACS: `https://<opnsense>/api/sso/saml/acs`
-   - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata`
+2. Give your IdP the SP URLs (shown live in the form). Each SAML server is its own
+   SP identity, so every endpoint carries `?provider=<server name>` — two IdPs never
+   share an EntityID or ACS:
+   - ACS: `https://<opnsense>/api/sso/saml/acs?provider=<name>`
+   - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
+   - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
 3. The IdP must **sign the assertion**. Map the NameID to the username.
 4. The IdP must send **at least one attribute** (configure attribute / property
    mappings — e.g. groups, email). An empty `<AttributeStatement/>` is invalid per
@@ -180,7 +183,7 @@ OIDC (`end_session_endpoint`) and SAML, and falls back to the normal local logou
 for password sessions. Register at your IdP:
 
 - OIDC post-logout redirect: `https://<opnsense>/`
-- SAML logout service: `https://<opnsense>/api/sso/saml/slo`
+- SAML logout service: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
 
 ## Security
 

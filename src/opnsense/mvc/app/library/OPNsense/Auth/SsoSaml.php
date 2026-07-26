@@ -74,8 +74,11 @@ class SsoSaml extends Local implements IAuthConnector
     {
         $base = trim((string)$this->ssoBaseUrl) !== '' ? rtrim((string)$this->ssoBaseUrl, '/') : 'https://{opnsense}';
         $b = htmlspecialchars($base);
-        $acs = gettext('SP ACS URL is') . ' <code>' . $b . '/api/sso/saml/acs</code>, ' .
-            gettext('metadata at') . ' <code>' . $b . '/api/sso/saml/metadata</code>.';
+        // Every SP endpoint carries ?provider=<server name>: each SAML server is its
+        // own SP identity, so two IdPs never share an EntityID/ACS.
+        $acs = gettext('SP ACS URL is') . ' <code>' . $b . '/api/sso/saml/acs?provider={name}</code>, ' .
+            gettext('metadata at') . ' <code>' . $b . '/api/sso/saml/metadata?provider={name}</code> ' .
+            gettext('({name} = this server\'s name; the live URLs are shown under Base URL).');
         return [
             'sso_idp_entity_id' => [
                 'name' => gettext('IdP EntityID'),
@@ -226,12 +229,18 @@ class SsoSaml extends Local implements IAuthConnector
         if (!base || base._ssoDisp) { return; }
         var box = document.createElement('div');
         box.style.marginTop = '6px';
+        // Each SAML server is its own SP: the endpoints carry ?provider=<name>.
+        var nameEl = document.querySelector('tr.auth_saml [name="name"]')
+            || document.querySelector('[name="name"]');
         function upd() {
             var b = (base.value || (location.protocol + '//' + location.host)).replace(/\/+$/, '');
-            box.innerHTML = 'SP ACS URL (give to the IdP):<br><code>' + b + '/api/sso/saml/acs</code><br>'
-                + 'SP EntityID / metadata:<br><code>' + b + '/api/sso/saml/metadata</code>';
+            var q = '?provider=' + encodeURIComponent((nameEl && nameEl.value) || '{name}');
+            box.innerHTML = 'SP ACS URL (give to the IdP):<br><code>' + b + '/api/sso/saml/acs' + q + '</code><br>'
+                + 'SP EntityID / metadata:<br><code>' + b + '/api/sso/saml/metadata' + q + '</code><br>'
+                + 'SP SLO URL:<br><code>' + b + '/api/sso/saml/slo' + q + '</code>';
         }
         base.addEventListener('input', upd);
+        if (nameEl) { nameEl.addEventListener('input', upd); }
         upd();
         base.parentNode.appendChild(box);
         base._ssoDisp = 1;
