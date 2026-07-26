@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!--
+  Privilege for the SSO diagnostics page. Deliberately its own privilege rather than
+  folded into page-system-usermanager: the page exposes IdP endpoints and the list of
+  open SSO sessions, which is read-only but not something every operator needs.
+-->
+<acl>
+    <page-system-sso-diagnostics>
+        <name>System: Access: SSO Diagnostics</name>
+        <patterns>
+            <pattern>ui/sso/diagnostics*</pattern>
+            <pattern>api/sso/diagnostics/*</pattern>
+        </patterns>
+    </page-system-sso-diagnostics>
+</acl>

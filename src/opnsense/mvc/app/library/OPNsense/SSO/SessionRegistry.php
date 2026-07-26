@@ -127,6 +127,26 @@ final class SessionRegistry
         });
     }
 
+    /**
+     * Every recorded session still backed by a live PHP session, newest first.
+     * Read-only view for the diagnostics page.
+     *
+     * @return array<int,array>
+     */
+    public static function listActive(): array
+    {
+        $out = [];
+        foreach (self::entries() as $entry) {
+            if (!is_file((string)($entry['file'] ?? ''))) {
+                continue;
+            }
+            unset($entry['file']); // a filesystem path is not diagnostics material
+            $out[] = $entry;
+        }
+        usort($out, fn($a, $b) => (int)($b['started'] ?? 0) <=> (int)($a['started'] ?? 0));
+        return $out;
+    }
+
     /** @return array<string,array> record path => entry */
     private static function entries(): array
     {

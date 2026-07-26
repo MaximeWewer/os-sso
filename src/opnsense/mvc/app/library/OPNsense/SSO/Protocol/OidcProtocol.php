@@ -265,6 +265,20 @@ final class OidcProtocol implements ProtocolInterface
     }
 
     /**
+     * Live view of what the IdP publishes, for the diagnostics page: the discovery
+     * document plus what we derive from it. Fetches for real (cache aside), so a
+     * failure here is the same failure a login would hit.
+     */
+    public function describe(): array
+    {
+        $disco = $this->discover();
+        return $disco + [
+            'signing_keys' => count($this->jwks($disco, false)),
+            'token_auth_method' => $this->tokenAuthMethod($disco),
+        ];
+    }
+
+    /**
      * Build the RP-initiated logout URL (OIDC RP-Initiated Logout 1.0): redirect
      * the browser here to end the session at the IdP. Returns '' if the IdP has no
      * end_session_endpoint (the caller then just does a local logout).

@@ -10,4 +10,10 @@
     <Lobby>
         <Logout url="/api/sso/logout"/>
     </Lobby>
+    <System>
+        <Access>
+            <SSODiagnostics VisibleName="SSO Diagnostics" url="/ui/sso/diagnostics"
+                            order="80" cssClass="fa fa-stethoscope fa-fw"/>
+        </Access>
+    </System>
 </menu>

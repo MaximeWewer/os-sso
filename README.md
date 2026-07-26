@@ -230,6 +230,17 @@ takes only a signed `logout_token`: issuer, audience, `iat` freshness, the
 backchannel-logout event, absence of a `nonce` and single-use `jti` are all checked
 before any session is ended.
 
+## Diagnostics
+
+**System ▸ Access ▸ SSO Diagnostics** shows, for every configured provider, the exact
+URLs to register at the IdP, the effective policy (required groups, auto-creation,
+group sync, session lifetime), and a **Test** button that talks to the IdP live —
+discovery + JWKS for OIDC, the metadata document for SAML, the JWKS for forward-auth.
+It also lists the currently open SSO sessions and lets you **flush the caches**
+(discovery, JWKS, SAML metadata, icons) after changing something at the IdP instead of
+waiting out a TTL. Access is gated by its own ACL privilege,
+*System: Access: SSO Diagnostics*.
+
 ## Security
 
 - Privileges are **never** stored in the session - the OPNsense ACL resolves them
