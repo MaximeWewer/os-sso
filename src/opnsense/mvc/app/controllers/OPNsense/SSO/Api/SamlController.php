@@ -18,6 +18,7 @@ use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\LogoutGuard;
+use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\SamlProtocol;
 
@@ -56,6 +57,9 @@ class SamlController extends ApiControllerBase
         // keyed by the AuthnRequest id (the assertion POST is cross-site, so the
         // SameSite=Lax session cookie would not survive the round-trip anyway).
         try {
+            // Pre-auth endpoint: cap how often one source can start a ceremony (each
+            // one writes an in-flight state file).
+            RateLimiter::hit('saml-login', $this->clientIp(), 20);
             $provider = $this->request->get('provider');
             $protocol = $this->protocolFor($provider);
             // OpenVPN deferred web-auth: carry the one-time VPN session id in the
@@ -87,6 +91,8 @@ class SamlController extends ApiControllerBase
             return 'Already logged in.';
         }
         try {
+            // Pre-auth endpoint: XML parsing and signature verification are not free.
+            RateLimiter::hit('saml-acs', $this->clientIp(), 20);
             // Recover in-flight state via the response InResponseTo (single use).
             $inResponseTo = SamlProtocol::peekInResponseTo($_POST);
             $state = SamlProtocol::consumeState($inResponseTo);
@@ -411,6 +417,12 @@ class SamlController extends ApiControllerBase
             throw new \RuntimeException('unknown SAML provider');
         }
         return $auth;
+    }
+
+    /** Direct TCP peer -- never a forwardable header. */
+    private function clientIp(): string
+    {
+        return (string)($_SERVER['REMOTE_ADDR'] ?? '');
     }
 
     /** Reopen the native PHP session (the Mvc wrapper aborts it at dispatch). */

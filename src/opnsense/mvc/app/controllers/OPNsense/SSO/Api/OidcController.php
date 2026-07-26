@@ -18,6 +18,7 @@ use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\LogoutGuard;
+use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\OidcProtocol;
 
@@ -57,6 +58,9 @@ class OidcController extends ApiControllerBase
         // protocol's anti-replay state (state/nonce/PKCE verifier) actually persists.
         $this->startSession();
         try {
+            // Pre-auth endpoint: cap how often one source can start a ceremony (each
+            // one costs a discovery/JWKS lookup and a session write).
+            RateLimiter::hit('oidc-login', $this->clientIp(), 20);
             $provider = $this->request->get('provider');
             $protocol = $this->protocolFor($provider);
             $returnUrl = (string)($this->request->get('url') ?? '/');
@@ -105,6 +109,7 @@ class OidcController extends ApiControllerBase
         // form_post delivers the same parameters in the body instead of the query.
         $response = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !empty($_POST) ? $_POST : $_GET;
         try {
+            RateLimiter::hit('oidc-callback', $this->clientIp(), 20);
             // Recover this login's in-flight record by the state the IdP echoes back
             // (single use). Trust the provider recorded at startLogin over any query
             // param, so a crafted callback URL cannot steer which provider validates.
@@ -209,6 +214,8 @@ class OidcController extends ApiControllerBase
         // Section 2.8: never cache, and answer 200 with no body on success.
         $this->response->setHeader('Cache-Control', 'no-store');
         try {
+            // Higher ceiling: one IdP legitimately logs out many sessions at once.
+            RateLimiter::hit('oidc-backchannel', $this->clientIp(), 120);
             $provider = $this->request->get('provider');
             $auth = $this->authServer($provider);
             $protocol = $this->protocolFor($provider, $auth);
@@ -373,6 +380,12 @@ class OidcController extends ApiControllerBase
     }
 
     /** Reopen the native PHP session (the Mvc wrapper aborts it at dispatch). */
+    /** Direct TCP peer -- never a forwardable header. */
+    private function clientIp(): string
+    {
+        return (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    }
+
     private function startSession(): void
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {

@@ -25,6 +25,11 @@ use OPNsense\SSO\Protocol\JwtProtocol;
  * X-Forwarded-For) is in the provider's trusted-proxy allowlist. Without that, anyone
  * able to reach the WebGUI could forge the header and log in as anyone. The JWT
  * signature/iss/aud/exp checks live in JwtProtocol.
+ *
+ * Not rate-limited per source, unlike the OIDC/SAML endpoints: every user of this
+ * provider arrives from the same proxy address, so a per-IP throttle would only
+ * throttle the whole organisation at once. The trusted-proxy allowlist is what bounds
+ * who can reach it at all.
  */
 class JwtController extends ApiControllerBase
 {
