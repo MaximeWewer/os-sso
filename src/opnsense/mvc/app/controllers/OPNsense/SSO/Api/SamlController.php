@@ -16,6 +16,7 @@ use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
+use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\SamlProtocol;
 
@@ -208,7 +209,14 @@ class SamlController extends ApiControllerBase
             return 'Logged out.';
         }
 
-        // SP-initiated logout.
+        // SP-initiated logout. (Only this branch is guarded: the branch above is an
+        // IdP message, cross-site by design and validated by its signature.)
+        if (!LogoutGuard::allow()) {
+            $page = LogoutGuard::confirm('/api/sso/logout');
+            session_write_close();
+            $this->response->setContentType('text/html', 'UTF-8');
+            return $page;
+        }
         $logout = $_SESSION['sso_logout'] ?? null;
         $url = '';
         try {

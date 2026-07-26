@@ -8,6 +8,7 @@
 namespace OPNsense\SSO\Api;
 
 use OPNsense\Base\ApiControllerBase;
+use OPNsense\SSO\LogoutGuard;
 
 /**
  * Unified logout entry point that the WebGUI "Logout" menu item is re-pointed to
@@ -28,11 +29,18 @@ class LogoutController extends ApiControllerBase
         return true;
     }
 
-    /** GET /api/sso/logout */
+    /** GET|POST /api/sso/logout */
     public function indexAction()
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
+        }
+        // A third-party page must not be able to end the session for the user.
+        if (!LogoutGuard::allow()) {
+            $page = LogoutGuard::confirm('/api/sso/logout');
+            session_write_close();
+            $this->response->setContentType('text/html', 'UTF-8');
+            return $page;
         }
         $type = is_array($_SESSION['sso_logout'] ?? null) ? ($_SESSION['sso_logout']['type'] ?? '') : '';
         session_write_close();

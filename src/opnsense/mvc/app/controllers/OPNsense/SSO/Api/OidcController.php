@@ -16,6 +16,7 @@ use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
+use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\OidcProtocol;
 
@@ -180,6 +181,13 @@ class OidcController extends ApiControllerBase
     public function logoutAction()
     {
         $this->startSession();
+        // A third-party page must not be able to end the session for the user.
+        if (!LogoutGuard::allow()) {
+            $page = LogoutGuard::confirm('/api/sso/logout');
+            session_write_close();
+            $this->response->setContentType('text/html', 'UTF-8');
+            return $page;
+        }
         $logout = $_SESSION['sso_logout'] ?? null;
 
         $url = '';
