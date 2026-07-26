@@ -19,18 +19,52 @@ namespace OPNsense\SSO;
  *     leave that host are rejected (effective-URL host check), and an absolute
  *     <link href> pointing off-origin is ignored.
  *   - literal private / loopback / link-local / reserved IPs are refused outright.
+ *   - the result is cached on disk, so an anonymous caller cannot use the pre-auth
+ *     icon endpoint as an outbound request amplifier.
  */
 final class FaviconProxy
 {
     private const TIMEOUT = 6;
     private const MAX_BYTES = 262144; // 256 KiB
+    private const CACHE_TTL = 86400;  // a favicon is not a moving target
+    private const MISS_TTL = 3600;    // remember "no icon" too, or we retry forever
 
     /**
+     * Cached favicon fetch.
+     *
+     * The icon endpoint is pre-auth (the login page has to render before anyone is
+     * logged in), so without a cache every anonymous hit on it costs the firewall up
+     * to two outbound HTTPS requests -- a free amplifier pointed at our own IdP. The
+     * result, including the failure, is therefore remembered on disk.
+     *
      * @param string $baseUrl issuer / IdP SSO URL to derive the host from
      * @return array{type:string,data:string}
      * @throws \RuntimeException when no icon could be fetched
      */
     public static function fetch(string $baseUrl): array
+    {
+        $cached = self::cacheGet($baseUrl);
+        if (is_array($cached)) {
+            return $cached;
+        }
+        if ($cached === false) {
+            throw new \RuntimeException('icon: no favicon found (cached)');
+        }
+        try {
+            $icon = self::fetchLive($baseUrl);
+        } catch (\Throwable $e) {
+            self::cacheSet($baseUrl, null); // negative entry, shorter TTL
+            throw $e;
+        }
+        self::cacheSet($baseUrl, $icon);
+        return $icon;
+    }
+
+    /**
+     * @return array{type:string,data:string}
+     * @throws \RuntimeException when no icon could be fetched
+     */
+    private static function fetchLive(string $baseUrl): array
     {
         $p = parse_url($baseUrl);
         if (empty($p['scheme']) || $p['scheme'] !== 'https' || empty($p['host'])) {
@@ -75,6 +109,55 @@ final class FaviconProxy
         }
 
         throw new \RuntimeException('icon: no favicon found');
+    }
+
+    /* ---- on-disk cache (positive + negative), inside the vetted state dir ---- */
+
+    /**
+     * @return array{type:string,data:string}|false|null the cached icon, false for a
+     *         cached failure, null when nothing usable is cached
+     */
+    private static function cacheGet(string $baseUrl)
+    {
+        try {
+            $f = self::cacheFile($baseUrl);
+        } catch (\RuntimeException $e) {
+            return null;
+        }
+        if (!is_file($f)) {
+            return null;
+        }
+        $entry = json_decode((string)@file_get_contents($f), true);
+        if (!is_array($entry)) {
+            return null;
+        }
+        $miss = empty($entry['type']);
+        if ((time() - (int)@filemtime($f)) > ($miss ? self::MISS_TTL : self::CACHE_TTL)) {
+            return null;
+        }
+        return $miss
+            ? false
+            : ['type' => (string)$entry['type'], 'data' => (string)base64_decode((string)($entry['data'] ?? ''))];
+    }
+
+    /** @param array{type:string,data:string}|null $icon null records a failure */
+    private static function cacheSet(string $baseUrl, ?array $icon): void
+    {
+        try {
+            $f = self::cacheFile($baseUrl);
+        } catch (\RuntimeException $e) {
+            return; // no usable cache directory: just run uncached
+        }
+        $entry = $icon === null
+            ? []
+            : ['type' => $icon['type'], 'data' => base64_encode($icon['data'])];
+        @file_put_contents($f, json_encode($entry), LOCK_EX);
+        @chmod($f, 0600);
+    }
+
+    private static function cacheFile(string $baseUrl): string
+    {
+        return StateDir::path('icons') . '/' . hash('sha256', $baseUrl) . '.json';
     }
 
     /**
