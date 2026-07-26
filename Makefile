@@ -2,7 +2,7 @@ PLUGIN_NAME=            sso
 PLUGIN_VERSION=         0.0.0-dev
 PLUGIN_COMMENT=         Interactive SSO (OIDC + SAML + JWT) authentication for WebGUI / Captive Portal / VPN
 PLUGIN_MAINTAINER=      https://github.com/MaximeWewer
-PLUGIN_DEPENDS=         php83-curl php83-dom php83-xml php83-mbstring
+PLUGIN_DEPENDS=         php83-curl php83-dom php83-xml php83-mbstring zip
 
 # Composer-vendored runtime libraries.
 # Vendored into src/opnsense/mvc/app/library/OPNsense/SSO/vendor at build time.

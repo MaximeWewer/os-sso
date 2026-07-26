@@ -21,8 +21,9 @@ if [ ! -f "$SRC/index.html" ]; then
     exit 1
 fi
 
+# zip is a package dependency; if it is gone, something removed it after install.
 command -v zip >/dev/null 2>&1 || {
-    echo "os-sso: the 'zip' package is required (pkg install zip)" >&2
+    echo "os-sso: 'zip' is missing (it is an os-sso dependency: pkg install zip)" >&2
     exit 1
 }
 
