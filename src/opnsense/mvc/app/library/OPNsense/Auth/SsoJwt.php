@@ -32,6 +32,7 @@ class SsoJwt extends Local implements IAuthConnector
     public $ssoJwtTrustedProxies = [];
     public $ssoUsernameClaim = 'preferred_username';
     public $ssoGroupsClaim = 'groups';
+    public $ssoSessionLifetime = 0;
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
     public $ssoDefaultGroups = [];
@@ -70,6 +71,9 @@ class SsoJwt extends Local implements IAuthConnector
             }
         }
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
+        if (isset($config['sso_session_lifetime']) && $config['sso_session_lifetime'] !== '') {
+            $this->ssoSessionLifetime = (int)$config['sso_session_lifetime'];
+        }
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
         if (!empty($config['sso_jwt_algorithms'])) {
             $this->ssoJwtAlgorithms = array_filter(array_map('trim', explode(',', $config['sso_jwt_algorithms'])));
@@ -176,6 +180,17 @@ class SsoJwt extends Local implements IAuthConnector
                 'help' => gettext('Claim listing the user\'s groups/roles (array, or comma/space separated).'),
                 'type' => 'text',
                 'default' => $this->ssoGroupsClaim,
+            ],
+            'sso_session_lifetime' => [
+                'name' => gettext('Maximum session lifetime (s)'),
+                'help' => gettext('End the WebGUI session this long after login whatever the user is doing, '
+                    . 'unlike the idle timeout. Enforced when the "sso expire_sessions" action runs (schedule '
+                    . 'it under System > Settings > Cron) and on every SSO login. 0 keeps sessions until they '
+                    . 'idle out.'),
+                'type' => 'text',
+                'default' => '0',
+                'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))
+                    ? [] : [gettext('Maximum session lifetime must be a number of seconds (0 = disabled).')],
             ],
             'sso_create_users' => [
                 'name' => gettext('Automatic user creation'),

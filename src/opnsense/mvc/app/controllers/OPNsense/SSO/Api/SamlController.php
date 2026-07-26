@@ -13,6 +13,7 @@ use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
+use OPNsense\SSO\SessionRegistry;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
@@ -144,7 +145,12 @@ class SamlController extends ApiControllerBase
             }
 
             $this->startSession();
-            (new SessionEstablisher())->establish($username, (string)$provider);
+            (new SessionEstablisher())->establish($username, (string)$provider, [
+                'issuer' => (string)$auth->ssoIdpEntityId,
+                'sub' => $identity->subject,
+                'sid' => $protocol->getLastSessionIndex(),
+                'lifetime' => (int)$auth->ssoSessionLifetime,
+            ]);
             // Keep what Single Logout needs, in the fresh session.
             $_SESSION['sso_logout'] = [
                 'type' => 'saml',
@@ -270,6 +276,7 @@ class SamlController extends ApiControllerBase
     /** Local WebGUI logout: wipe + destroy the session (mirrors the core logout). */
     private function clearSession(): void
     {
+        SessionRegistry::forget((string)session_id());
         $_SESSION = [];
         if (isset($_COOKIE[session_name()])) {
             setcookie(session_name(), '', time() - 42000, '/', '', true, true);

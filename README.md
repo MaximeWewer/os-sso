@@ -1,9 +1,9 @@
-# os-sso — Single Sign-On for OPNsense
+# os-sso - Single Sign-On for OPNsense
 
 Add **OpenID Connect**, **SAML 2.0** and **JWT forward-auth** as authentication
 types in OPNsense. The firewall acts as a pure consumer (Relying Party / Service
 Provider): your users sign in at your existing Identity Provider, and MFA and
-passkeys stay there — nothing to re-implement on the firewall.
+passkeys stay there - nothing to re-implement on the firewall.
 
 Works for the **WebGUI**, the **Captive Portal** and **OpenVPN**, with group
 mapping driving OPNsense privileges. The local password (+ native TOTP) always
@@ -11,17 +11,17 @@ stays available as a break-glass path.
 
 ## Features
 
-- **OpenID Connect** — automatic `.well-known` discovery, PKCE, JWKS key
+- **OpenID Connect** - automatic `.well-known` discovery, PKCE, JWKS key
   rotation. Works with Keycloak, Authentik, Entra ID, Zitadel, …
-- **SAML 2.0** — signed assertions, metadata generation, Single Logout.
-- **JWT forward-auth** — trust a signed JWT from a reverse proxy in front of
+- **SAML 2.0** - signed assertions, metadata generation, Single Logout.
+- **JWT forward-auth** - trust a signed JWT from a reverse proxy in front of
   OPNsense (oauth2-proxy, Authelia, Authentik forward-auth, Cloudflare Access).
-- **WebGUI login** — one button per provider on the login page.
+- **WebGUI login** - one button per provider on the login page.
 - **Captive Portal login** via OIDC/SAML.
 - **OpenVPN** login through the browser (deferred web-auth / `WEB_AUTH`).
-- **Group mapping** — IdP groups become OPNsense group membership; privileges
+- **Group mapping** - IdP groups become OPNsense group membership; privileges
   are resolved by the normal ACL.
-- **Single Logout** — the WebGUI *Logout* button ends the IdP session too.
+- **Single Logout** - the WebGUI *Logout* button ends the IdP session too.
 
 ## Screenshots
 
@@ -31,7 +31,7 @@ stays available as a break-glass path.
 
 ## Requirements
 
-- **OPNsense 25.7 or newer** — the login-page SSO button hook
+- **OPNsense 25.7 or newer** - the login-page SSO button hook
   (`ISSOContainer` / `listSSOproviders`) landed in core in 25.7.
 - For OpenVPN login: **OpenVPN 2.6+** on the firewall and a
   web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux, Windows 2.6+).
@@ -40,7 +40,7 @@ stays available as a break-glass path.
 ## Install
 
 Each release ships one package per FreeBSD ABI. Download the one matching your
-firewall's base from the [Releases](../../releases) page — check it with
+firewall's base from the [Releases](../../releases) page - check it with
 `pkg config ABI` (e.g. `FreeBSD:14:amd64` → the `…-FreeBSD-14.pkg`), then install:
 
 ```sh
@@ -57,36 +57,41 @@ Then reload the WebGUI (or reboot). The new server types appear under
 Go to **System ▸ Access ▸ Servers** and click **＋ Add**, then pick the **Type**.
 All types share a few options:
 
-- **Username claim/attribute** — which IdP field becomes the local username.
+- **Username claim/attribute** - which IdP field becomes the local username.
   Use an immutable, IdP-administered value (e.g. `preferred_username`). For SAML the
   username, email and display-name attributes are each configurable; left empty they
-  try the conventional friendly names and then the NameID — set them when your IdP
+  try the conventional friendly names and then the NameID - set them when your IdP
   emits OID-style names such as `urn:oid:0.9.2342.19200300.100.1.1`.
-- **Automatic user creation** — off by default. When on, matched users are created
+- **Automatic user creation** - off by default. When on, matched users are created
   in `config.xml` with no local password (IdP-only login).
-- **Required groups** — access gate: comma separated IdP group names, at least one
+- **Required groups** - access gate: comma separated IdP group names, at least one
   of which the user must hold to get in through this provider (WebGUI, Captive
   Portal and VPN alike). Checked on the IdP-asserted groups before any local
   account is matched, created or updated. Empty means every account the IdP
-  authenticates may log in — set it unless that is what you want.
-- **Default groups** — OPNsense groups always granted to mapped users.
-- **Group mapping** — optional `idpGroup:opnsenseGroup` pairs (comma separated).
+  authenticates may log in - set it unless that is what you want.
+- **Default groups** - OPNsense groups always granted to mapped users.
+- **Group mapping** - optional `idpGroup:opnsenseGroup` pairs (comma separated).
   Mapped groups are trusted and may target privileged groups (e.g. `admins`). IdP
   groups with no mapping fall back to a 1:1 name match that refuses privileged
   groups (see Security).
-- **Strict group sync** — off by default (membership is additive: groups are only
+- **Strict group sync** - off by default (membership is additive: groups are only
   ever added). When on, each login also *revokes* groups os-sso previously granted
   but the IdP no longer asserts. Only groups os-sso itself granted are touched
   (hand-assigned groups are kept), and the last member of a privileged group is
   never removed.
-- **Base URL** (required, OIDC/SAML) — the firewall's public `https://host[:port]`.
+- **Base URL** (required, OIDC/SAML) - the firewall's public `https://host[:port]`.
   Every URL handed to the IdP is built from it: the OIDC redirect/callback, the SAML
   SP EntityID/ACS/SLO. Mind a reverse proxy or port-forward. It is required because
   the fallback would derive those URLs from the request `Host` header, which the
-  client controls — an IdP doing prefix/wildcard redirect matching could then be
+  client controls - an IdP doing prefix/wildcard redirect matching could then be
   talked into sending the authorization code elsewhere. The form shows the exact
-  **redirect/ACS URL** live underneath this field — copy it into your IdP.
-- **Default landing URL** — where users land after login when no specific page was
+  **redirect/ACS URL** live underneath this field - copy it into your IdP.
+- **Maximum session lifetime** - end the WebGUI session this long after login
+  regardless of activity. The WebGUI's own timeout is *idle*-only, so a kept-open tab
+  otherwise never goes back through the IdP. Enforced on every SSO login and by the
+  configd action **os-sso: expire SSO sessions** - schedule it under
+  *System ▸ Settings ▸ Cron*, every 5 minutes is plenty. `0` disables it.
+- **Default landing URL** - where users land after login when no specific page was
   requested (e.g. `/ui/dashboard`).
 
 ### OpenID Connect
@@ -108,18 +113,18 @@ All types share a few options:
 |---|---|---|
 | **Keycloak** | `https://<kc>/realms/<realm>` | add a *Group Membership* mapper → `groups` |
 | **Authentik** | `https://<authentik>/application/o/<slug>/` | add the *Groups* scope |
-| **Entra ID** | `https://login.microsoftonline.com/<tenant>/v2.0` | `groups` claim (object IDs — use an explicit name map) |
+| **Entra ID** | `https://login.microsoftonline.com/<tenant>/v2.0` | `groups` claim (object IDs - use an explicit name map) |
 
 ### SAML 2.0
 
-1. In OPNsense either set the **IdP metadata URL** (https) and leave the rest empty —
+1. In OPNsense either set the **IdP metadata URL** (https) and leave the rest empty -
    the EntityID, SSO/SLO endpoints and signing certificate are read from it and
-   cached for 24 h, so an IdP **signing-key rotation is picked up on its own** — or
+   cached for 24 h, so an IdP **signing-key rotation is picked up on its own** - or
    fill **IdP EntityID**, **IdP SSO URL** (HTTP-Redirect) and the **IdP x509
-   certificate** (full PEM of the signing cert — not a fingerprint) by hand. Anything
+   certificate** (full PEM of the signing cert - not a fingerprint) by hand. Anything
    filled in by hand wins over the document.
 2. Give your IdP the SP URLs (shown live in the form). Each SAML server is its own
-   SP identity, so every endpoint carries `?provider=<server name>` — two IdPs never
+   SP identity, so every endpoint carries `?provider=<server name>` - two IdPs never
    share an EntityID or ACS:
    - ACS: `https://<opnsense>/api/sso/saml/acs?provider=<name>`
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
@@ -127,17 +132,17 @@ All types share a few options:
 3. The IdP must **sign the assertion**. Map the NameID to the username. Optional:
    **HTTP-POST binding** for the AuthnRequest (when the IdP does not take a redirect),
    **encrypted assertions** (needs the SP certificate + key), and **IdP-initiated
-   login** — the last one off by default, since an unsolicited assertion proves
+   login** - the last one off by default, since an unsolicited assertion proves
    nothing about who asked to log in.
 4. The IdP must send **at least one attribute** (configure attribute / property
-   mappings — e.g. groups, email). An empty `<AttributeStatement/>` is invalid per
-   the SAML schema and is rejected by the strict validation — and you need the
+   mappings - e.g. groups, email). An empty `<AttributeStatement/>` is invalid per
+   the SAML schema and is rejected by the strict validation - and you need the
    groups attribute for group mapping anyway.
 
 | Provider | IdP EntityID | SSO URL (redirect) |
 |---|---|---|
 | **Keycloak** | `https://<kc>/realms/<realm>` | `https://<kc>/realms/<realm>/protocol/saml` |
-| **Authentik** | `https://<authentik>/application/saml/<slug>/metadata/` (the response Issuer — note the `/metadata/` suffix) | `…/application/saml/<slug>/sso/binding/redirect/` |
+| **Authentik** | `https://<authentik>/application/saml/<slug>/metadata/` (the response Issuer - note the `/metadata/` suffix) | `…/application/saml/<slug>/sso/binding/redirect/` |
 
 ### JWT forward-auth
 
@@ -145,22 +150,22 @@ For OPNsense behind a trusted identity-aware proxy that authenticates users and
 forwards a **signed JWT in a header**.
 
 1. Fill **Issuer** and **Audience** (both checked), and the **JWKS URL**
-   (preferred — supports key rotation) or a static PEM public key.
-2. Set **Trusted proxy IPs/CIDRs** — *required*. The JWT header is only accepted
+   (preferred - supports key rotation) or a static PEM public key.
+2. Set **Trusted proxy IPs/CIDRs** - *required*. The JWT header is only accepted
    when the request comes from these source IPs (the proxy), which is what prevents
    anyone else from forging it. The match is on the **direct TCP peer**
-   (`REMOTE_ADDR`), never a forwardable header — list the IP that actually connects
+   (`REMOTE_ADDR`), never a forwardable header - list the IP that actually connects
    to the firewall. If another reverse proxy fronts the WebGUI, that proxy's IP goes
    here and it must strip the JWT header from untrusted clients.
 3. Point the proxy at `https://<opnsense>/api/sso/jwt/login?provider=<name>` and
    have it inject the token in the configured header (default `X-Auth-Request-Jwt`,
    or `Authorization: Bearer`).
-4. Bound the replay window. A signed JWT is a bearer credential — whoever holds the
+4. Bound the replay window. A signed JWT is a bearer credential - whoever holds the
    bytes is the user until it expires. Both controls are off by default because they
    depend on how your proxy issues tokens:
-   - **Maximum token age** — refuse tokens whose `iat` is older than N seconds, no
+   - **Maximum token age** - refuse tokens whose `iat` is older than N seconds, no
      matter what `exp` says.
-   - **Single-use tokens** — accept each token once (keyed on `jti` when present).
+   - **Single-use tokens** - accept each token once (keyed on `jti` when present).
      Only if the proxy mints a fresh token per login; if it reuses one token for the
      whole session (the usual oauth2-proxy setup), the second login would be refused.
 
@@ -181,7 +186,7 @@ WebGUI with privileges from their mapped groups.
 2. **Services ▸ Captive Portal ▸ Administration**: in the zone, add that server
    under *Authentication* (optionally set an enforce-group).
 3. Use the bundled portal template
-   (`src/opnsense/scripts/OPNsense/SSO/cp-portal/`) — zip its contents, upload it
+   (`src/opnsense/scripts/OPNsense/SSO/cp-portal/`) - zip its contents, upload it
    under *Templates*, and select it on the zone. It shows the SSO buttons and keeps
    the standard login form.
 4. Make sure the zone lets unauthenticated clients reach the firewall WebGUI and
@@ -199,7 +204,7 @@ OpenVPN 2.6+ “pending auth” lets the client authenticate in a browser:
 
 Configure protocol/provider in `/usr/local/etc/sso/vpn.conf`
 (`PROTOCOL=oidc|saml`, `PROVIDER`, `HOST`, `TIMEOUT`). Use a web-auth-capable
-client (OpenVPN Connect, OpenVPN 3 Linux) — see `test/vpn-client/README.md`.
+client (OpenVPN Connect, OpenVPN 3 Linux) - see `test/vpn-client/README.md`.
 
 ### Logout
 
@@ -212,7 +217,7 @@ for password sessions. Register at your IdP:
 
 ## Security
 
-- Privileges are **never** stored in the session — the OPNsense ACL resolves them
+- Privileges are **never** stored in the session - the OPNsense ACL resolves them
   from group membership on every request.
 - New sessions regenerate their ID (anti session-fixation).
 - SSO will not bind the username claim to an existing local account that has its
@@ -231,14 +236,14 @@ for password sessions. Register at your IdP:
   signature; SAML verifies the assertion signature and is replay-protected
   (single-use request id + consumed-assertion cache).
 - The local password (+ native TOTP) is always left active as a **break-glass**
-  path — keep at least one local admin.
+  path - keep at least one local admin.
 
 > `client_secret` and SP keys are stored in `config.xml` like other OPNsense
 > credentials (e.g. LDAP bind passwords) and are never written to logs.
 
 ## Test / lab
 
-A reproducible lab lives under `test/` — a Vagrant OPNsense VM plus Authentik and
+A reproducible lab lives under `test/` - a Vagrant OPNsense VM plus Authentik and
 Keycloak in Docker behind a TLS proxy. `vagrant up` is self-contained: it pushes
 the source over SCP and deploys the plugin into the live tree (no manual steps).
 
@@ -256,7 +261,7 @@ Captive Portal end-to-end suites. Host `/etc/hosts` needs
 ## Build
 
 CI builds the `.pkg` in a FreeBSD VM and publishes a GitHub release on a
-`v*.*.*` tag (or a manual run) — see `.github/workflows/build-pkg.yml`. Versions
+`v*.*.*` tag (or a manual run) - see `.github/workflows/build-pkg.yml`. Versions
 follow `YEAR.MONTH.INDEX` (e.g. `2026.6.3`).
 
 Locally on an OPNsense dev VM (plugin name `sso`, category `security`):

@@ -83,7 +83,11 @@ class JwtController extends ApiControllerBase
             );
 
             $this->startSession();
-            (new SessionEstablisher())->establish($username, (string)$this->request->get('provider'));
+            (new SessionEstablisher())->establish($username, (string)$this->request->get('provider'), [
+                'issuer' => (string)$auth->ssoJwtIssuer,
+                'sub' => $identity->subject,
+                'lifetime' => (int)$auth->ssoSessionLifetime,
+            ]);
             // JWT is a local logout only (no IdP redirect to end a remote session).
             $_SESSION['sso_logout'] = ['type' => 'jwt', 'provider' => (string)$this->request->get('provider')];
             $returnUrl = $this->landing((string)($this->request->get('url') ?? '/'), $auth);

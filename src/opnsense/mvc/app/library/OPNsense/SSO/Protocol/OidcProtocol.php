@@ -60,6 +60,9 @@ final class OidcProtocol implements ProtocolInterface
     /** @var string state minted by the last startLogin() (correlation key for the flow) */
     private string $lastState = '';
 
+    /** @var string `sid` of the last validated ID token (IdP session id, for back-channel logout) */
+    private string $lastSid = '';
+
     /**
      * @param array $cfg issuer, client_id, client_secret, scopes[], username_claim,
      *                    groups_claim, redirect_uri, use_pkce
@@ -199,6 +202,9 @@ final class OidcProtocol implements ProtocolInterface
 
         $claims = $this->validateIdToken($disco, $idToken, $sessionNonce, (string)($tokens['access_token'] ?? ''));
         $this->lastIdToken = $idToken; // keep for RP-initiated logout (id_token_hint)
+        // The IdP's own session id, when it publishes one: what a back-channel logout
+        // names, and more precise than the subject (one user, several sessions).
+        $this->lastSid = isset($claims->sid) && is_scalar($claims->sid) ? (string)$claims->sid : '';
 
         // Optionally enrich from userinfo (groups/email often live there).
         $merged = (array)$claims;
@@ -243,6 +249,18 @@ final class OidcProtocol implements ProtocolInterface
     public function getLastState(): string
     {
         return $this->lastState;
+    }
+
+    /** The configured issuer (the trust anchor a session is recorded against). */
+    public function getIssuer(): string
+    {
+        return $this->issuer;
+    }
+
+    /** The IdP session id (`sid`) of the last validated ID token, '' if it had none. */
+    public function getLastSessionId(): string
+    {
+        return $this->lastSid;
     }
 
     /**

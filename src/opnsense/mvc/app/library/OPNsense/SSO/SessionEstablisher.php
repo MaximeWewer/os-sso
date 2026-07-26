@@ -35,9 +35,11 @@ final class SessionEstablisher
      *
      * @param string $localUsername local account name (already provisioned)
      * @param string $authServerName authserver name that authenticated (audit + timeout)
+     * @param array $idpSession issuer, sub, sid and lifetime -- recorded so the session
+     *              can be ended later by a back-channel logout or by its own deadline
      * @throws \RuntimeException if the user does not exist or is disabled
      */
-    public function establish(string $localUsername, string $authServerName): void
+    public function establish(string $localUsername, string $authServerName, array $idpSession = []): void
     {
         $cnf = Config::getInstance()->object();
 
@@ -66,10 +68,24 @@ final class SessionEstablisher
         // 4. Record the originating auth server (audit trail + session timeout policy).
         $_SESSION['auth_server'] = $authServerName;
 
-        // 5. Audit, matching the core wording so log tooling stays uniform.
+        // 5. Register the session so it can be ended from outside this browser: a
+        //    back-channel logout from the IdP, or its own absolute deadline. Also
+        //    sweep whatever has meanwhile expired -- a login is a cheap, regular
+        //    moment to do it, on top of the scheduled "sso expire_sessions" action.
+        SessionRegistry::record([
+            'username' => $localUsername,
+            'provider' => $authServerName,
+            'issuer' => (string)($idpSession['issuer'] ?? ''),
+            'sub' => (string)($idpSession['sub'] ?? ''),
+            'sid' => (string)($idpSession['sid'] ?? ''),
+            'lifetime' => (int)($idpSession['lifetime'] ?? 0),
+        ]);
+        SessionRegistry::sweep();
+
+        // 6. Audit, matching the core wording so log tooling stays uniform.
         $this->audit($localUsername, $authServerName);
 
-        // 6. Privileges: intentionally untouched. Resolved by OPNsense\Core\ACL
+        // 7. Privileges: intentionally untouched. Resolved by OPNsense\Core\ACL
         //    from group membership on the next request.
     }
 

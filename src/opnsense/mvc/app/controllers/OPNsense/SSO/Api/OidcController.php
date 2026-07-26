@@ -13,6 +13,7 @@ use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
+use OPNsense\SSO\SessionRegistry;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
@@ -159,7 +160,12 @@ class OidcController extends ApiControllerBase
                 return VpnAuthorizer::donePage($username);
             }
 
-            (new SessionEstablisher())->establish($username, (string)$provider);
+            (new SessionEstablisher())->establish($username, (string)$provider, [
+                'issuer' => $protocol->getIssuer(),
+                'sub' => $identity->subject,
+                'sid' => $protocol->getLastSessionId(),
+                'lifetime' => (int)$auth->ssoSessionLifetime,
+            ]);
             // Keep what RP-initiated logout (SLO) needs, in the fresh session.
             $_SESSION['sso_logout'] = [
                 'type' => 'oidc',
@@ -337,6 +343,7 @@ class OidcController extends ApiControllerBase
     /** Local WebGUI logout: wipe + destroy the session (mirrors the core logout). */
     private function clearSession(): void
     {
+        SessionRegistry::forget((string)session_id());
         $_SESSION = [];
         if (isset($_COOKIE[session_name()])) {
             setcookie(session_name(), '', time() - 42000, '/', '', true, true);
