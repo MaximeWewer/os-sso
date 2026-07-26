@@ -27,6 +27,8 @@ class SsoJwt extends Local implements IAuthConnector
     // not in the vendored firebase/php-jwt and so are intentionally absent.
     public $ssoJwtAlgorithms = ['RS256', 'RS384', 'RS512', 'PS256', 'ES256', 'ES384', 'EdDSA'];
     public $ssoJwtClockSkew = 60;
+    public $ssoJwtMaxAge = 0;
+    public $ssoJwtSingleUse = false;
     public $ssoJwtTrustedProxies = [];
     public $ssoUsernameClaim = 'preferred_username';
     public $ssoGroupsClaim = 'groups';
@@ -75,6 +77,10 @@ class SsoJwt extends Local implements IAuthConnector
         if (isset($config['sso_jwt_clock_skew']) && $config['sso_jwt_clock_skew'] !== '') {
             $this->ssoJwtClockSkew = (int)$config['sso_jwt_clock_skew'];
         }
+        if (isset($config['sso_jwt_max_age']) && $config['sso_jwt_max_age'] !== '') {
+            $this->ssoJwtMaxAge = (int)$config['sso_jwt_max_age'];
+        }
+        $this->ssoJwtSingleUse = !empty($config['sso_jwt_single_use']);
         $this->ssoJwtTrustedProxies = array_filter(array_map('trim', explode(',', $config['sso_jwt_trusted_proxies'] ?? '')));
         $this->ssoRequiredGroups = array_filter(array_map('trim', explode(',', $config['sso_required_groups'] ?? '')));
         $this->ssoDefaultGroups = array_filter(array_map('trim', explode(',', $config['sso_default_groups'] ?? '')));
@@ -141,6 +147,23 @@ class SsoJwt extends Local implements IAuthConnector
                 'default' => (string)$this->ssoJwtClockSkew,
                 'validate' => fn($v) => ($v === '' || (ctype_digit((string)$v) && (int)$v <= 300))
                     ? [] : [gettext('Clock skew must be a number of seconds (0-300).')],
+            ],
+            'sso_jwt_max_age' => [
+                'name' => gettext('Maximum token age (s)'),
+                'help' => gettext('Refuse a token whose "iat" is older than this, whatever its "exp" says. '
+                    . 'Bounds how long a captured token stays usable when the signer issues long-lived '
+                    . 'tokens. 0 disables the check.'),
+                'type' => 'text',
+                'default' => (string)$this->ssoJwtMaxAge,
+                'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))
+                    ? [] : [gettext('Maximum token age must be a number of seconds (0 = disabled).')],
+            ],
+            'sso_jwt_single_use' => [
+                'name' => gettext('Single-use tokens'),
+                'help' => gettext('Accept each token only once (replay protection, keyed on "jti" when the '
+                    . 'signer sets one). Enable when the proxy mints a fresh token per login. Leave off if it '
+                    . 'reuses one token for the whole session -- the second login would be refused.'),
+                'type' => 'checkbox',
             ],
             'sso_username_claim' => [
                 'name' => gettext('Username claim'),

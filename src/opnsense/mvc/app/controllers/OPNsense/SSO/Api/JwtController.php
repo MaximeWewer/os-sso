@@ -62,6 +62,8 @@ class JwtController extends ApiControllerBase
                 'public_key' => $auth->ssoJwtPublicKey,
                 'algorithms' => (array)$auth->ssoJwtAlgorithms,
                 'leeway' => $auth->ssoJwtClockSkew,
+                'max_age' => $auth->ssoJwtMaxAge,
+                'single_use' => $auth->ssoJwtSingleUse,
                 'username_claim' => $auth->ssoUsernameClaim,
                 'groups_claim' => $auth->ssoGroupsClaim,
             ]);

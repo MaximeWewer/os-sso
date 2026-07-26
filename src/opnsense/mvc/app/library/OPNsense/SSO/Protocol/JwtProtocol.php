@@ -43,6 +43,10 @@ final class JwtProtocol
     private array $algorithms;
     private string $usernameClaim;
     private string $groupsClaim;
+    /** reject a token whose iat is older than this many seconds (0 = no limit) */
+    private int $maxAge;
+    /** accept each token only once within its remaining lifetime */
+    private bool $singleUse;
 
     public function __construct(array $cfg)
     {
@@ -53,6 +57,8 @@ final class JwtProtocol
         $this->algorithms = !empty($cfg['algorithms']) ? array_values($cfg['algorithms']) : ['RS256', 'ES256'];
         $this->usernameClaim = (string)($cfg['username_claim'] ?? 'preferred_username');
         $this->groupsClaim = (string)($cfg['groups_claim'] ?? 'groups');
+        $this->maxAge = max(0, (int)($cfg['max_age'] ?? 0));
+        $this->singleUse = (bool)($cfg['single_use'] ?? false);
 
         if (!class_exists(\Firebase\JWT\JWT::class)) {
             require_once __DIR__ . '/../vendor/autoload.php';
@@ -112,7 +118,66 @@ final class JwtProtocol
         if (!isset($claims->exp)) {
             throw new \RuntimeException('JWT: token has no exp claim');
         }
+        // iat is what bounds the replay window below; without it "how old is this
+        // token" has no answer, and a long exp is the only thing left.
+        if (!isset($claims->iat)) {
+            throw new \RuntimeException('JWT: token has no iat claim');
+        }
+        if ($this->maxAge > 0 && (time() - (int)$claims->iat) > $this->maxAge + JWT::$leeway) {
+            throw new \RuntimeException('JWT: token is older than the configured maximum age');
+        }
+        if ($this->singleUse) {
+            $this->guardReplay($claims, $jwt);
+        }
         return $this->toIdentity((array)$claims);
+    }
+
+    /**
+     * Accept a token once. A signed JWT is a bearer credential: whoever holds the
+     * bytes is the user, so anything that can read it (a proxy access log, a debug
+     * dump) can log in as them until it expires. Opt-in, because a proxy that hands
+     * the SAME token to every request -- the common oauth2-proxy setup -- would see
+     * its second login refused; turn it on when the proxy mints a fresh token.
+     *
+     * Keyed by jti when present, else by a digest of the token itself (unique per
+     * token, since the signature is). The marker only has to outlive the token, so
+     * it is swept once exp has passed.
+     */
+    private function guardReplay(object $claims, string $jwt): void
+    {
+        $key = isset($claims->jti) && is_scalar($claims->jti)
+            ? 'jti:' . (string)$claims->jti
+            : 'tok:' . hash('sha256', $jwt);
+        try {
+            $dir = StateDir::path('jwt-seen');
+        } catch (\RuntimeException $e) {
+            // No trustworthy place to remember tokens: refuse rather than silently
+            // downgrade to no replay protection when the operator asked for it.
+            throw new \RuntimeException('JWT: replay protection unavailable: ' . $e->getMessage());
+        }
+        $this->sweepSeen($dir);
+        $file = $dir . '/' . hash('sha256', $this->issuer . '|' . $key) . '.json';
+        // Exclusive create: succeeds exactly once per token.
+        $fp = @fopen($file, 'x');
+        if ($fp === false) {
+            throw new \RuntimeException('JWT: token replay detected');
+        }
+        fwrite($fp, json_encode(['exp' => (int)$claims->exp]));
+        fclose($fp);
+        @chmod($file, 0600);
+    }
+
+    /** Drop replay markers for tokens that have expired anyway. */
+    private function sweepSeen(string $dir): void
+    {
+        $now = time();
+        foreach (glob($dir . '/*.json') ?: [] as $f) {
+            $entry = json_decode((string)@file_get_contents($f), true);
+            $exp = is_array($entry) ? (int)($entry['exp'] ?? 0) : 0;
+            if ($exp + self::MAX_LEEWAY < $now) {
+                @unlink($f);
+            }
+        }
     }
 
     /**

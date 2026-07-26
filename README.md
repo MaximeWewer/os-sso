@@ -138,6 +138,14 @@ forwards a **signed JWT in a header**.
 3. Point the proxy at `https://<opnsense>/api/sso/jwt/login?provider=<name>` and
    have it inject the token in the configured header (default `X-Auth-Request-Jwt`,
    or `Authorization: Bearer`).
+4. Bound the replay window. A signed JWT is a bearer credential — whoever holds the
+   bytes is the user until it expires. Both controls are off by default because they
+   depend on how your proxy issues tokens:
+   - **Maximum token age** — refuse tokens whose `iat` is older than N seconds, no
+     matter what `exp` says.
+   - **Single-use tokens** — accept each token once (keyed on `jti` when present).
+     Only if the proxy mints a fresh token per login; if it reuses one token for the
+     whole session (the usual oauth2-proxy setup), the second login would be refused.
 
 Only asymmetric algorithms (`RS256`/`ES256`/…) are accepted; `exp`/`nbf` are
 enforced.
