@@ -4,19 +4,20 @@
 # hostname -- inside the VM, "localhost:8444" is nothing).
 #
 # Prerequisites:
-#   test/idp/up.sh keycloak  +  test/idp/keycloak/setup-keycloak.sh   (SP_BASE matching)
+#   an IdP stack from test/idp, set up with a matching SP_BASE
 #   vagrant up                                                        (SSO_GUI_PORT matching)
-#   an 'keycloak' oidc auth server registered in the VM (see add_authserver.php)
+#   an '<idp>' oidc auth server registered in the VM (see add_authserver.php)
 #
-# Usage: SSO_GUI_PORT=8444 ./oidc-e2e.sh
+# Usage: SSO_GUI_PORT=8444 ./oidc.sh            (or through ./run-all.sh)
 set -uo pipefail
 cd "$(dirname "$0")"
 
 PORT="${SSO_GUI_PORT:-8443}"
 GUI="https://localhost:$PORT"
+IDP="${IDP:-keycloak}"
 PROVIDER="${SSO_PROVIDER:-keycloak}"
-KC_USER="${KC_USER:-kctest}"
-KC_PASS="${KC_PASS:-Test12345!}"
+IDP_USER="${IDP_USER:-kctest}"
+IDP_PASS="${IDP_PASS:-Test12345!}"
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 pass=0; fail=0
@@ -24,33 +25,24 @@ pass=0; fail=0
 ok()   { echo "  PASS $1"; pass=$((pass+1)); }
 ko()   { echo "  FAIL $1"; fail=$((fail+1)); }
 check(){ [ "$2" = "$3" ] && ok "$1 ($3)" || ko "$1 (expected $2, got $3)"; }
+# Run as root in the VM. The command goes through "sh -c" so globs expand as root:
+# the os-sso state directories are 0700, so the vagrant user cannot even expand a
+# path inside them (which is the point).
+vm()   { vagrant ssh -c "sudo sh -c '$1'" 2>/dev/null | tr -d '\r'; }
 # Core redirects an unauthenticated caller to the login page (302) rather than
 # answering 403, so "is this session live" is 200-or-not, not a specific code.
 authed(){ [ "$(curl -sk -b "$1" -o /dev/null -w '%{http_code}' "$GUI/api/core/menu/search")" = "200" ]; }
 is_live(){ authed "$1" && ok "$2" || ko "$2 (session is not authenticated)"; }
 not_live(){ authed "$1" && ko "$2 (session still authenticated)" || ok "$2"; }
-# Run as root in the VM. The command goes through "sh -c" so globs expand as root:
-# the os-sso state directories are 0700, so the vagrant user cannot even expand a
-# path inside them (which is the point).
-vm()   { vagrant ssh -c "sudo sh -c '$1'" 2>/dev/null | tr -d '\r'; }
 
-# Drive the whole browser ceremony; leaves the WebGUI session cookie in $1.
+# The whole browser ceremony, IdP dialect included, lives in lib/idp_login.py.
 login() {
-    local jar="$1" kcjar="$W/kc.$$" action cb
-    rm -f "$jar" "$kcjar"
-    local authz
-    authz=$(curl -sk -c "$jar" -o /dev/null -w '%{redirect_url}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")
-    case "$authz" in https://*) ;; *) echo "000"; return ;; esac
-    curl -sk -c "$kcjar" -L "$authz" -o "$W/kc.html"
-    action=$(grep -o 'action="[^"]*"' "$W/kc.html" | head -1 | sed 's/action="//;s/"$//;s/&amp;/\&/g')
-    [ -z "$action" ] && { echo "000"; return; }
-    cb=$(curl -sk -b "$kcjar" -c "$kcjar" -o /dev/null -w '%{redirect_url}' \
-        -d "username=$KC_USER" -d "password=$KC_PASS" -d 'credentialId=' "$action")
-    [ -z "$cb" ] && { echo "000"; return; }
-    curl -sk -b "$jar" -c "$jar" -o /dev/null -w '%{http_code}' "$cb"
+    python3 "$(dirname "$0")/lib/idp_login.py" --gui "$GUI" --provider "$PROVIDER" \
+        --protocol oidc --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" \
+        --jar "$1" 2>/dev/null | tail -1
 }
 
-echo "=== os-sso OIDC end-to-end ($GUI, provider=$PROVIDER) ==="
+echo "=== os-sso OIDC end-to-end ($GUI, idp=$IDP, provider=$PROVIDER) ==="
 
 # --- 1. the ceremony itself --------------------------------------------------
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
@@ -95,7 +87,7 @@ curl -sk -b "$W/jar" -o "$W/check.json" "$GUI/api/sso/diagnostics/check/$PROVIDE
 grep -q '"status":"ok"' "$W/check.json" && ok "live IdP check ok" || ko "IdP check ($(head -c 160 "$W/check.json"))"
 grep -q '"signing_keys":[1-9]' "$W/check.json" && ok "JWKS keys counted" || ko "no signing keys reported"
 curl -sk -b "$W/jar" -o "$W/sess.json" "$GUI/api/sso/diagnostics/sessions"
-grep -q "$KC_USER" "$W/sess.json" && ok "the open session is listed" || ko "session not listed ($(head -c 160 "$W/sess.json"))"
+grep -q "$IDP_USER" "$W/sess.json" && ok "the open session is listed" || ko "session not listed ($(head -c 160 "$W/sess.json"))"
 check "diagnostics page renders" 200 \
     "$(curl -sk -b "$W/jar" -o /dev/null -w '%{http_code}' "$GUI/ui/sso/diagnostics")"
 check "settings page renders" 200 \
@@ -144,7 +136,7 @@ vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null
 login "$W/jar3" >/dev/null
 vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups=nobody-has-this sso_deprovision=1" >/dev/null
 login "$W/jar3b" >/dev/null
-DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $KC_USER")
+DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $IDP_USER")
 case "$DUMP" in
     *disabled=1*) ok "the refused account was disabled ($DUMP)" ;;
     *) ko "account not disabled ($DUMP)" ;;
@@ -156,7 +148,7 @@ vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null
 login "$W/jar3c" >/dev/null
 vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups=nobody-has-this sso_deprovision=1" >/dev/null
 login "$W/jar3d" >/dev/null
-DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $KC_USER")
+DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $IDP_USER")
 case "$DUMP" in
     *disabled=0*) ok "the admins-group account was left enabled ($DUMP)" ;;
     *) ko "a privileged account was disabled ($DUMP)" ;;

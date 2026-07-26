@@ -49,9 +49,12 @@ Vagrant.configure("2") do |config|
   # 3. upload the lab CA so deploy.sh can trust the IdP TLS (optional, guarded).
   config.vm.provision "file", run: "always",
     source: "../test/idp/certs", destination: "/home/vagrant/os-sso/test/idp/certs"
-  # 4. upload the lab helper scripts (authserver registration, e2e tests).
+  # 4. upload the lab helper scripts (authserver registration, config probes).
   config.vm.provision "file", run: "always",
     source: "vagrant", destination: "/home/vagrant/os-sso/test/vagrant"
-  # 5. deploy the plugin into the live OPNsense tree.
+  # 5. upload the end-to-end suites; the VM-side ones run from here.
+  config.vm.provision "file", run: "always",
+    source: "e2e", destination: "/home/vagrant/os-sso/test/e2e"
+  # 6. deploy the plugin into the live OPNsense tree.
   config.vm.provision "shell", path: "vagrant/deploy.sh", run: "always"
 end

@@ -29,6 +29,14 @@ stays available as a break-glass path.
 |---|---|---|
 | ![Authentication servers](assets/servers.png) | ![Server configuration](assets/server_config.png) | ![WebGUI login form](assets/login_form.png) |
 
+| Captive Portal, after signing in | OpenVPN, after signing in |
+|---|---|
+| ![Captive portal client authorized](assets/cp_connected.png) | ![VPN tunnel authorized](assets/vpn_authorized.png) |
+
+| OpenVPN web-auth settings | SSO diagnostics |
+|---|---|
+| ![SSO settings](assets/vpn_settings.png) | ![SSO diagnostics](assets/sso_diagnostics.png) |
+
 ## Requirements
 
 - **OPNsense 25.7 or newer** - the login-page SSO button hook

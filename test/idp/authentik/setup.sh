@@ -4,6 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 TOK=$(grep AUTHENTIK_BOOTSTRAP_TOKEN .env | cut -d= -f2-)
+# The SP base URL the browser (and therefore the IdP) uses -- overridable because the
+# lab's forwarded WebGUI port is (see test/Vagrantfile SSO_GUI_PORT). os-sso gives
+# every SAML server its own SP identity, hence ?provider=<auth server name>.
+SP_BASE="${SP_BASE:-https://localhost:8443}"
+SAML_PROVIDER="${SAML_PROVIDER:-authentik-saml}"
+SP_Q="?provider=$SAML_PROVIDER"
 API=http://localhost:9000/api/v3
 H="Authorization: Bearer $TOK"
 CT="Content-Type: application/json"
@@ -28,7 +34,7 @@ OIDC_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/oauth2/" -d "{
   \"name\":\"opnsense-oidc\",\"authorization_flow\":\"$AUTHZ\",\"invalidation_flow\":\"$INVAL\",
   \"client_type\":\"confidential\",\"signing_key\":\"$SIGN\",\"include_claims_in_id_token\":true,
   \"sub_mode\":\"user_username\",\"grant_types\":[\"authorization_code\",\"refresh_token\"],
-  \"redirect_uris\":[{\"matching_mode\":\"strict\",\"url\":\"https://localhost:8443/api/sso/oidc/callback\"}],
+  \"redirect_uris\":[{\"matching_mode\":\"strict\",\"url\":\"$SP_BASE/api/sso/oidc/callback\"}],
   \"property_mappings\":$SCOPES}" | jq -r '.pk')
 OIDC_CID=$(curl -s -H "$H" "$API/providers/oauth2/$OIDC_PROV/" | jq -r '.client_id')
 OIDC_SEC=$(curl -s -H "$H" "$API/providers/oauth2/$OIDC_PROV/" | jq -r '.client_secret')
@@ -44,9 +50,9 @@ SAML_MAPS=$(curl -s -H "$H" "$API/propertymappings/provider/saml/?page_size=50" 
   | jq -c '[.results[] | select(.name|contains("default SAML Mapping")) | .pk]')
 SAML_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/saml/" -d "{
   \"name\":\"opnsense-saml\",\"authorization_flow\":\"$AUTHZ\",\"invalidation_flow\":\"$INVAL\",
-  \"acs_url\":\"https://localhost:8443/api/sso/saml/acs\",
+  \"acs_url\":\"$SP_BASE/api/sso/saml/acs$SP_Q\",
   \"issuer\":\"https://authentik.test:9443/application/saml/opnsense-saml/\",
-  \"audience\":\"https://localhost:8443/api/sso/saml/metadata\",
+  \"audience\":\"$SP_BASE/api/sso/saml/metadata$SP_Q\",
   \"sp_binding\":\"post\",\"signing_kp\":\"$SIGN\",\"sign_assertion\":true,\"sign_response\":false,
   \"property_mappings\":$SAML_MAPS,
   \"name_id_mapping\":\"$UNAME\"}" | jq -r '.pk')

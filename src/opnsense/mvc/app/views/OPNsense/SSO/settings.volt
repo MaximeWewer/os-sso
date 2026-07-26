@@ -7,10 +7,12 @@
     'use strict';
 
     $(document).ready(function () {
+        // No updateServiceControlUI() here: os-sso runs no daemon of its own, and
+        // asking for a service status that does not exist pops "Endpoint not found"
+        // over the form.
         mapDataToFormUI({ frm_settings: '/api/sso/settings/get' }).done(function () {
             formatTokenizersUI();
             $('.selectpicker').selectpicker('refresh');
-            updateServiceControlUI('sso');
         });
 
         $('#save').click(function () {

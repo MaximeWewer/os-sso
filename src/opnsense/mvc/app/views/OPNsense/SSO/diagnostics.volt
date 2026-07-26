@@ -61,7 +61,7 @@
                     + '<td><strong>' + escapeHtml(provider.name) + '</strong></td>'
                     + '<td>' + escapeHtml(provider.type.toUpperCase()) + '</td>'
                     + '<td>' + urlRows(provider.urls) + '<div class="small">' + flags(provider) + '</div></td>'
-                    + '<td class="text-nowrap">'
+                    + '<td>'
                     + '<button class="btn btn-xs btn-default check-btn" data-provider="'
                     + escapeHtml(provider.name) + '">{{ lang._("Test") }}</button>'
                     + '<div class="check-result small" id="check-' + escapeHtml(provider.name).replace(/\W/g, '_') + '"></div>'
@@ -133,6 +133,13 @@
     });
 </script>
 
+<style>
+    /* IdP endpoints and JWKS URLs are longer than any column can be; let them wrap
+       rather than stretch the page sideways. */
+    #providers-body code, #providers-body .check-result { word-break: break-all; }
+    #providers-body .check-result { max-width: 34em; }
+</style>
+
 <div class="content-box" style="padding-bottom: 1.5em;">
     <div class="content-box-main">
         <div style="padding: 1em;">
@@ -147,6 +154,7 @@
         </div>
 
         <h2 style="padding-left: 0.6em;">{{ lang._('Providers') }}</h2>
+        <div class="table-responsive">
         <table class="table table-striped table-condensed">
             <thead>
                 <tr>
@@ -158,8 +166,10 @@
             </thead>
             <tbody id="providers-body"></tbody>
         </table>
+        </div>
 
         <h2 style="padding-left: 0.6em;">{{ lang._('Open SSO sessions') }}</h2>
+        <div class="table-responsive">
         <table class="table table-striped table-condensed">
             <thead>
                 <tr>
@@ -172,5 +182,6 @@
             </thead>
             <tbody id="sessions-body"></tbody>
         </table>
+        </div>
     </div>
 </div>
