@@ -42,6 +42,12 @@ final class OidcProtocol implements ProtocolInterface
     private string $groupsClaim;
     private string $redirectUri;
     private bool $usePkce;
+    /** force re-authentication when the IdP session is older than this (0 = off) */
+    private int $maxAge;
+    /** ask the IdP to POST the response back instead of putting it in the URL */
+    private bool $formPost;
+    /** @var array<string,string> extra authorization-request parameters */
+    private array $extraParams;
     /** per-provider session-key prefix so concurrent flows do not clobber each other */
     private string $sessionPrefix;
 
@@ -68,6 +74,9 @@ final class OidcProtocol implements ProtocolInterface
         $this->groupsClaim = (string)($cfg['groups_claim'] ?? 'groups');
         $this->redirectUri = (string)($cfg['redirect_uri'] ?? '');
         $this->usePkce = (bool)($cfg['use_pkce'] ?? true);
+        $this->maxAge = max(0, (int)($cfg['max_age'] ?? 0));
+        $this->formPost = (bool)($cfg['form_post'] ?? false);
+        $this->extraParams = self::parseExtraParams((string)($cfg['extra_params'] ?? ''));
         // Namespace the in-flight session keys (state/nonce/verifier/return) by
         // provider so two concurrent logins to different providers in one browser
         // session cannot overwrite each other's single-use anti-replay material.
@@ -113,8 +122,51 @@ final class OidcProtocol implements ProtocolInterface
             $params['code_challenge'] = $challenge;
             $params['code_challenge_method'] = 'S256';
         }
+        if ($this->maxAge > 0) {
+            // Ask the IdP to re-authenticate anyone whose session there is older than
+            // this. The answer -- auth_time -- is checked back in validateIdToken.
+            $params['max_age'] = (string)$this->maxAge;
+        }
+        if ($this->formPost) {
+            // Keep the code out of the URL (browser history, Referer, proxy logs).
+            $params['response_mode'] = 'form_post';
+        }
+        // Operator extras (prompt, acr_values, login_hint, ui_locales...). parseExtra
+        // already dropped anything that would overwrite a parameter we depend on.
+        $params += $this->extraParams;
 
         return $disco['authorization_endpoint'] . '?' . http_build_query($params);
+    }
+
+    /**
+     * Parse the operator's "key=value, key=value" extras.
+     *
+     * Anything that carries the security of the flow -- the ones minted per login,
+     * the client identity, the redirect target -- is refused: an extra parameter is a
+     * convenience, never a way to rewrite the ceremony.
+     *
+     * @return array<string,string>
+     */
+    private static function parseExtraParams(string $spec): array
+    {
+        static $reserved = [
+            'response_type', 'response_mode', 'client_id', 'redirect_uri', 'scope',
+            'state', 'nonce', 'code_challenge', 'code_challenge_method', 'max_age',
+        ];
+        $out = [];
+        foreach (preg_split('/[,\r\n]+/', $spec) ?: [] as $pair) {
+            $parts = explode('=', trim($pair), 2);
+            if (count($parts) !== 2) {
+                continue;
+            }
+            $key = trim($parts[0]);
+            $value = trim($parts[1]);
+            if ($key === '' || $value === '' || in_array(strtolower($key), $reserved, true)) {
+                continue;
+            }
+            $out[$key] = $value;
+        }
+        return $out;
     }
 
     public function handleCallback(array $request): NormalizedIdentity
@@ -145,7 +197,7 @@ final class OidcProtocol implements ProtocolInterface
             throw new \RuntimeException('OIDC: token response had no id_token');
         }
 
-        $claims = $this->validateIdToken($disco, $idToken, $sessionNonce);
+        $claims = $this->validateIdToken($disco, $idToken, $sessionNonce, (string)($tokens['access_token'] ?? ''));
         $this->lastIdToken = $idToken; // keep for RP-initiated logout (id_token_hint)
 
         // Optionally enrich from userinfo (groups/email often live there).
@@ -223,8 +275,12 @@ final class OidcProtocol implements ProtocolInterface
      *
      * @return object decoded, validated claims
      */
-    private function validateIdToken(array $disco, string $idToken, string $sessionNonce): object
-    {
+    private function validateIdToken(
+        array $disco,
+        string $idToken,
+        string $sessionNonce,
+        string $accessToken = ''
+    ): object {
         // An OIDC ID token MUST be asymmetrically signed. decode() pins the key's
         // alg to the header alg (blocking alg-confusion), but would still accept a
         // symmetric HS* alg if the issuer's JWKS ever exposed an "oct" key -- so
@@ -273,8 +329,51 @@ final class OidcProtocol implements ProtocolInterface
         if (!isset($claims->iat)) {
             throw new \RuntimeException('OIDC: ID token has no iat claim');
         }
+        // We asked for a recent authentication; check we got one. The IdP MUST return
+        // auth_time when max_age was requested, so a missing claim is a failure, not
+        // an excuse to accept a session of unknown age.
+        if ($this->maxAge > 0) {
+            if (!isset($claims->auth_time)) {
+                throw new \RuntimeException('OIDC: max_age requested but the ID token has no auth_time');
+            }
+            if ((time() - (int)$claims->auth_time) > $this->maxAge + self::LEEWAY) {
+                throw new \RuntimeException('OIDC: the IdP authentication is older than the configured max_age');
+            }
+        }
+        // at_hash binds the ID token to the access token delivered with it. Without
+        // it, an access token from another (attacker) session could be paired with a
+        // genuine ID token and drive the userinfo enrichment below.
+        $this->assertAtHash($idToken, $claims, $accessToken);
 
         return $claims;
+    }
+
+    /**
+     * Verify at_hash when the ID token carries one: base64url of the left half of the
+     * access token's hash, using the hash size of the token's own signing algorithm.
+     */
+    private function assertAtHash(string $idToken, object $claims, string $accessToken): void
+    {
+        if (!isset($claims->at_hash) || !is_string($claims->at_hash) || $accessToken === '') {
+            return; // optional in the code flow; nothing to check against
+        }
+        $alg = self::jwsAlg($idToken);
+        $bits = (int)substr($alg, -3);
+        $hashAlg = in_array($bits, [384, 512], true) ? 'sha' . $bits : 'sha256';
+        $digest = hash($hashAlg, $accessToken, true);
+        $expected = rtrim(strtr(base64_encode(substr($digest, 0, intdiv(strlen($digest), 2))), '+/', '-_'), '=');
+        if (!hash_equals($expected, $claims->at_hash)) {
+            throw new \RuntimeException('OIDC: at_hash does not match the access token');
+        }
+    }
+
+    /** The "alg" of a JWS header, '' when unreadable. */
+    private static function jwsAlg(string $jwt): string
+    {
+        $dot = strpos($jwt, '.');
+        $header = $dot === false ? null
+            : json_decode((string)base64_decode(strtr(substr($jwt, 0, $dot), '-_', '+/')), true);
+        return is_array($header) ? (string)($header['alg'] ?? '') : '';
     }
 
     /**
@@ -285,10 +384,7 @@ final class OidcProtocol implements ProtocolInterface
      */
     private function assertAsymmetricAlg(string $jwt): void
     {
-        $dot = strpos($jwt, '.');
-        $header = $dot === false ? null
-            : json_decode((string)base64_decode(strtr(substr($jwt, 0, $dot), '-_', '+/')), true);
-        $alg = is_array($header) ? (string)($header['alg'] ?? '') : '';
+        $alg = self::jwsAlg($jwt);
         if ($alg === '' || stripos($alg, 'HS') === 0 || strcasecmp($alg, 'none') === 0) {
             throw new \RuntimeException('OIDC: id_token must use an asymmetric signature (got ' . ($alg ?: 'none') . ')');
         }

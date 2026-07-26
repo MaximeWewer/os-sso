@@ -96,7 +96,13 @@ All types share a few options:
 2. In OPNsense fill **Issuer URL** + **Client ID/Secret**. Discovery and keys are
    fetched automatically from `<issuer>/.well-known/openid-configuration`.
 3. Keep **PKCE** on; scopes `openid email profile` (+ a groups scope if you map
-   groups).
+   groups). The client authentication method (`client_secret_basic` or
+   `client_secret_post`) is taken from the IdP's discovery document.
+4. Optional hardening: **Maximum authentication age** sends `max_age` and enforces
+   the returned `auth_time`, so an old IdP session must re-authenticate;
+   **form_post response mode** keeps the authorization code out of the URL;
+   **Extra authorization parameters** passes things like `prompt=login` or
+   `acr_values=mfa` through to the IdP.
 
 | Provider | Issuer URL | Groups |
 |---|---|---|

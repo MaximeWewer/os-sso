@@ -26,6 +26,9 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoUsernameClaim = 'preferred_username';
     public $ssoGroupsClaim = 'groups';
     public $ssoUsePkce = true;
+    public $ssoMaxAge = 0;
+    public $ssoFormPost = false;
+    public $ssoExtraParams = null;
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
     public $ssoDefaultGroups = [];
@@ -57,6 +60,7 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_base_url' => 'ssoBaseUrl',
             'sso_login_redirect' => 'ssoLoginRedirect',
             'sso_group_map' => 'ssoGroupMap',
+            'sso_extra_params' => 'ssoExtraParams',
         ];
         foreach ($map as $k => $prop) {
             if (!empty($config[$k]) && property_exists($this, $prop)) {
@@ -64,6 +68,10 @@ class SsoOidc extends Local implements IAuthConnector
             }
         }
         $this->ssoUsePkce = !empty($config['sso_use_pkce']);
+        $this->ssoFormPost = !empty($config['sso_form_post']);
+        if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
+            $this->ssoMaxAge = (int)$config['sso_max_age'];
+        }
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
         if (!empty($config['sso_scopes'])) {
@@ -108,6 +116,30 @@ class SsoOidc extends Local implements IAuthConnector
                 'help' => gettext('Proof Key for Code Exchange. Recommended; keep enabled unless the IdP does not support it.'),
                 'type' => 'checkbox',
                 'default' => '1',
+            ],
+            'sso_max_age' => [
+                'name' => gettext('Maximum authentication age (s)'),
+                'help' => gettext('Send max_age so the IdP re-authenticates anyone whose session there is '
+                    . 'older than this, and refuse the login if the returned auth_time says otherwise. '
+                    . '0 disables it (the IdP session is then accepted whatever its age).'),
+                'type' => 'text',
+                'default' => '0',
+                'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))
+                    ? [] : [gettext('Maximum authentication age must be a number of seconds (0 = disabled).')],
+            ],
+            'sso_form_post' => [
+                'name' => gettext('Use form_post response mode'),
+                'help' => gettext('Ask the IdP to POST the authorization response instead of putting the code '
+                    . 'in the callback URL, keeping it out of browser history, Referer headers and proxy logs. '
+                    . 'Enable only if the IdP supports response_mode=form_post.'),
+                'type' => 'checkbox',
+            ],
+            'sso_extra_params' => [
+                'name' => gettext('Extra authorization parameters'),
+                'help' => gettext('Optional "key=value" pairs, comma separated, appended to the authorization '
+                    . 'request (e.g. "prompt=login, acr_values=mfa, ui_locales=fr"). Parameters that carry the '
+                    . 'security of the flow (state, nonce, redirect_uri, PKCE, max_age...) are ignored here.'),
+                'type' => 'text',
             ],
             'sso_username_claim' => [
                 'name' => gettext('Username claim'),

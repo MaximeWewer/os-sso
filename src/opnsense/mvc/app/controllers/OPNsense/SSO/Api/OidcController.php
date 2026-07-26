@@ -33,6 +33,17 @@ class OidcController extends ApiControllerBase
         return true;
     }
 
+    /**
+     * Pre-auth AND CSRF-exempt, like the SAML controller. With response_mode=form_post
+     * the IdP delivers the callback as a cross-site HTTP-POST that cannot carry the
+     * WebGUI CSRF token; the base gate would 403 it. What protects this flow is not a
+     * CSRF token but the single-use state/nonce/PKCE material minted at login.
+     */
+    public function beforeExecuteRoute($dispatcher)
+    {
+        return true;
+    }
+
     /** GET /api/sso/oidc/login?provider=<name> */
     public function loginAction()
     {
@@ -82,7 +93,7 @@ class OidcController extends ApiControllerBase
         return 'Redirecting to identity provider...';
     }
 
-    /** GET /api/sso/oidc/callback */
+    /** GET|POST /api/sso/oidc/callback (POST with response_mode=form_post) */
     public function callbackAction()
     {
         if ($this->session->get('Username') !== null) {
@@ -90,11 +101,13 @@ class OidcController extends ApiControllerBase
             return 'Already logged in.';
         }
         $this->startSession();
+        // form_post delivers the same parameters in the body instead of the query.
+        $response = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !empty($_POST) ? $_POST : $_GET;
         try {
             // Recover this login's in-flight record by the state the IdP echoes back
             // (single use). Trust the provider recorded at startLogin over any query
             // param, so a crafted callback URL cannot steer which provider validates.
-            $state = (string)($_GET['state'] ?? '');
+            $state = (string)($response['state'] ?? '');
             $flow = $this->consumeFlow($state);
             $provider = is_array($flow) && $flow['provider'] !== ''
                 ? (string)$flow['provider']
@@ -102,7 +115,7 @@ class OidcController extends ApiControllerBase
             $auth = $this->authServer($provider);
             $protocol = $this->protocolFor($provider, $auth);
 
-            $identity = $protocol->handleCallback($_GET);
+            $identity = $protocol->handleCallback($response);
             $identity->authServer = (string)$provider;
 
             // Provider-level door policy, before ANY path below (captive portal, VPN
@@ -263,6 +276,9 @@ class OidcController extends ApiControllerBase
             'username_claim' => $auth->ssoUsernameClaim,
             'groups_claim' => $auth->ssoGroupsClaim,
             'use_pkce' => $auth->ssoUsePkce,
+            'max_age' => $auth->ssoMaxAge,
+            'form_post' => $auth->ssoFormPost,
+            'extra_params' => $auth->ssoExtraParams,
             'redirect_uri' => $this->baseUrlFor($auth) . '/api/sso/oidc/callback',
         ]);
     }
