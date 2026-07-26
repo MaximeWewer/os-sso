@@ -12,7 +12,9 @@ VERDICT=$(printf '%s' "${2:-0}" | tr -cd '01')
 BROWSER_IP=$(printf '%s' "${3:-}" | tr -cd '0-9a-fA-F.:')
 [ -n "$VERDICT" ] || VERDICT=0
 
-DIR=/var/tmp/os-sso-vpn
+# Root-owned tree (/var/db is 0755 root:wheel), not the world-writable /var/tmp:
+# the session map decides which control file we write a positive verdict into.
+DIR=/var/db/os-sso-vpn
 MAP="$DIR/$SID"
 
 if [ -z "$SID" ]; then

@@ -55,11 +55,12 @@ final class IdentityMapper
         // cannot be taken rather than proceeding unlocked: an unlocked write could
         // hand two first-time logins the same UID, with one user then inheriting
         // the other's group membership.
-        $fp = @fopen('/var/tmp/os-sso-config.lock', 'c');
+        $lock = StateDir::path('run') . '/config.lock';
+        $fp = @fopen($lock, 'c');
         if ($fp === false) {
             throw new \RuntimeException('SSO: cannot open the config lock; refusing to proceed unserialized');
         }
-        @chmod('/var/tmp/os-sso-config.lock', 0600);
+        @chmod($lock, 0600);
         try {
             if (!flock($fp, LOCK_EX)) {
                 throw new \RuntimeException('SSO: cannot acquire the config lock; refusing to proceed unserialized');

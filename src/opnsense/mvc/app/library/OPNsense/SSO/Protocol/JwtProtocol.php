@@ -11,6 +11,7 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\JWK;
 use Firebase\JWT\Key;
 use OPNsense\SSO\NormalizedIdentity;
+use OPNsense\SSO\StateDir;
 
 /**
  * Forward-auth provider: validates a signed JWT handed over by a TRUSTED upstream
@@ -32,7 +33,6 @@ final class JwtProtocol
     private const HTTP_TIMEOUT = 8;
     private const MAX_BODY = 1048576;
     private const MAX_LEEWAY = 300;
-    private const CACHE_DIR = '/var/tmp/os-sso-jwt';
     private const JWKS_TTL = 3600;
 
     private string $issuer;
@@ -170,9 +170,23 @@ final class JwtProtocol
 
     /* ---- JWKS disk cache (TTL, www-owned, 0600) ----------------------- */
 
+    /**
+     * Cache file inside the vetted state directory. A JWKS cache anyone else can
+     * write is a signature-verification bypass, so StateDir refuses a directory it
+     * does not fully control and we simply run cacheless.
+     */
+    private function cacheFile(string $key): string
+    {
+        return StateDir::path('jwt') . '/' . hash('sha256', $key) . '.json';
+    }
+
     private function cacheGet(string $key): ?array
     {
-        $f = self::CACHE_DIR . '/' . hash('sha256', $key) . '.json';
+        try {
+            $f = $this->cacheFile($key);
+        } catch (\RuntimeException $e) {
+            return null; // no usable cache: fall through to a live fetch
+        }
         if (!is_file($f) || (time() - (int)@filemtime($f)) > self::JWKS_TTL) {
             return null;
         }
@@ -182,11 +196,12 @@ final class JwtProtocol
 
     private function cacheSet(string $key, array $data): void
     {
-        if (!is_dir(self::CACHE_DIR)) {
-            @mkdir(self::CACHE_DIR, 0700, true);
+        try {
+            $f = $this->cacheFile($key);
+        } catch (\RuntimeException $e) {
+            syslog(LOG_WARNING, 'os-sso jwt: cache disabled: ' . $e->getMessage());
+            return;
         }
-        @chmod(self::CACHE_DIR, 0700);
-        $f = self::CACHE_DIR . '/' . hash('sha256', $key) . '.json';
         @file_put_contents($f, json_encode($data), LOCK_EX);
         @chmod($f, 0600);
     }

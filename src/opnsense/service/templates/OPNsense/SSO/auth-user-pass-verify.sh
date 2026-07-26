@@ -19,7 +19,9 @@ PROTOCOL="${PROTOCOL:-oidc}"   # oidc | saml
 PROVIDER="${PROVIDER:-}"
 HOST="${HOST:-}"
 TIMEOUT="${TIMEOUT:-180}"
-STATE_DIR=/var/tmp/os-sso-vpn
+# Root-owned tree, not the world-writable /var/tmp: the per-session file holds the
+# auth-control path a positive verdict gets written to.
+STATE_DIR=/var/db/os-sso-vpn
 
 case "$PROTOCOL" in
     oidc|saml) ;;
@@ -45,8 +47,10 @@ if [ -z "${auth_pending_file:-}" ] || [ -z "${auth_control_file:-}" ]; then
 fi
 
 mkdir -p "$STATE_DIR"
-# Fail closed: a state dir we cannot lock down (e.g. pre-existing world-readable)
-# must not hold the per-session control-file path + client IP.
+# Fail closed: a state dir we cannot lock down (e.g. pre-existing world-readable, or
+# a symlink someone planted) must not hold the per-session control-file path + client
+# IP -- that file is what a later verdict trusts to pick the file it writes 1 into.
+[ ! -h "$STATE_DIR" ] || { echo "os-sso vpn: $STATE_DIR is a symlink" >&2; exit 1; }
 chmod 700 "$STATE_DIR" || { echo "os-sso vpn: cannot secure $STATE_DIR" >&2; exit 1; }
 
 # One-time, unguessable session id mapped to this attempt's control file + the

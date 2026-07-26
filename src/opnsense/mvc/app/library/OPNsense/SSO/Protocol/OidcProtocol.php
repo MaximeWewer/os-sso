@@ -10,6 +10,7 @@ namespace OPNsense\SSO\Protocol;
 use Firebase\JWT\JWT;
 use Firebase\JWT\JWK;
 use OPNsense\SSO\NormalizedIdentity;
+use OPNsense\SSO\StateDir;
 
 /**
  * Hand-rolled OpenID Connect Relying Party on top of firebase/php-jwt.
@@ -29,7 +30,6 @@ final class OidcProtocol implements ProtocolInterface
     private const HTTP_TIMEOUT = 8;       // seconds, short on purpose
     private const MAX_BODY = 1048576;     // 1 MiB cap on IdP responses
     private const LEEWAY = 60;            // max clock skew
-    private const CACHE_DIR = '/var/tmp/os-sso-oidc';
     private const DISCO_TTL = 3600;       // discovery document cache TTL
     private const JWKS_TTL = 3600;        // JWKS cache TTL (refetched early on kid miss)
 
@@ -335,9 +335,23 @@ final class OidcProtocol implements ProtocolInterface
 
     /* ---- small on-disk cache for discovery + JWKS (TTL, www-owned) ----- */
 
+    /**
+     * Cache file path inside the vetted state directory. A cache we do not fully
+     * control is worse than no cache (a writable JWKS cache is a signature bypass),
+     * so StateDir throws rather than hand back a suspect directory.
+     */
+    private function cacheFile(string $key): string
+    {
+        return StateDir::path('oidc') . '/' . hash('sha256', $key) . '.json';
+    }
+
     private function cacheGet(string $key, int $ttl): ?array
     {
-        $f = self::CACHE_DIR . '/' . hash('sha256', $key) . '.json';
+        try {
+            $f = $this->cacheFile($key);
+        } catch (\RuntimeException $e) {
+            return null; // no usable cache: fall through to a live fetch
+        }
         if (!is_file($f) || (time() - (int)@filemtime($f)) > $ttl) {
             return null;
         }
@@ -347,11 +361,12 @@ final class OidcProtocol implements ProtocolInterface
 
     private function cacheSet(string $key, array $data): void
     {
-        if (!is_dir(self::CACHE_DIR)) {
-            @mkdir(self::CACHE_DIR, 0700, true);
+        try {
+            $f = $this->cacheFile($key);
+        } catch (\RuntimeException $e) {
+            syslog(LOG_WARNING, 'os-sso oidc: cache disabled: ' . $e->getMessage());
+            return;
         }
-        @chmod(self::CACHE_DIR, 0700); // reassert mode if the dir pre-existed
-        $f = self::CACHE_DIR . '/' . hash('sha256', $key) . '.json';
         @file_put_contents($f, json_encode($data), LOCK_EX);
         @chmod($f, 0600);
     }

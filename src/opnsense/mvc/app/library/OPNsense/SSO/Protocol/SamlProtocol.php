@@ -9,6 +9,7 @@ namespace OPNsense\SSO\Protocol;
 
 use OneLogin\Saml2\Auth as Saml2Auth;
 use OPNsense\SSO\NormalizedIdentity;
+use OPNsense\SSO\StateDir;
 
 /**
  * SAML 2.0 Service Provider on top of SAML-Toolkits/php-saml (onelogin/php-saml).
@@ -60,9 +61,14 @@ final class SamlProtocol implements ProtocolInterface
 
     /** server-side state store: the SAML assertion POST is cross-site, so the
      *  WebGUI session cookie (SameSite=Lax) is withheld. We key in-flight request
-     *  state by the AuthnRequest ID instead, recovered at the ACS via InResponseTo. */
-    private const STATE_DIR = "/var/tmp/os-sso-saml";
+     *  state by the AuthnRequest ID instead, recovered at the ACS via InResponseTo.
+     *  Lives under StateDir (root-owned /var/db, not world-writable /var/tmp). */
     private const STATE_TTL = 600; // seconds
+
+    private static function stateDir(): string
+    {
+        return StateDir::path("saml");
+    }
 
     public function startLogin(string $returnUrl, string $vpn = '', string $cp = '', string $cpurl = ''): string
     {
@@ -288,11 +294,7 @@ final class SamlProtocol implements ProtocolInterface
         if ($assertionId === "") {
             return; // nothing to key on; single-use InResponseTo still applies
         }
-        if (!is_dir(self::STATE_DIR)) {
-            @mkdir(self::STATE_DIR, 0700, true);
-        }
-        @chmod(self::STATE_DIR, 0700);
-        $file = self::STATE_DIR . "/seen-" . hash("sha256", $assertionId) . ".json";
+        $file = self::stateDir() . "/seen-" . hash("sha256", $assertionId) . ".json";
         // Drop a stale marker so a long-since-expired ID does not block forever.
         if (is_file($file) && time() - (int) @filemtime($file) > self::STATE_TTL) {
             @unlink($file);
@@ -310,10 +312,6 @@ final class SamlProtocol implements ProtocolInterface
 
     private function saveState(string $requestId, array $data): void
     {
-        if (!is_dir(self::STATE_DIR)) {
-            @mkdir(self::STATE_DIR, 0700, true);
-        }
-        @chmod(self::STATE_DIR, 0700); // reassert mode if the dir pre-existed
         $this->sweepStale();
         file_put_contents(
             self::stateFile($requestId),
@@ -326,7 +324,7 @@ final class SamlProtocol implements ProtocolInterface
     /** Drop state files from abandoned logins (never consumed) past the TTL. */
     private function sweepStale(): void
     {
-        foreach (glob(self::STATE_DIR . '/*.json') ?: [] as $f) {
+        foreach (glob(self::stateDir() . '/*.json') ?: [] as $f) {
             if ((time() - (int) @filemtime($f)) > self::STATE_TTL) {
                 @unlink($f);
             }
@@ -335,7 +333,7 @@ final class SamlProtocol implements ProtocolInterface
 
     private static function stateFile(string $requestId): string
     {
-        return self::STATE_DIR . "/" . hash("sha256", $requestId) . ".json";
+        return self::stateDir() . "/" . hash("sha256", $requestId) . ".json";
     }
 
     /**
