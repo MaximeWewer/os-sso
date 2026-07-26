@@ -19,7 +19,11 @@ foreach ($cfg->system->user as $u) {
     if ((string)$u->name === $name) {
         $uid = (string)$u->uid;
         // Reported so a test can tell a deprovisioned account from a missing one.
-        $disabled = ((string)($u->disabled ?? '')) !== '' ? '1' : '0';
+        // Same truthiness as LocalAccount::isUsable(): a provisioned account carries
+        // <disabled>0</disabled>, which is NOT disabled -- comparing against '' would
+        // call every fresh account disabled and make a deprovisioning test pass on its
+        // own.
+        $disabled = !empty((string)($u->disabled ?? '')) ? '1' : '0';
         break;
     }
 }

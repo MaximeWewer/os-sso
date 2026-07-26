@@ -218,7 +218,7 @@ server, the host the client's browser opens, and the web-auth timeout. Saving wr
 server at the script:
 
 ```
-auth-user-pass-verify /usr/local/etc/sso/auth-user-pass-verify.sh via-file
+auth-user-pass-verify /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh via-file
 ```
 
 Use a web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux) - see
@@ -303,9 +303,35 @@ bash keycloak/setup-keycloak.sh       # create realm, clients, test user
 bash authentik/setup.sh               # create OIDC/SAML providers + mappings
 ```
 
-Helper scripts under `test/vagrant/` register the auth servers and run the JWT /
-Captive Portal end-to-end suites. Host `/etc/hosts` needs
-`127.0.0.1 authentik.test keycloak.test`.
+Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. Both host ports
+are overridable when something else already owns them:
+
+```sh
+SSO_GUI_PORT=8444 vagrant up                               # WebGUI forward
+KC_HTTP_PORT=8091 ./up.sh keycloak                         # Keycloak admin port
+SP_BASE=https://localhost:8444 bash keycloak/setup-keycloak.sh
+```
+
+Whatever `SSO_GUI_PORT` you pick must be the `SP_BASE` given to the IdP setup and
+the **Base URL** registered on the auth server - it is what ends up in the OIDC
+`redirect_uri` and the SAML ACS.
+
+Five end-to-end suites, 84 checks in total:
+
+```sh
+# host-side (they drive a real browser ceremony against Keycloak)
+SSO_GUI_PORT=8444 ./oidc-e2e.sh    # 28 checks
+SSO_GUI_PORT=8444 ./saml-e2e.sh    # 20 checks
+# VM-side
+vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/jwt-e2e.sh'   # 17
+vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/cp-e2e.sh'    #  6
+vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/vpn-e2e.sh'   # 13
+```
+
+They cover the full ceremonies (login, callback, session) plus the security
+behaviour: Host-header hardening, assertion replay, single-use JWTs, the
+required-groups gate, deprovisioning (and its refusal on privileged accounts),
+session expiry, rate limiting, cross-site logout and IdP-initiated SAML.
 
 ## Build
 

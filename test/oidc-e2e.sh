@@ -137,12 +137,29 @@ check "login refused when the group is missing" 400 "$(login "$W/jar2")"
 not_live "$W/jar2" "no session was opened"
 
 echo ">>> case 8: deprovisioning on a refused login"
-vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_deprovision=1" >/dev/null
+# Provision the account with NO privileged group first: os-sso refuses to disable a
+# privileged one (anti-lockout), which is asserted separately below.
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups= sso_default_groups= sso_deprovision=0" >/dev/null
+vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null
 login "$W/jar3" >/dev/null
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups=nobody-has-this sso_deprovision=1" >/dev/null
+login "$W/jar3b" >/dev/null
 DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $KC_USER")
 case "$DUMP" in
     *disabled=1*) ok "the refused account was disabled ($DUMP)" ;;
     *) ko "account not disabled ($DUMP)" ;;
+esac
+
+echo ">>> case 8b: a privileged account is never deprovisioned (anti-lockout)"
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups= sso_default_groups=admins sso_deprovision=0" >/dev/null
+vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null
+login "$W/jar3c" >/dev/null
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups=nobody-has-this sso_deprovision=1" >/dev/null
+login "$W/jar3d" >/dev/null
+DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $KC_USER")
+case "$DUMP" in
+    *disabled=0*) ok "the admins-group account was left enabled ($DUMP)" ;;
+    *) ko "a privileged account was disabled ($DUMP)" ;;
 esac
 vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups= sso_deprovision=0" >/dev/null
 vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null

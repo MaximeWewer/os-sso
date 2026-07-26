@@ -99,6 +99,40 @@ if [ "$gc" = "302" ] && echo "$g" | grep -qw 'admins'; then
 else
     echo "  FAIL explicit map did not grant admins (login=$gc $g)"; fail=$((fail+1)); fi
 
+# --- replay / freshness guards -------------------------------------------------
+echo ">>> case 9: a token with no iat is refused"
+JWT_TRUSTED='127.0.0.1' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+NOIAT=$(PRIV="$W/priv.pem" JWT_NO_IAT=1 php "$H/sign_jwt.php")
+check "token without iat -> 400" 400 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $NOIAT")"
+
+echo ">>> case 10: maximum token age"
+JWT_TRUSTED='127.0.0.1' JWT_MAX_AGE='120' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+FRESH=$(PRIV="$W/priv.pem" php "$H/sign_jwt.php")
+check "fresh token accepted" 302 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $FRESH")"
+# Still inside exp (300s) but well past the 120s age limit.
+STALE=$(PRIV="$W/priv.pem" JWT_IAT_AGE=200 php "$H/sign_jwt.php")
+check "token older than max-age refused" 400 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $STALE")"
+
+echo ">>> case 11: single-use tokens"
+JWT_TRUSTED='127.0.0.1' JWT_SINGLE_USE=1 JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+# Unique per run: the replay marker for a jti legitimately survives until the token
+# expires, so reusing a fixed value would make the second run fail on the first use.
+ONCE=$(PRIV="$W/priv.pem" JWT_JTI="single-use-$(date +%s)-$$" php "$H/sign_jwt.php")
+check "first use accepted" 302 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $ONCE")"
+check "second use refused" 400 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $ONCE")"
+# A different token from the same signer still gets in.
+AGAIN=$(PRIV="$W/priv.pem" php "$H/sign_jwt.php")
+check "a fresh token still works" 302 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $AGAIN")"
+JWT_TRUSTED='127.0.0.1' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+
+echo ">>> case 12: required-groups gate"
+JWT_TRUSTED='127.0.0.1' JWT_REQUIRED_GROUPS='nobody-has-this' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+GATED=$(PRIV="$W/priv.pem" php "$H/sign_jwt.php")
+check "login refused without the required group" 400 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $GATED")"
+JWT_TRUSTED='127.0.0.1' JWT_REQUIRED_GROUPS='admins' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+check "login allowed with the required group" 302 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $GATED")"
+JWT_TRUSTED='127.0.0.1' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
+
 echo ""
 echo ">>> RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -5,7 +5,7 @@ set -eu
 
 PKI=/usr/local/etc/sso/pki
 CONF=/usr/local/etc/sso/vpn-server.conf
-HOOK=/usr/local/etc/sso/auth-user-pass-verify.sh
+HOOK=/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh
 
 mkdir -p "$PKI"
 cd "$PKI"
