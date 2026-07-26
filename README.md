@@ -29,13 +29,9 @@ stays available as a break-glass path.
 |---|---|---|
 | ![Authentication servers](assets/servers.png) | ![Server configuration](assets/server_config.png) | ![WebGUI login form](assets/login_form.png) |
 
-| Captive Portal, after signing in | OpenVPN, after signing in |
-|---|---|
-| ![Captive portal client authorized](assets/cp_connected.png) | ![VPN tunnel authorized](assets/vpn_authorized.png) |
-
-| OpenVPN web-auth settings | SSO diagnostics |
-|---|---|
-| ![SSO settings](assets/vpn_settings.png) | ![SSO diagnostics](assets/sso_diagnostics.png) |
+| Captive Portal login | OpenVPN web-auth settings | SSO diagnostics |
+|---|---|---|
+| ![Captive portal login page](assets/cp_portal.png) | ![OpenVPN web-auth settings](assets/vpn_settings.png) | ![SSO diagnostics](assets/sso_diagnostics.png) |
 
 ## Requirements
 
@@ -231,7 +227,16 @@ auth-user-pass-verify /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-ve
 
 Use a web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux) - see
 `test/vpn-client/README.md`. With web-auth disabled the script denies the connection
-rather than deferring it.
+rather than deferring it. What the client sees:
+
+```
+AUTH_PENDING received, extending handshake timeout from 60s to 240s
+Info command was pushed by server ('WEB_AUTH::https://vpn.example.com/api/sso/oidc/login?provider=keycloak&vpn=48e5ef74…')
+   ... the user authenticates in the browser ...
+Initialization Sequence Completed
+```
+
+and on the firewall: `os-sso vpn: authorized tunnel for 'kctest' from 10.0.2.2`.
 
 ### Logout
 
