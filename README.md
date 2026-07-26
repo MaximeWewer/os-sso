@@ -191,10 +191,14 @@ WebGUI with privileges from their mapped groups.
 1. Add the OIDC/SAML server (as above).
 2. **Services ▸ Captive Portal ▸ Administration**: in the zone, add that server
    under *Authentication* (optionally set an enforce-group).
-3. Use the bundled portal template
-   (`src/opnsense/scripts/OPNsense/SSO/cp-portal/`) - zip its contents, upload it
-   under *Templates*, and select it on the zone. It shows the SSO buttons and keeps
-   the standard login form.
+3. Build the bundled portal template and upload it:
+
+   ```sh
+   configctl sso build_cp_template     # prints /tmp/os-sso-cp-template.zip
+   ```
+
+   Upload that zip under *Templates* and select it on the zone. The page shows one
+   button per SSO provider and keeps the standard username/password form.
 4. Make sure the zone lets unauthenticated clients reach the firewall WebGUI and
    the IdP (zone *allowed addresses* / pre-auth) so the login can complete.
 
