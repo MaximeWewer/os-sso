@@ -23,8 +23,8 @@ use OPNsense\Core\Config;
  *     now requires it;
  *   - the legacy auto-detect fallback (for providers configured before that) accepts
  *     a Host only if it matches a name this firewall actually answers to -- its
- *     hostname/domain, the WebGUI "alternate hostnames" allowlist, or the server's own
- *     name/address -- and otherwise falls back to the configured hostname;
+ *     hostname/domain, the WebGUI "alternate hostnames" allowlist, or the local socket
+ *     address -- and otherwise falls back to the configured hostname;
  *   - the scheme comes from the WebGUI configuration, never from the forwardable
  *     X-Forwarded-Proto header.
  */
@@ -78,7 +78,12 @@ final class SiteUrl
     /**
      * Names this firewall legitimately answers to: its hostname, its FQDN, the WebGUI
      * "alternate hostnames" allowlist (the same list core uses for its referrer check),
-     * and the server's own name / address as php-fpm sees it.
+     * and the address the request actually landed on.
+     *
+     * SERVER_NAME is deliberately NOT in this list. Under lighttpd (and CGI generally)
+     * it is derived from the request's own Host header, so trusting it would make this
+     * allowlist validate the attacker's input against itself -- which is exactly what
+     * the lab caught. SERVER_ADDR is the local socket address and is not client-set.
      *
      * @return string[]
      */
@@ -98,11 +103,9 @@ final class SiteUrl
                 $names[] = trim($alt);
             }
         }
-        foreach (['SERVER_NAME', 'SERVER_ADDR'] as $key) {
-            $value = trim((string)($_SERVER[$key] ?? ''));
-            if ($value !== '') {
-                $names[] = $value;
-            }
+        $addr = trim((string)($_SERVER['SERVER_ADDR'] ?? ''));
+        if ($addr !== '') {
+            $names[] = $addr;
         }
         return $names;
     }
@@ -115,7 +118,9 @@ final class SiteUrl
         if ($hostname !== '') {
             return $domain !== '' ? $hostname . '.' . $domain : $hostname;
         }
-        $server = trim((string)($_SERVER['SERVER_NAME'] ?? ''));
-        return $server !== '' ? $server : 'localhost';
+        // Same reasoning as ownNames(): SERVER_NAME mirrors the Host header, so it
+        // cannot be the safe fallback for a Host we just refused.
+        $addr = trim((string)($_SERVER['SERVER_ADDR'] ?? ''));
+        return $addr !== '' ? $addr : 'localhost';
     }
 }
