@@ -13,6 +13,7 @@ use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
+use OPNsense\SSO\SourceGate;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\Protocol\JwtProtocol;
 
@@ -51,7 +52,7 @@ class JwtController extends ApiControllerBase
             // SOURCE GATE -- before reading any header. The TCP peer must be a
             // configured trusted proxy; client-supplied XFF is deliberately ignored.
             $peer = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-            if (!$this->ipAllowed($peer, (array)$auth->ssoJwtTrustedProxies)) {
+            if (!SourceGate::allows($peer, (array)$auth->ssoJwtTrustedProxies)) {
                 throw new \RuntimeException('JWT forward-auth from untrusted source ' . $peer);
             }
 
@@ -145,54 +146,6 @@ class JwtController extends ApiControllerBase
             $val = substr($val, 7);
         }
         return trim($val);
-    }
-
-    /**
-     * Is $ip within any of the configured IPs/CIDRs? IPv4 + IPv6, binary compare.
-     */
-    private function ipAllowed(string $ip, array $cidrs): bool
-    {
-        $ipBin = @inet_pton($ip);
-        if ($ipBin === false) {
-            return false;
-        }
-        foreach ($cidrs as $cidr) {
-            $cidr = trim((string)$cidr);
-            if ($cidr === '') {
-                continue;
-            }
-            if (strpos($cidr, '/') === false) {
-                $netBin = @inet_pton($cidr);
-                if ($netBin !== false && $netBin === $ipBin) {
-                    return true;
-                }
-                continue;
-            }
-            [$net, $bitsRaw] = explode('/', $cidr, 2);
-            $netBin = @inet_pton($net);
-            if ($netBin === false || strlen($netBin) !== strlen($ipBin)) {
-                continue;
-            }
-            $bits = (int)$bitsRaw;
-            // Reject a prefix length outside the address width: an over-long prefix
-            // would index past the address bytes below and spuriously over-match.
-            if ($bits < 0 || $bits > strlen($ipBin) * 8) {
-                continue;
-            }
-            $bytes = intdiv($bits, 8);
-            $rem = $bits % 8;
-            if ($bytes > 0 && strncmp($ipBin, $netBin, $bytes) !== 0) {
-                continue;
-            }
-            if ($rem === 0) {
-                return true;
-            }
-            $mask = chr((0xff << (8 - $rem)) & 0xff);
-            if (((ord($ipBin[$bytes]) ^ ord($netBin[$bytes])) & ord($mask)) === 0) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Post-login landing: explicit requested page wins, else the configured default. */

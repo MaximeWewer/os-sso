@@ -30,6 +30,9 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoFormPost = false;
     public $ssoExtraParams = null;
     public $ssoSessionLifetime = 0;
+    public $ssoScimEnabled = false;
+    public $ssoScimToken = null;
+    public $ssoScimTrusted = [];
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
     public $ssoDeprovision = false;
@@ -62,6 +65,7 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_base_url' => 'ssoBaseUrl',
             'sso_login_redirect' => 'ssoLoginRedirect',
             'sso_group_map' => 'ssoGroupMap',
+            'sso_scim_token' => 'ssoScimToken',
             'sso_extra_params' => 'ssoExtraParams',
         ];
         foreach ($map as $k => $prop) {
@@ -75,6 +79,8 @@ class SsoOidc extends Local implements IAuthConnector
             $this->ssoMaxAge = (int)$config['sso_max_age'];
         }
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
+        $this->ssoScimEnabled = !empty($config['sso_scim_enabled']);
+        $this->ssoScimTrusted = array_filter(array_map('trim', explode(',', $config['sso_scim_trusted'] ?? '')));
         $this->ssoDeprovision = !empty($config['sso_deprovision']);
         if (isset($config['sso_session_lifetime']) && $config['sso_session_lifetime'] !== '') {
             $this->ssoSessionLifetime = (int)$config['sso_session_lifetime'];
@@ -213,6 +219,30 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'member of a privileged group is never removed. Off = additive (memberships are '
                     . 'only ever added).'),
                 'type' => 'checkbox',
+            ],
+            'sso_scim_enabled' => [
+                'name' => gettext('Enable SCIM provisioning'),
+                'help' => gettext('Let this IdP push account lifecycle to the firewall over SCIM 2.0, instead '
+                    . 'of os-sso only learning about changes when someone logs in. Base URL to register at the '
+                    . 'IdP: <code>https://{opnsense}/api/sso/scim</code>. Accounts are created disabled-free, '
+                    . 'never privileged, and a SCIM delete deactivates rather than removes.'),
+                'type' => 'checkbox',
+            ],
+            'sso_scim_token' => [
+                'name' => gettext('SCIM bearer token'),
+                'help' => gettext('Shared secret the IdP presents as "Authorization: Bearer ...". It is the '
+                    . 'whole authentication of a write API into the account database - generate a long random '
+                    . 'value and treat it as a credential.'),
+                'type' => 'text',
+                'validate' => fn($v) => empty($v) || strlen($v) >= 32
+                    ? [] : [gettext('The SCIM token should be at least 32 characters.')],
+            ],
+            'sso_scim_trusted' => [
+                'name' => gettext('SCIM source IPs/CIDRs'),
+                'help' => gettext('Comma separated addresses the IdP connects from. Strongly recommended: it '
+                    . 'bounds who can even attempt to use the token. Matched on the direct TCP peer, never on '
+                    . 'a forwardable header. Empty means any source may present the token.'),
+                'type' => 'text',
             ],
             'sso_button_label' => [
                 'name' => gettext('Login button label'),

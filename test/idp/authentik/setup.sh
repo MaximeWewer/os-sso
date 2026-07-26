@@ -86,7 +86,33 @@ curl -s -H "$H" -H "$CT" -X PATCH "$API/providers/saml/$SAML_PROV/" \
 SAML_CERT=$(curl -s -H "$H" "$API/providers/saml/$SAML_PROV/metadata/" \
   | jq -r '.metadata' | grep -o '<ds:X509Certificate>[^<]*' | head -1 | sed 's/<ds:X509Certificate>//')
 
+# --- SCIM provider (provisioning) ---
+# Attached to the application as a BACKCHANNEL provider: an application already has
+# the OIDC one on its front channel, and without that attachment the SCIM sync has an
+# empty user scope and silently does nothing.
+SCIM_TOKEN="${SCIM_TOKEN:-$(head -c 32 /dev/urandom | base64 | tr -d '=+/')}"
+SCIM_MAPS=$(curl -s -H "$H" "$API/propertymappings/provider/scim/?page_size=20" \
+  | jq -c '[.results[] | select(.name|test("User")) | .pk]')
+SCIM_GMAPS=$(curl -s -H "$H" "$API/propertymappings/provider/scim/?page_size=20" \
+  | jq -c '[.results[] | select(.name|test("Group")) | .pk]')
+SCIM_PROV=$(curl -s -H "$H" "$API/providers/scim/?name=opnsense-scim" | jq -r '.results[0].pk // empty')
+if [ -z "$SCIM_PROV" ]; then
+  SCIM_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/scim/" -d "{
+    \"name\":\"opnsense-scim\",\"url\":\"$SP_BASE/api/sso/scim\",\"token\":\"$SCIM_TOKEN\",
+    \"exclude_users_service_account\":true,
+    \"property_mappings\":$SCIM_MAPS,\"property_mappings_group\":$SCIM_GMAPS}" | jq -r '.pk')
+fi
+# verify_certificates off: the lab firewall serves a self-signed certificate, and the
+# sync fails silently (status "done", nothing pushed) when it cannot verify it.
+curl -s -H "$H" -H "$CT" -X PATCH "$API/providers/scim/$SCIM_PROV/" -d "{
+  \"url\":\"$SP_BASE/api/sso/scim\",\"token\":\"$SCIM_TOKEN\",\"verify_certificates\":false}" >/dev/null
+curl -s -H "$H" -H "$CT" -X PATCH "$API/core/applications/opnsense/" \
+  -d "{\"backchannel_providers\":[$SCIM_PROV]}" >/dev/null
+echo ">>> scim provider pk=$SCIM_PROV"
+
 cat > /tmp/authentik-out.env <<EOF
+SCIM_TOKEN=$SCIM_TOKEN
+SCIM_PROVIDER_PK=$SCIM_PROV
 OIDC_CLIENT_ID=$OIDC_CID
 OIDC_CLIENT_SECRET=$OIDC_SEC
 OIDC_ISSUER=https://authentik.test:9443/application/o/opnsense

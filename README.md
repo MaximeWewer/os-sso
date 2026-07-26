@@ -22,6 +22,9 @@ stays available as a break-glass path.
 - **Group mapping** - IdP groups become OPNsense group membership; privileges
   are resolved by the normal ACL.
 - **Single Logout** - the WebGUI *Logout* button ends the IdP session too.
+- **SCIM 2.0 provisioning** - the IdP pushes account lifecycle, so a revoked user is
+  disabled (and their sessions killed) when the directory says so, not at their next
+  login attempt.
 
 ## Screenshots
 
@@ -262,6 +265,43 @@ takes only a signed `logout_token`: issuer, audience, `iat` freshness, the
 backchannel-logout event, absence of a `nonce` and single-use `jti` are all checked
 before any session is ended.
 
+### SCIM provisioning
+
+Without it, os-sso only learns that someone was revoked when they try to log in --
+until then a disabled directory account keeps working here. SCIM inverts that: the
+IdP pushes creations, updates and deactivations as they happen, and pre-provisions
+accounts so they exist before the first login (which matters as soon as you reference
+a user in a rule or a certificate).
+
+Enable it on the authentication server (**Enable SCIM provisioning**, a **bearer
+token**, and the **source IPs** the IdP connects from), then register the base URL at
+the IdP:
+
+```
+https://<opnsense>/api/sso/scim
+```
+
+Supported: `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
+(GET/POST/PUT/PATCH/DELETE, `filter=userName eq "..."` and `externalId eq "..."`,
+pagination) and `/Groups` (GET, and PATCH of membership). Not supported: bulk, sort,
+ETags, and filters beyond `eq` on the indexed attributes - an unsupported filter is
+refused rather than silently answered with the wrong set.
+
+Four things it deliberately refuses, because this is a write API into a firewall's
+account database:
+
+- a **privileged** account (system, uid 0, member of `admins`) is never modified,
+  disabled or deleted;
+- an account with a **real local password** is never taken over;
+- **DELETE deactivates**, it does not remove - a user can own firewall rules,
+  certificates and API keys;
+- a **group carrying administrative privileges** takes no membership from SCIM.
+  Granting administration stays an operator action, by hand or through the provider's
+  explicit group map.
+
+Groups are never created or deleted over SCIM either; the client fills the groups
+that already exist.
+
 ### API access (not SSO)
 
 The OPNsense **API** keeps using its own key/secret credentials - os-sso does not
@@ -344,7 +384,7 @@ reach it. On a machine with VMware installed, 192.168.56/57 are already taken by
 host-only addresses inside 192.168.56.0/21 unless `/etc/vbox/networks.conf` says
 otherwise.
 
-Seven end-to-end suites under `test/e2e/`, run against either IdP:
+Eight end-to-end suites under `test/e2e/`, run against either IdP:
 
 ```sh
 cd test/e2e
@@ -359,6 +399,7 @@ SSO_GUI_URL=https://192.168.60.10 ./run-all.sh oidc saml      # a subset
 | `saml.sh` | host | 21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off), POST binding, metadata import, SLO |
 | `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
+| `scim.sh` | host | 42-45 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and against Authentik its real SCIM client |
 | `jwt.sh` | VM | 17 | source gate, signature/aud, `iat`, max-age, single-use, group mapping |
 | `cp.sh` | VM | 6 | the authorizer gates and a real configd allow |
 | `vpn.sh` | VM | 13 | the hook and the verdict writer, IP binding, single-use session ids |

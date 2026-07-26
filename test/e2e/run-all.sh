@@ -18,7 +18,7 @@ PORT="${SSO_GUI_PORT:-8443}"
 GUI_URL="${SSO_GUI_URL:-https://localhost:$PORT}"
 IDP="${IDP:-keycloak}"
 VM_SUITES="jwt cp vpn"
-HOST_SUITES="oidc saml portal vpn-client"
+HOST_SUITES="oidc saml portal vpn-client scim"
 WANT="${*:-$HOST_SUITES $VM_SUITES}"
 rc=0
 
