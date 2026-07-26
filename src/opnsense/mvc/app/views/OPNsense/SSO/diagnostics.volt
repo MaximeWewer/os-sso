@@ -40,6 +40,7 @@
             if (provider.create_users) { out.push('auto-creates users'); }
             if (provider.group_sync) { out.push('strict group sync'); }
             if (provider.deprovision) { out.push('deprovisions on refusal'); }
+            if (provider.scim) { out.push('<span class="text-success">SCIM provisioning</span>'); }
             out.push(provider.session_lifetime > 0
                 ? 'session lifetime: ' + provider.session_lifetime + 's'
                 : '<span class="text-muted">no maximum session lifetime</span>');

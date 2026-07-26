@@ -1,4 +1,4 @@
-# os-sso - Single Sign-On for OPNsense
+# os-sso - Single Sign-On (SSO) and SCIM provisioning for OPNsense
 
 Add **OpenID Connect**, **SAML 2.0** and **JWT forward-auth** as authentication
 types in OPNsense. The firewall acts as a pure consumer (Relying Party / Service
@@ -6,8 +6,9 @@ Provider): your users sign in at your existing Identity Provider, and MFA and
 passkeys stay there - nothing to re-implement on the firewall.
 
 Works for the **WebGUI**, the **Captive Portal** and **OpenVPN**, with group
-mapping driving OPNsense privileges. The local password (+ native TOTP) always
-stays available as a break-glass path.
+mapping driving OPNsense privileges, and takes **SCIM 2.0** provisioning from the
+same IdP so account lifecycle does not wait for a login. The local password
+(+ native TOTP) always stays available as a break-glass path.
 
 ## Features
 
@@ -35,6 +36,10 @@ stays available as a break-glass path.
 | Captive Portal login | OpenVPN web-auth settings | SSO diagnostics |
 |---|---|---|
 | ![Captive portal login page](assets/cp_portal.png) | ![OpenVPN web-auth settings](assets/vpn_settings.png) | ![SSO diagnostics](assets/sso_diagnostics.png) |
+
+| SCIM provisioning, on the authentication server |
+|---|
+| ![SCIM settings](assets/scim_settings.png) |
 
 ## Requirements
 
@@ -76,6 +81,9 @@ All types share a few options:
   Portal and VPN alike). Checked on the IdP-asserted groups before any local
   account is matched, created or updated. Empty means every account the IdP
   authenticates may log in - set it unless that is what you want.
+- **SCIM provisioning** - lets the IdP push account lifecycle instead of os-sso
+  waiting for a login. Needs a bearer token and, strongly recommended, the source
+  addresses the IdP connects from. See [SCIM provisioning](#scim-provisioning).
 - **Deprovision on refused login** - when the required groups above refuse a login,
   also disable the local account behind it and end its open sessions. A login attempt
   is the only moment a firewall plugin hears about a revocation at the IdP, so this is
@@ -209,8 +217,8 @@ WebGUI with privileges from their mapped groups.
    core naming rule: a template *name* may not contain a hyphen (letters, digits,
    `.`, `,`, `_` and spaces only).
 
-   In the lab, `test/vagrant/setup-cp.sh` does the whole thing — zone, template,
-   render, unpack, start — and documents the ordering the UI normally handles.
+   In the lab, `test/vagrant/setup-cp.sh` does the whole thing - zone, template,
+   render, unpack, start - and documents the ordering the UI normally handles.
 4. Make sure the zone lets unauthenticated clients reach the firewall WebGUI and
    the IdP (zone *allowed addresses* / pre-auth) so the login can complete.
 
@@ -343,6 +351,11 @@ waiting out a TTL. Access is gated by its own ACL privilege,
 - OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp` and requires an asymmetric
   signature; SAML verifies the assertion signature and is replay-protected
   (single-use request id + consumed-assertion cache).
+- The SCIM endpoint is gated by a bearer token **and** a source-address allowlist,
+  and refuses on the same principles as the login path: no privileged account is
+  ever modified or disabled, no password-owning account is taken over, a delete
+  deactivates rather than removes, and a group carrying administrative privileges
+  takes no membership from a directory.
 - The local password (+ native TOTP) is always left active as a **break-glass**
   path - keep at least one local admin.
 

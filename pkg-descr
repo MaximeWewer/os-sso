@@ -1,4 +1,4 @@
-Interactive Single Sign-On (SSO) for OPNsense.
+Interactive Single Sign-On (SSO) and SCIM provisioning for OPNsense.
 
 Adds OpenID Connect (OIDC), SAML 2.0 and JWT forward-auth as authentication
 types under System > Access > Servers. OPNsense acts as a pure Relying Party /
@@ -12,5 +12,11 @@ Features:
   * JWT forward-auth: trust a signed JWT from a trusted upstream proxy,
     gated to the proxy's source IP (verified signature, iss/aud/exp).
   * IdP group -> OPNsense group mapping (privileges resolved by the ACL).
+  * SCIM 2.0 provisioning: the IdP pushes account creations, updates and
+    deactivations, so a revoked user is disabled -- and their open sessions
+    ended -- when the directory says so, rather than at their next login
+    attempt. Bearer token plus source-address gated. It never touches a
+    privileged account or one owning a local password, and a SCIM delete
+    deactivates instead of removing.
 
 The local password path (+ native TOTP) stays active as break-glass.

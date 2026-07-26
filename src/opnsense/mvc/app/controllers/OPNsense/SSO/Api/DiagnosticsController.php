@@ -51,7 +51,8 @@ class DiagnosticsController extends ApiControllerBase
                 'required_groups' => implode(', ', (array)$auth->ssoRequiredGroups),
                 'default_groups' => implode(', ', (array)$auth->ssoDefaultGroups),
                 'session_lifetime' => (int)($auth->ssoSessionLifetime ?? 0),
-                'urls' => $this->urlsFor($type, $base, $name),
+                'scim' => !empty($auth->ssoScimEnabled),
+                'urls' => $this->urlsFor($type, $base, $name, !empty($auth->ssoScimEnabled)),
             ];
             $out[] = $row;
         }
@@ -219,25 +220,34 @@ class DiagnosticsController extends ApiControllerBase
     }
 
     /** The URLs an operator has to register at the IdP for this provider. */
-    private function urlsFor(string $type, string $base, string $name): array
+    private function urlsFor(string $type, string $base, string $name, bool $scim = false): array
     {
         $q = '?provider=' . rawurlencode($name);
         switch ($type) {
             case 'oidc':
-                return [
+                $urls = [
                     'Redirect / callback' => $base . '/api/sso/oidc/callback',
                     'Back-channel logout' => $base . '/api/sso/oidc/backchannel' . $q,
                     'Post-logout redirect' => $base . '/',
                 ];
+                break;
             case 'saml':
-                return [
+                $urls = [
                     'ACS' => $base . '/api/sso/saml/acs' . $q,
                     'EntityID / metadata' => $base . '/api/sso/saml/metadata' . $q,
                     'SLO' => $base . '/api/sso/saml/slo' . $q,
                 ];
+                break;
             default:
-                return ['Forward-auth login' => $base . '/api/sso/jwt/login' . $q];
+                $urls = ['Forward-auth login' => $base . '/api/sso/jwt/login' . $q];
+                break;
         }
+        if ($scim) {
+            // One base URL for every provider: the bearer token is what says which
+            // one a request belongs to.
+            $urls['SCIM base URL'] = $base . '/api/sso/scim';
+        }
+        return $urls;
     }
 
     /** @return \SimpleXMLElement[] */
