@@ -32,6 +32,7 @@ final class OidcProtocol implements ProtocolInterface
     private const LEEWAY = 60;            // max clock skew
     private const DISCO_TTL = 3600;       // discovery document cache TTL
     private const JWKS_TTL = 3600;        // JWKS cache TTL (refetched early on kid miss)
+    private const LOGOUT_TOKEN_TTL = 300; // max age of a back-channel logout token
 
     private string $issuer;
     private string $clientId;
@@ -282,6 +283,79 @@ final class OidcProtocol implements ProtocolInterface
             $params['post_logout_redirect_uri'] = $postLogoutRedirect;
         }
         return $disco['end_session_endpoint'] . '?' . http_build_query($params);
+    }
+
+    /**
+     * Validate a back-channel logout token (OIDC Back-Channel Logout 1.0 section 2.6)
+     * and return whose session it ends.
+     *
+     * This endpoint is unauthenticated by construction -- the IdP calls it server to
+     * server, with no browser and no session -- so the token is the ONLY thing
+     * standing between a stranger and "log everybody out". Every check below is a
+     * requirement of that section, including the two negative ones: a logout token
+     * must not carry a nonce (that would make an ID token usable here), and it must
+     * carry the logout event (so a plain ID token, which has neither, is refused).
+     *
+     * @return array{sub:string,sid:string}
+     */
+    public function validateLogoutToken(string $jwt): array
+    {
+        $disco = $this->discover();
+        $this->assertAsymmetricAlg($jwt);
+        try {
+            $claims = JWT::decode($jwt, $this->jwks($disco, false));
+        } catch (\UnexpectedValueException $e) {
+            if (stripos($e->getMessage(), 'kid') === false) {
+                throw $e;
+            }
+            $claims = JWT::decode($jwt, $this->jwks($disco, true));
+        }
+
+        if (!isset($claims->iss) || $claims->iss !== $disco['issuer']) {
+            throw new \RuntimeException('OIDC logout: issuer mismatch');
+        }
+        if (!in_array($this->clientId, (array)($claims->aud ?? []), true)) {
+            throw new \RuntimeException('OIDC logout: audience does not contain client_id');
+        }
+        if (!isset($claims->iat) || (time() - (int)$claims->iat) > self::LOGOUT_TOKEN_TTL) {
+            throw new \RuntimeException('OIDC logout: token is missing iat or too old');
+        }
+        if (isset($claims->nonce)) {
+            throw new \RuntimeException('OIDC logout: a logout token must not carry a nonce');
+        }
+        $events = (array)($claims->events ?? []);
+        if (!array_key_exists('http://schemas.openid.net/event/backchannel-logout', $events)) {
+            throw new \RuntimeException('OIDC logout: token does not carry the backchannel-logout event');
+        }
+        $sub = isset($claims->sub) && is_scalar($claims->sub) ? (string)$claims->sub : '';
+        $sid = isset($claims->sid) && is_scalar($claims->sid) ? (string)$claims->sid : '';
+        if ($sub === '' && $sid === '') {
+            throw new \RuntimeException('OIDC logout: token names neither sub nor sid');
+        }
+        $this->guardLogoutReplay(isset($claims->jti) && is_scalar($claims->jti) ? (string)$claims->jti : '');
+
+        return ['sub' => $sub, 'sid' => $sid];
+    }
+
+    /** Accept each logout token's jti once, so a captured one cannot be re-fired. */
+    private function guardLogoutReplay(string $jti): void
+    {
+        if ($jti === '') {
+            return; // optional claim; the short iat window is what bounds it then
+        }
+        $dir = StateDir::path('oidc-logout');
+        foreach (glob($dir . '/*.marker') ?: [] as $old) {
+            if ((time() - (int)@filemtime($old)) > self::LOGOUT_TOKEN_TTL) {
+                @unlink($old);
+            }
+        }
+        $file = $dir . '/' . hash('sha256', $this->issuer . '|' . $jti) . '.marker';
+        $fp = @fopen($file, 'x');
+        if ($fp === false) {
+            throw new \RuntimeException('OIDC logout: token replay detected');
+        }
+        fclose($fp);
+        @chmod($file, 0600);
     }
 
     /* -------------------------------------------------------------------- */

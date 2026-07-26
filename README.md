@@ -215,6 +215,15 @@ for password sessions. Register at your IdP:
 - OIDC post-logout redirect: `https://<opnsense>/`
 - SAML logout service: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
 
+**Back-channel logout (OIDC).** Register
+`https://<opnsense>/api/sso/oidc/backchannel?provider=<name>` as the client's
+back-channel logout URI and the IdP can end the firewall session by itself — when the
+user logs out elsewhere, or when you disable the account. Without it (and without a
+maximum session lifetime) an open session survives until it idles out. The endpoint
+takes only a signed `logout_token`: issuer, audience, `iat` freshness, the
+backchannel-logout event, absence of a `nonce` and single-use `jti` are all checked
+before any session is ended.
+
 ## Security
 
 - Privileges are **never** stored in the session - the OPNsense ACL resolves them

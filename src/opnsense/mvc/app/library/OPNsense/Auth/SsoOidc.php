@@ -248,12 +248,18 @@ class SsoOidc extends Local implements IAuthConnector
         if (!base || base._ssoDisp) { return; }
         var box = document.createElement('div');
         box.style.marginTop = '6px';
+        var nameEl = document.querySelector('tr.auth_oidc [name="name"]')
+            || document.querySelector('[name="name"]');
         function upd() {
             var b = (base.value || (location.protocol + '//' + location.host)).replace(/\/+$/, '');
+            var q = '?provider=' + encodeURIComponent((nameEl && nameEl.value) || '{name}');
             box.innerHTML = 'Redirect/callback URL to register at the IdP:<br>'
-                + '<code>' + b + '/api/sso/oidc/callback</code>';
+                + '<code>' + b + '/api/sso/oidc/callback</code><br>'
+                + 'Back-channel logout URL (optional):<br>'
+                + '<code>' + b + '/api/sso/oidc/backchannel' + q + '</code>';
         }
         base.addEventListener('input', upd);
+        if (nameEl) { nameEl.addEventListener('input', upd); }
         upd();
         base.parentNode.appendChild(box);
         base._ssoDisp = 1;

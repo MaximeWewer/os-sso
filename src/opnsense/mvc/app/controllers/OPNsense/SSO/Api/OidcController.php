@@ -196,6 +196,46 @@ class OidcController extends ApiControllerBase
         return $icon['data'];
     }
 
+    /**
+     * POST /api/sso/oidc/backchannel?provider=<name> -- OIDC Back-Channel Logout.
+     *
+     * The IdP calls this server-to-server when a session ends on its side, so that a
+     * user disabled (or logged out) there does not keep an open WebGUI session here
+     * until it idles out. No browser, no cookie: the signed logout_token is the whole
+     * of the authentication, and it is validated in full before anything is ended.
+     */
+    public function backchannelAction()
+    {
+        // Section 2.8: never cache, and answer 200 with no body on success.
+        $this->response->setHeader('Cache-Control', 'no-store');
+        try {
+            $provider = $this->request->get('provider');
+            $auth = $this->authServer($provider);
+            $protocol = $this->protocolFor($provider, $auth);
+            $token = (string)($_POST['logout_token'] ?? '');
+            if ($token === '') {
+                throw new \RuntimeException('no logout_token in the request');
+            }
+            $subject = $protocol->validateLogoutToken($token);
+            $ended = SessionRegistry::destroyForSubject(
+                $protocol->getIssuer(),
+                $subject['sub'],
+                $subject['sid']
+            );
+            syslog(LOG_NOTICE, sprintf(
+                'os-sso oidc: back-channel logout from %s ended %d session(s)',
+                (string)$provider,
+                $ended
+            ));
+        } catch (\Throwable $e) {
+            syslog(LOG_ERR, 'os-sso oidc backchannel: ' . $e->getMessage());
+            $this->response->setStatusCode(400, 'Bad Request');
+            return '';
+        }
+        $this->response->setStatusCode(200, 'OK');
+        return '';
+    }
+
     /** GET /api/sso/oidc/logout -- RP-initiated Single Logout. */
     public function logoutAction()
     {
