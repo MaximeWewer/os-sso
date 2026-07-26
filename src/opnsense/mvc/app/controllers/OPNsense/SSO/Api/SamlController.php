@@ -19,6 +19,7 @@ use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\RateLimiter;
+use OPNsense\SSO\SamlMetadata;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\SamlProtocol;
 
