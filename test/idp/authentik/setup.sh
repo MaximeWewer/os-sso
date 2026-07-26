@@ -30,16 +30,30 @@ UNAME=$(curl -s -H "$H" "$API/propertymappings/provider/saml/?page_size=50" \
   | jq -r '.results[] | select(.name|test("Username$";"i")) | .pk' | head -1)
 
 echo ">>> creating OIDC provider + app"
-OIDC_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/oauth2/" -d "{
+# Reuse an existing provider: this script is expected to be re-runnable (e.g. after
+# changing SP_BASE), and POSTing blindly would pile up duplicates whose application
+# slug collides, leaving the app pointed at the first, stale provider.
+OIDC_PROV=$(curl -s -H "$H" "$API/providers/oauth2/?name=opnsense-oidc" | jq -r '.results[0].pk // empty')
+[ -z "$OIDC_PROV" ] && OIDC_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/oauth2/" -d "{
   \"name\":\"opnsense-oidc\",\"authorization_flow\":\"$AUTHZ\",\"invalidation_flow\":\"$INVAL\",
   \"client_type\":\"confidential\",\"signing_key\":\"$SIGN\",\"include_claims_in_id_token\":true,
   \"sub_mode\":\"user_username\",\"grant_types\":[\"authorization_code\",\"refresh_token\"],
   \"redirect_uris\":[{\"matching_mode\":\"strict\",\"url\":\"$SP_BASE/api/sso/oidc/callback\"}],
   \"property_mappings\":$SCOPES}" | jq -r '.pk')
+# Re-apply the redirect URI every run so a changed SP_BASE takes effect on a lab that
+# was already set up (the provider is only created once).
+curl -s -H "$H" -H "$CT" -X PATCH "$API/providers/oauth2/$OIDC_PROV/" \
+  -d "{\"redirect_uris\":[{\"matching_mode\":\"strict\",\"url\":\"$SP_BASE/api/sso/oidc/callback\"}]}" >/dev/null
 OIDC_CID=$(curl -s -H "$H" "$API/providers/oauth2/$OIDC_PROV/" | jq -r '.client_id')
 OIDC_SEC=$(curl -s -H "$H" "$API/providers/oauth2/$OIDC_PROV/" | jq -r '.client_secret')
-curl -s -H "$H" -H "$CT" -X POST "$API/core/applications/" \
-  -d "{\"name\":\"OPNsense\",\"slug\":\"opnsense\",\"provider\":$OIDC_PROV}" >/dev/null
+# Point the application at the provider whether it was just created or reused.
+if curl -sf -H "$H" "$API/core/applications/opnsense/" >/dev/null 2>&1; then
+  curl -s -H "$H" -H "$CT" -X PATCH "$API/core/applications/opnsense/" \
+    -d "{\"provider\":$OIDC_PROV}" >/dev/null
+else
+  curl -s -H "$H" -H "$CT" -X POST "$API/core/applications/" \
+    -d "{\"name\":\"OPNsense\",\"slug\":\"opnsense\",\"provider\":$OIDC_PROV}" >/dev/null
+fi
 
 echo ">>> creating SAML provider + app"
 # Attribute mappings: without at least one, Authentik emits an EMPTY
@@ -48,7 +62,8 @@ echo ">>> creating SAML provider + app"
 # -- they also carry the groups os-sso maps to OPNsense groups.
 SAML_MAPS=$(curl -s -H "$H" "$API/propertymappings/provider/saml/?page_size=50" \
   | jq -c '[.results[] | select(.name|contains("default SAML Mapping")) | .pk]')
-SAML_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/saml/" -d "{
+SAML_PROV=$(curl -s -H "$H" "$API/providers/saml/?name=opnsense-saml" | jq -r '.results[0].pk // empty')
+[ -z "$SAML_PROV" ] && SAML_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/saml/" -d "{
   \"name\":\"opnsense-saml\",\"authorization_flow\":\"$AUTHZ\",\"invalidation_flow\":\"$INVAL\",
   \"acs_url\":\"$SP_BASE/api/sso/saml/acs$SP_Q\",
   \"issuer\":\"https://authentik.test:9443/application/saml/opnsense-saml/\",
@@ -56,8 +71,17 @@ SAML_PROV=$(curl -s -H "$H" -H "$CT" -X POST "$API/providers/saml/" -d "{
   \"sp_binding\":\"post\",\"signing_kp\":\"$SIGN\",\"sign_assertion\":true,\"sign_response\":false,
   \"property_mappings\":$SAML_MAPS,
   \"name_id_mapping\":\"$UNAME\"}" | jq -r '.pk')
-curl -s -H "$H" -H "$CT" -X POST "$API/core/applications/" \
-  -d "{\"name\":\"OPNsense SAML\",\"slug\":\"opnsense-saml\",\"provider\":$SAML_PROV}" >/dev/null
+if curl -sf -H "$H" "$API/core/applications/opnsense-saml/" >/dev/null 2>&1; then
+  curl -s -H "$H" -H "$CT" -X PATCH "$API/core/applications/opnsense-saml/" \
+    -d "{\"provider\":$SAML_PROV}" >/dev/null
+else
+  curl -s -H "$H" -H "$CT" -X POST "$API/core/applications/" \
+    -d "{\"name\":\"OPNsense SAML\",\"slug\":\"opnsense-saml\",\"provider\":$SAML_PROV}" >/dev/null
+fi
+# Same for the SAML provider's ACS and audience.
+curl -s -H "$H" -H "$CT" -X PATCH "$API/providers/saml/$SAML_PROV/" \
+  -d "{\"acs_url\":\"$SP_BASE/api/sso/saml/acs$SP_Q\",\"audience\":\"$SP_BASE/api/sso/saml/metadata$SP_Q\"}" >/dev/null
+
 # SAML signing cert (use="signing") from the provider metadata
 SAML_CERT=$(curl -s -H "$H" "$API/providers/saml/$SAML_PROV/metadata/" \
   | jq -r '.metadata' | grep -o '<ds:X509Certificate>[^<]*' | head -1 | sed 's/<ds:X509Certificate>//')

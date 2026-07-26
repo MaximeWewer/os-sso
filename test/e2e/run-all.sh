@@ -15,6 +15,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 PORT="${SSO_GUI_PORT:-8443}"
+GUI_URL="${SSO_GUI_URL:-https://localhost:$PORT}"
 IDP="${IDP:-keycloak}"
 VM_SUITES="jwt cp vpn"
 HOST_SUITES="oidc saml portal vpn-client"
@@ -42,7 +43,7 @@ esac
 
 run_host() {
     echo "############ ${1} (host, idp=$IDP) ############"
-    SSO_GUI_PORT="$PORT" IDP="$IDP" IDP_BASE="$IDP_BASE" \
+    SSO_GUI_PORT="$PORT" SSO_GUI_URL="$GUI_URL" IDP="$IDP" IDP_BASE="$IDP_BASE" \
     IDP_USER="$IDP_USER" IDP_PASS="$IDP_PASS" \
     SSO_PROVIDER="$OIDC_PROVIDER" SSO_SAML_PROVIDER="$SAML_PROVIDER" \
         bash "./$1.sh" || rc=1

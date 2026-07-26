@@ -13,7 +13,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 PORT="${SSO_GUI_PORT:-8443}"
-GUI="https://localhost:$PORT"
+# The lab can be reached two ways: the NAT-forwarded port, or the host-only address
+# (test/Vagrantfile). SSO_GUI_URL picks; it must match the provider Base URL, or the
+# callback lands on a different origin than the login and the session is not found.
+GUI="${SSO_GUI_URL:-https://localhost:$PORT}"
 IDP="${IDP:-keycloak}"
 PROVIDER="${SSO_PROVIDER:-keycloak}"
 IDP_USER="${IDP_USER:-kctest}"
@@ -59,9 +62,13 @@ grep -q 'Connected' "$W/done.html" 2>/dev/null && ok "page confirms network acce
 grep -q 'http://example.com/welcome' "$W/done.html" 2>/dev/null \
     && ok "the original destination is offered as a link" \
     || ko "the destination was not carried through"
-vm "grep -a os-sso /var/log/system/system_*.log | grep -a authorized | grep -av COMMAND | tail -1" \
-    | grep -q "zone $ZONE" \
-    && ok "the firewall logged the authorization" || ko "no authorization in the log"
+# Match this zone specifically rather than the last authorization in a log every
+# other suite also writes to. grep -av COMMAND: sudo logs our own probe into the
+# very file we are reading.
+HITS=$(vm "grep -a os-sso /var/log/system/system_*.log | grep -av COMMAND | grep -ac \"in zone $ZONE from\"")
+[ "${HITS:-0}" -gt 0 ] 2>/dev/null \
+    && ok "the firewall logged the authorization for zone $ZONE" \
+    || ko "no authorization for zone $ZONE in the log (hits=$HITS)"
 
 echo ">>> case 3: an unbound zone is refused"
 # Zone 9 does not exist in the lab, so the zone lookup itself must reject it.

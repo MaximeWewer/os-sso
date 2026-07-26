@@ -10,6 +10,11 @@
 # ACS URL, so pass the same value to test/idp/keycloak/setup-keycloak.sh.
 GUI_PORT = (ENV["SSO_GUI_PORT"] || "8443").to_i
 VPN_PORT = (ENV["SSO_VPN_PORT"] || "1194").to_i
+# LAN address on the host-only network. Everything the browser and the IdP see should
+# use it: the provider Base URL, SP_BASE when setting the IdPs up, and SSO_GUI_URL for
+# the e2e suites -- one origin end to end, or the session carrying the OIDC/SAML
+# anti-replay material is not found at the callback.
+LAN_IP = ENV["SSO_LAN_IP"] || "192.168.60.10"
 
 Vagrant.configure("2") do |config|
   config.vm.box = "puzzle/opnsense"
@@ -19,6 +24,12 @@ Vagrant.configure("2") do |config|
 
   # WebGUI reachable from the host browser at https://localhost:8443.
   config.vm.network "forwarded_port", guest: 443, host: GUI_PORT, id: "https"
+  # Host-only network: the only way to reach the LAN-side services (the captive
+  # portal listens on 8000+zoneid on the zone interface, and redirects there, so a
+  # NAT forward cannot reach it). 192.168.60.0/24 by default because VMware, when
+  # installed, already owns 192.168.56/57 -- and VirtualBox only allows host-only
+  # addresses inside 192.168.56.0/21 unless /etc/vbox/networks.conf says otherwise.
+  config.vm.network "private_network", ip: LAN_IP, netmask: "255.255.255.0"
   # OpenVPN server (deferred web-auth lab) reachable at udp 127.0.0.1:1194.
   config.vm.network "forwarded_port", guest: 1194, host: VPN_PORT, protocol: "udp", id: "openvpn"
 

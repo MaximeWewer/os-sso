@@ -9,7 +9,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 PORT="${SSO_GUI_PORT:-8443}"
-GUI="https://localhost:$PORT"
+# The lab can be reached two ways: the NAT-forwarded port, or the host-only address
+# (test/Vagrantfile). SSO_GUI_URL picks; it must match the provider Base URL, or the
+# callback lands on a different origin than the login and the session is not found.
+GUI="${SSO_GUI_URL:-https://localhost:$PORT}"
 IDP="${IDP:-keycloak}"
 PROVIDER="${SSO_SAML_PROVIDER:-keycloak-saml}"
 IDP_BASE="${IDP_BASE:-https://keycloak.test:9443/realms/opnsense}"

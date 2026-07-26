@@ -321,26 +321,35 @@ bash keycloak/setup-keycloak.sh       # create realm, clients, test user
 bash authentik/setup.sh               # create OIDC/SAML providers + mappings
 ```
 
-Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. Both host ports
-are overridable when something else already owns them:
+Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. The VM gets a
+host-only address (`192.168.60.10` by default) *and* a NAT forward for the WebGUI;
+both are overridable when something else already owns them:
 
 ```sh
-SSO_GUI_PORT=8444 vagrant up                               # WebGUI forward
+SSO_LAN_IP=192.168.60.10 SSO_GUI_PORT=8444 vagrant up      # host-only + WebGUI forward
 KC_HTTP_PORT=8091 ./up.sh keycloak                         # Keycloak admin port
-SP_BASE=https://localhost:8444 bash keycloak/setup-keycloak.sh
+SP_BASE=https://192.168.60.10 bash keycloak/setup-keycloak.sh
 ```
 
-Whatever `SSO_GUI_PORT` you pick must be the `SP_BASE` given to the IdP setup and
-the **Base URL** registered on the auth server - it is what ends up in the OIDC
-`redirect_uri` and the SAML ACS.
+**Use one origin end to end.** The URL given to `SP_BASE`, the **Base URL** on the
+auth server, and `SSO_GUI_URL` for the suites must be the same - the OIDC/SAML
+anti-replay material (state, nonce, PKCE) lives in a session cookie, so a login
+started on one origin and a callback landing on another simply will not find it.
+
+The host-only address is what the **captive portal** needs: its listener sits on
+`8000+zoneid` on the zone interface and redirects there, so a NAT forward cannot
+reach it. On a machine with VMware installed, 192.168.56/57 are already taken by
+`vmnet2`/`vmnet3`, hence the 192.168.60.0/24 default - VirtualBox only allows
+host-only addresses inside 192.168.56.0/21 unless `/etc/vbox/networks.conf` says
+otherwise.
 
 Seven end-to-end suites under `test/e2e/`, run against either IdP:
 
 ```sh
 cd test/e2e
-SSO_GUI_PORT=8444 ./run-all.sh                  # everything, against Keycloak
-SSO_GUI_PORT=8444 IDP=authentik ./run-all.sh    # same, against Authentik
-SSO_GUI_PORT=8444 ./run-all.sh oidc saml        # a subset
+SSO_GUI_URL=https://192.168.60.10 ./run-all.sh                # everything, Keycloak
+SSO_GUI_URL=https://192.168.60.10 IDP=authentik ./run-all.sh  # same, Authentik
+SSO_GUI_URL=https://192.168.60.10 ./run-all.sh oidc saml      # a subset
 ```
 
 | Suite | Where | Checks | Covers |

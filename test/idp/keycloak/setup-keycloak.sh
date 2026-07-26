@@ -27,6 +27,10 @@ if [ -z "$CID" ]; then
     -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" \
     -s 'webOrigins=["+"]' -i 2>/dev/null | tr -d '\r')
 fi
+# Re-apply the redirect URI every run: SP_BASE may have changed since the client was
+# created, and a stale redirect_uri is refused by Keycloak at login time.
+"${KC[@]}" update "clients/$CID" -r "$R" \
+  -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" -s 'webOrigins=["+"]' 2>/dev/null || true
 SECRET=$("${KC[@]}" get "clients/$CID/client-secret" -r "$R" 2>/dev/null | grep -o '"value"[^,]*' | cut -d'"' -f4)
 echo "oidc_client_uuid=$CID"
 echo "oidc_client_secret=$SECRET"
@@ -55,6 +59,15 @@ if [ -z "$SCID" ]; then
     -s 'attributes."saml_idp_initiated_sso_url_name"=opnsense-sso' \
     -i 2>/dev/null | tr -d '\r')
 fi
+# Same for the SAML client: EntityID (clientId) cannot change without recreating it,
+# but the ACS/SLO endpoints can and must follow SP_BASE.
+"${KC[@]}" update "clients/$SCID" -r "$R" \
+  -s "redirectUris=[\"$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER\"]" \
+  -s "attributes.\"saml_assertion_consumer_url_post\"=$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER" \
+  -s "attributes.\"saml_assertion_consumer_url_redirect\"=$SP_BASE/api/sso/saml/acs?provider=$SAML_PROVIDER" \
+  -s "attributes.\"saml_single_logout_service_url_redirect\"=$SP_BASE/api/sso/saml/slo?provider=$SAML_PROVIDER" \
+  -s "attributes.\"saml_single_logout_service_url_post\"=$SP_BASE/api/sso/saml/slo?provider=$SAML_PROVIDER" \
+  -s 'attributes."saml_idp_initiated_sso_url_name"=opnsense-sso' 2>/dev/null || true
 echo "saml_client_uuid=$SCID"
 
 # --- test user ---

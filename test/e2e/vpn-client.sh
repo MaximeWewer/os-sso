@@ -17,7 +17,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 PORT="${SSO_GUI_PORT:-8443}"
-GUI="https://localhost:$PORT"
+# The lab can be reached two ways: the NAT-forwarded port, or the host-only address
+# (test/Vagrantfile). SSO_GUI_URL picks; it must match the provider Base URL, or the
+# callback lands on a different origin than the login and the session is not found.
+GUI="${SSO_GUI_URL:-https://localhost:$PORT}"
 IDP="${IDP:-keycloak}"
 PROVIDER="${SSO_PROVIDER:-keycloak}"
 IDP_USER="${IDP_USER:-kctest}"
@@ -45,12 +48,18 @@ if ! grep -q '^remote ' "$W/client.ovpn"; then
     echo "  FAIL no client profile in the VM (run vagrant/setup-vpn-server.sh first)"
     exit 1
 fi
+# The tunnel and the browser must reach the firewall over the SAME path: os-sso only
+# releases the tunnel when the browser completing the login comes from the VPN
+# client's own address. Connecting over NAT while browsing over host-only (or the
+# reverse) is two different source IPs, and the verdict is correctly refused.
+VPN_REMOTE=${VPN_REMOTE:-$(printf '%s' "$GUI" | sed -e 's#^https\?://##' -e 's#[:/].*##')}
 {
-    cat "$W/client.ovpn"
+    sed "s/^remote .*/remote $VPN_REMOTE 1194/" "$W/client.ovpn"
     # OpenVPN Connect advertises this natively; the CLI has to be told, otherwise the
     # hook denies the connection (by design -- there would be no browser to drive).
     printf '\nsetenv IV_SSO webauth\nauth-user-pass %s/creds\nauth-retry none\n' "$W"
 } > "$W/client-webauth.ovpn"
+echo "    connecting to $VPN_REMOTE (same path as the browser)"
 printf 'sso\nsso\n' > "$W/creds"
 
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null

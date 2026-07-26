@@ -13,7 +13,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 PORT="${SSO_GUI_PORT:-8443}"
-GUI="https://localhost:$PORT"
+# The lab can be reached two ways: the NAT-forwarded port, or the host-only address
+# (test/Vagrantfile). SSO_GUI_URL picks; it must match the provider Base URL, or the
+# callback lands on a different origin than the login and the session is not found.
+GUI="${SSO_GUI_URL:-https://localhost:$PORT}"
 IDP="${IDP:-keycloak}"
 PROVIDER="${SSO_PROVIDER:-keycloak}"
 IDP_USER="${IDP_USER:-kctest}"
@@ -53,9 +56,11 @@ is_live "$W/jar" "session reaches an authenticated API"
 # --- 2. the authorization request ---------------------------------------------
 echo ">>> case 2: authorization request parameters"
 AUTHZ=$(curl -sk -o /dev/null -w '%{redirect_url}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")
+# Percent-encode $GUI the way it appears inside the authorization URL, so the
+# assertion follows SSO_GUI_URL instead of assuming one deployment.
+GUI_ENC=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]+"/api/sso/oidc/callback",safe=""))' "$GUI")
 case "$AUTHZ" in
-    *"redirect_uri=https%3A%2F%2Flocalhost%3A$PORT%2Fapi%2Fsso%2Foidc%2Fcallback"*)
-        ok "redirect_uri built from the configured Base URL" ;;
+    *"redirect_uri=$GUI_ENC"*) ok "redirect_uri built from the configured Base URL" ;;
     *) ko "redirect_uri (got: $(echo "$AUTHZ" | tr '&' '\n' | grep redirect_uri))" ;;
 esac
 case "$AUTHZ" in *code_challenge_method=S256*) ok "PKCE S256 requested" ;; *) ko "no PKCE challenge" ;; esac
