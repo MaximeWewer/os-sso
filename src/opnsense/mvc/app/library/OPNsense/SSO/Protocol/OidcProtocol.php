@@ -404,18 +404,44 @@ final class OidcProtocol implements ProtocolInterface
             $body['code_verifier'] = $verifier;
         }
 
-        // client_secret_basic
         $headers = [
-            'Authorization: Basic ' . base64_encode(rawurlencode($this->clientId) . ':' . rawurlencode($this->clientSecret)),
             'Content-Type: application/x-www-form-urlencoded',
             'Accept: application/json',
         ];
+        // Client authentication: client_secret_basic is the default every IdP must
+        // support, but a fair number advertise only client_secret_post -- against
+        // those, a Basic header is simply an unauthenticated client. Take the answer
+        // from the IdP's own discovery document rather than assuming.
+        if ($this->tokenAuthMethod($disco) === 'client_secret_post') {
+            $body['client_id'] = $this->clientId;
+            $body['client_secret'] = $this->clientSecret;
+        } else {
+            $headers[] = 'Authorization: Basic ' . base64_encode(
+                rawurlencode($this->clientId) . ':' . rawurlencode($this->clientSecret)
+            );
+        }
         $resp = $this->httpPost((string)$disco['token_endpoint'], http_build_query($body), $headers);
         $json = json_decode($resp, true);
         if (!is_array($json) || isset($json['error'])) {
             throw new \RuntimeException('OIDC: token endpoint error: ' . ($json['error'] ?? 'invalid response'));
         }
         return $json;
+    }
+
+    /**
+     * How to authenticate to the token endpoint. Per OIDC Discovery, omitting
+     * token_endpoint_auth_methods_supported means client_secret_basic; we only ever
+     * choose client_secret_post when the IdP lists it and not basic.
+     */
+    private function tokenAuthMethod(array $disco): string
+    {
+        $methods = (array)($disco['token_endpoint_auth_methods_supported'] ?? []);
+        if (empty($methods) || in_array('client_secret_basic', $methods, true)) {
+            return 'client_secret_basic';
+        }
+        return in_array('client_secret_post', $methods, true)
+            ? 'client_secret_post'
+            : 'client_secret_basic';
     }
 
     private function fetchUserInfo(array $disco, string $accessToken): array
