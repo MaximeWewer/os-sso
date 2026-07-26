@@ -243,6 +243,16 @@ takes only a signed `logout_token`: issuer, audience, `iat` freshness, the
 backchannel-logout event, absence of a `nonce` and single-use `jti` are all checked
 before any session is ended.
 
+### API access (not SSO)
+
+The OPNsense **API** keeps using its own key/secret credentials — os-sso does not
+turn an IdP token into API access, and cannot: API authentication is handled by core
+before any plugin sees the request, so bearer-token support would have to land in
+core, not here. What does work is the useful half: an account provisioned by SSO is a
+normal local account, so you can issue it an API key under *System ▸ Access ▸ Users*
+and the ACL applies the groups os-sso mapped. Its local *password* stays unusable —
+API keys are separate credentials, not the password.
+
 ## Diagnostics
 
 **System ▸ Access ▸ SSO Diagnostics** shows, for every configured provider, the exact
