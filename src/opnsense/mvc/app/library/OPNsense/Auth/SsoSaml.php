@@ -22,6 +22,9 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoSpKey = null;
     public $ssoNameIdFormat = 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent';
     public $ssoGroupsAttribute = 'groups';
+    public $ssoUsernameAttribute = null;
+    public $ssoEmailAttribute = null;
+    public $ssoDisplayNameAttribute = null;
     public $ssoWantMessagesSigned = false;
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
@@ -53,6 +56,9 @@ class SsoSaml extends Local implements IAuthConnector
             'sso_sp_key' => 'ssoSpKey',
             'sso_nameid_format' => 'ssoNameIdFormat',
             'sso_groups_attribute' => 'ssoGroupsAttribute',
+            'sso_username_attribute' => 'ssoUsernameAttribute',
+            'sso_email_attribute' => 'ssoEmailAttribute',
+            'sso_display_name_attribute' => 'ssoDisplayNameAttribute',
             'sso_button_label' => 'ssoButtonLabel',
             'sso_base_url' => 'ssoBaseUrl',
             'sso_login_redirect' => 'ssoLoginRedirect',
@@ -123,6 +129,24 @@ class SsoSaml extends Local implements IAuthConnector
                 'help' => gettext('Requested NameID format. "persistent" suits most setups; some IdPs need "unspecified" or "emailAddress".'),
                 'type' => 'text',
                 'default' => $this->ssoNameIdFormat,
+            ],
+            'sso_username_attribute' => [
+                'name' => gettext('Username attribute'),
+                'help' => gettext('Assertion attribute mapped to the local username. Leave empty to try '
+                    . '"uid", "username", "preferred_username" and then fall back to the NameID. Set it when '
+                    . 'the IdP emits OID-style names (e.g. urn:oid:0.9.2342.19200300.100.1.1) or its own.'),
+                'type' => 'text',
+            ],
+            'sso_email_attribute' => [
+                'name' => gettext('Email attribute'),
+                'help' => gettext('Assertion attribute carrying the email. Empty tries "email" then "mail".'),
+                'type' => 'text',
+            ],
+            'sso_display_name_attribute' => [
+                'name' => gettext('Display name attribute'),
+                'help' => gettext('Assertion attribute carrying the full name. Empty tries "displayName", '
+                    . '"cn" then "name".'),
+                'type' => 'text',
             ],
             'sso_groups_attribute' => [
                 'name' => gettext('Groups attribute'),

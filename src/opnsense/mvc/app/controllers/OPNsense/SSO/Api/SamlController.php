@@ -325,6 +325,9 @@ class SamlController extends ApiControllerBase
             'sp_key' => $auth->ssoSpKey,
             'name_id_format' => $auth->ssoNameIdFormat,
             'groups_attribute' => $auth->ssoGroupsAttribute,
+            'username_attribute' => $auth->ssoUsernameAttribute,
+            'email_attribute' => $auth->ssoEmailAttribute,
+            'display_name_attribute' => $auth->ssoDisplayNameAttribute,
             'want_messages_signed' => (bool)$auth->ssoWantMessagesSigned,
         ]);
     }

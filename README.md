@@ -58,7 +58,10 @@ Go to **System ▸ Access ▸ Servers** and click **＋ Add**, then pick the **T
 All types share a few options:
 
 - **Username claim/attribute** — which IdP field becomes the local username.
-  Use an immutable, IdP-administered value (e.g. `preferred_username`).
+  Use an immutable, IdP-administered value (e.g. `preferred_username`). For SAML the
+  username, email and display-name attributes are each configurable; left empty they
+  try the conventional friendly names and then the NameID — set them when your IdP
+  emits OID-style names such as `urn:oid:0.9.2342.19200300.100.1.1`.
 - **Automatic user creation** — off by default. When on, matched users are created
   in `config.xml` with no local password (IdP-only login).
 - **Required groups** — access gate: comma separated IdP group names, at least one

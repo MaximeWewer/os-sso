@@ -359,15 +359,22 @@ final class SamlProtocol implements ProtocolInterface
         $id->subject = (string) $auth->getNameId();
         $groupsAttr = (string) ($this->cfg["groups_attribute"] ?? "groups");
 
+        // The conventional friendly names cover Keycloak/Authentik out of the box,
+        // but plenty of IdPs only emit OID-style names (urn:oid:0.9.2342.19200300.
+        // 100.1.1 and friends) or a site-specific one -- hence the configurable
+        // attribute, which always wins over the guesses below.
         $id->username =
-            $this->firstAttr($attrs, [
+            $this->attr($attrs, $this->cfg["username_attribute"] ?? "", [
                 "uid",
                 "username",
                 "preferred_username",
             ]) ?:
             $id->subject;
-        $id->email = $this->firstAttr($attrs, ["email", "mail"]);
-        $id->displayName = $this->firstAttr($attrs, [
+        $id->email = $this->attr($attrs, $this->cfg["email_attribute"] ?? "", [
+            "email",
+            "mail",
+        ]);
+        $id->displayName = $this->attr($attrs, $this->cfg["display_name_attribute"] ?? "", [
             "displayName",
             "cn",
             "name",
@@ -377,6 +384,19 @@ final class SamlProtocol implements ProtocolInterface
         );
         $id->raw = $attrs;
         return $id;
+    }
+
+    /**
+     * Value of the operator-configured attribute, else the first of the conventional
+     * fallback names that carries one.
+     */
+    private function attr(array $attrs, string $configured, array $fallbacks): string
+    {
+        $configured = trim($configured);
+        if ($configured !== "") {
+            return $this->firstAttr($attrs, [$configured]);
+        }
+        return $this->firstAttr($attrs, $fallbacks);
     }
 
     private function firstAttr(array $attrs, array $names): string
