@@ -202,7 +202,12 @@ WebGUI with privileges from their mapped groups.
    ```
 
    Upload that zip under *Templates* and select it on the zone. The page shows one
-   button per SSO provider and keeps the standard username/password form.
+   button per SSO provider and keeps the standard username/password form. Mind the
+   core naming rule: a template *name* may not contain a hyphen (letters, digits,
+   `.`, `,`, `_` and spaces only).
+
+   In the lab, `test/vagrant/setup-cp.sh` does the whole thing — zone, template,
+   render, unpack, start — and documents the ordering the UI normally handles.
 4. Make sure the zone lets unauthenticated clients reach the firewall WebGUI and
    the IdP (zone *allowed addresses* / pre-auth) so the login can complete.
 
