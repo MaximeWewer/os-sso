@@ -140,6 +140,17 @@ All types share a few options:
 | **Authentik** | `https://<authentik>/application/o/<slug>/` | add the *Groups* scope |
 | **Entra ID** | `https://login.microsoftonline.com/<tenant>/v2.0` | `groups` claim (object IDs - use an explicit name map) |
 
+The **Groups claim** accepts dot notation for a nested claim, which is where roles
+usually live: `realm_access.roles` for Keycloak realm roles,
+`resource_access.<client-id>.roles` for its client roles. A claim whose own name
+contains dots (`urn:oid:…`) is matched whole first, so both styles work.
+
+> Entra ID tenants where a user is in more than ~200 groups send a *group overage*
+> claim (`_claim_names` / `_claim_sources`) instead of the groups themselves. os-sso
+> does not follow it to Microsoft Graph, so those users arrive with no groups - and
+> are refused if you set required groups. Use application roles, or a group filter on
+> the token configuration, to keep the claim under the limit.
+
 ### SAML 2.0
 
 1. In OPNsense either set the **IdP metadata URL** (https) and leave the rest empty -

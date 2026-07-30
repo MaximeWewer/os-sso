@@ -185,7 +185,11 @@ class SsoJwt extends Local implements IAuthConnector
             ],
             'sso_groups_claim' => [
                 'name' => gettext('Groups claim'),
-                'help' => gettext('Claim listing the user\'s groups/roles (array, or comma/space separated).'),
+                'help' => gettext('Claim listing the user\'s groups/roles (array, or comma/space '
+                    . 'separated). Dot notation reaches a nested claim, which is where most IdPs '
+                    . 'actually put them - e.g. "realm_access.roles" or '
+                    . '"resource_access.<client-id>.roles" on Keycloak. A claim whose own name '
+                    . 'contains dots is matched whole first.'),
                 'type' => 'text',
                 'default' => $this->ssoGroupsClaim,
             ],

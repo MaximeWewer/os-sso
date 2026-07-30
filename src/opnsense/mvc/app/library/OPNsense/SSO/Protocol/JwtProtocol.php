@@ -10,6 +10,7 @@ namespace OPNsense\SSO\Protocol;
 use Firebase\JWT\JWT;
 use Firebase\JWT\JWK;
 use Firebase\JWT\Key;
+use OPNsense\SSO\ClaimPath;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
 
@@ -205,11 +206,11 @@ final class JwtProtocol
     {
         $id = new NormalizedIdentity('');
         $id->subject = self::scalarClaim($claims['sub'] ?? '');
-        $id->username = self::scalarClaim($claims[$this->usernameClaim] ?? '');
+        $id->username = self::scalarClaim(ClaimPath::get($claims, $this->usernameClaim));
         $id->email = self::scalarClaim($claims['email'] ?? '');
         $id->emailVerified = filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOL);
         $id->displayName = self::scalarClaim($claims['name'] ?? '');
-        $id->groups = $this->extractGroups($claims);
+        $id->groups = ClaimPath::groups($claims, $this->groupsClaim);
         $id->raw = $claims;
         return $id;
     }
@@ -222,15 +223,6 @@ final class JwtProtocol
     private static function scalarClaim($value): string
     {
         return is_scalar($value) ? (string)$value : '';
-    }
-
-    private function extractGroups(array $claims): array
-    {
-        $g = $claims[$this->groupsClaim] ?? [];
-        if (is_string($g)) {
-            $g = preg_split('/[,\s]+/', $g, -1, PREG_SPLIT_NO_EMPTY);
-        }
-        return array_values(array_filter(array_map('strval', (array)$g)));
     }
 
     /* ---- JWKS disk cache (TTL, www-owned, 0600) ----------------------- */
