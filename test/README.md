@@ -70,14 +70,14 @@ e2e/oidc.sh                                    # or one suite on its own
 
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
-| `oidc.sh` | host | 28 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, rate limiting, required groups, deprovisioning, session expiry, back-channel logout |
+| `oidc.sh` | host | 42-43 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, pushed authorization requests, rate limiting, required groups, deprovisioning, session expiry, back-channel logout, service scoping, ending a session from the diagnostics page |
 | `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only), POST binding, metadata import, SLO |
-| `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
+| `portal.sh` | host | 11 | a captive client signing in, being authorized in its zone, and being disconnected again when its grant is revoked |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
 | `scim.sh` | host | 46 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and Authentik's real SCIM client |
 | `jwt.sh` | VM | 17 | source gate, signature/aud, `iat`, max-age, single-use, group mapping |
 | `cp.sh` | VM | 8 | the authorizer gates, CORS scoping, and a real configd allow |
-| `vpn.sh` | VM | 22 | the hook and the verdict writer, IP binding, single-use session ids, username enforcement, stale-session sweep |
+| `vpn.sh` | VM | 23 | the hook and the verdict writer, profile resolution, IP binding, single-use session ids, username enforcement, the common name a revocation kills, stale-session sweep |
 
 Host-side suites drive the whole ceremony through `e2e/lib/idp_login.py`, which speaks
 both dialects: Keycloak renders a login form, Authentik drives a flow-executor API. They

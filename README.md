@@ -12,26 +12,33 @@ same IdP so account lifecycle does not wait for a login. The local password
 
 ## Features
 
-- **OpenID Connect** - `.well-known` discovery, PKCE, JWKS rotation, and client
-  authentication beyond the shared secret: `client_secret_jwt`, `private_key_jwt`
-  (serving our own JWKS, so key rollover needs no copy-paste) or mutual TLS. MFA
-  context (`acr`) and re-authentication age (`max_age`) are *enforced* on the way
-  back, not merely requested. Keycloak, Authentik, Entra ID, Zitadel, …
-- **SAML 2.0** - signed and optionally encrypted assertions, metadata import and
-  generation, signed AuthnRequests, `ForceAuthn` checked against `AuthnInstant`,
-  Single Logout.
+- **OpenID Connect** - `.well-known` discovery, PKCE, pushed authorization requests
+  (PAR), JWKS rotation, and client authentication beyond the shared secret:
+  `client_secret_jwt`, `private_key_jwt` (serving our own JWKS, so key rollover needs
+  no copy-paste) or mutual TLS. MFA context (`acr`) and re-authentication age
+  (`max_age`) are *enforced* on the way back, not merely requested. Keycloak,
+  Authentik, Entra ID, Zitadel, …
+- **SAML 2.0** - signed (RSA-SHA256; SHA-1 refused) and optionally encrypted
+  assertions, metadata import and generation, signed AuthnRequests, `ForceAuthn`
+  checked against `AuthnInstant`, the requested authentication context checked against
+  the one that comes back, Single Logout over either binding.
 - **JWT forward-auth** - trust a signed JWT from a reverse proxy in front of
   OPNsense (oauth2-proxy, Authelia, Authentik forward-auth, Cloudflare Access).
 - **WebGUI login** - one button per provider on the login page.
 - **Captive Portal login** via OIDC/SAML.
-- **OpenVPN** login through the browser (deferred web-auth / `WEB_AUTH`).
+- **OpenVPN** login through the browser (deferred web-auth / `WEB_AUTH`), one profile
+  per OpenVPN instance.
+- **Scoped per service** - a provider says which of the WebGUI, the portal and the VPN
+  it serves, so one added for guest wifi is not also a door into the firewall.
 - **Group mapping** - IdP groups become OPNsense group membership; privileges are
   resolved by the normal ACL. Reads nested claims (`resource_access.<client>.roles`)
   and follows Entra's group-overage pointer.
-- **Single Logout** - the WebGUI *Logout* button ends the IdP session too.
+- **Single Logout** - the WebGUI *Logout* button ends the IdP session too, and a
+  revocation from any side (back-channel logout, SLO, SCIM, an administrator) ends the
+  WebGUI session, disconnects the portal client and drops the VPN tunnel.
 - **SCIM 2.0 provisioning** - the IdP pushes account lifecycle, so a revoked user is
-  disabled (and their sessions killed) when the directory says so, not at their next
-  login attempt.
+  disabled (and their access ended) when the directory says so, not at their next
+  login attempt. ETags, timestamps and composed `eq` filters included.
 
 ## Screenshots
 
@@ -235,6 +242,10 @@ enforced.
 Each configured OIDC/SAML/JWT server adds a **“Login with …”** button to the
 firewall login page. Users click it, authenticate at the IdP, and land in the
 WebGUI with privileges from their mapped groups.
+
+A provider whose **Applies to** does not list `webgui` gets no button - and its login
+endpoint refuses a WebGUI login, which is the half that matters: the button is only
+the part an attacker does not need.
 
 ### Captive Portal
 
@@ -477,9 +488,9 @@ end-to-end suites** against a Vagrant OPNsense VM with Authentik and Keycloak in
 driving real browser ceremonies and a real OpenVPN client.
 
 ```sh
-php test/unit/run.php                                       # ~400 assertions, no setup
+php test/unit/run.php                                       # ~550 assertions, no setup
 cd test && vagrant up && (cd idp && ./up.sh)                # bring the lab up
-SSO_GUI_URL=https://192.168.60.10 test/e2e/run-all.sh       # ~150 checks, either IdP
+SSO_GUI_URL=https://192.168.60.10 test/e2e/run-all.sh       # ~175 checks, either IdP
 ```
 
 ## License
