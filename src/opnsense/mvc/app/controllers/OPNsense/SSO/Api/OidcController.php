@@ -142,6 +142,8 @@ class OidcController extends ApiControllerBase
                 );
                 session_write_close();
                 $this->response->setContentType('text/html', 'UTF-8');
+                // This page bounces off-site; our own URL holds the code and state.
+                $this->response->setHeader('Referrer-Policy', 'no-referrer');
                 return CaptivePortalAuthorizer::donePage($cpRes['username'], $cpurl);
             }
 

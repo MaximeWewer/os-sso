@@ -131,6 +131,8 @@ class SamlController extends ApiControllerBase
                     (string)($_SERVER['REMOTE_ADDR'] ?? '')
                 );
                 $this->response->setContentType('text/html', 'UTF-8');
+                // This page bounces off-site; keep our own URL out of the Referer.
+                $this->response->setHeader('Referrer-Policy', 'no-referrer');
                 return CaptivePortalAuthorizer::donePage($cpRes['username'], (string)($state['cpurl'] ?? ''));
             }
 

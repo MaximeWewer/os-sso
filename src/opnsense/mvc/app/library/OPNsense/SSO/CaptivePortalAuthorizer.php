@@ -149,6 +149,14 @@ final class CaptivePortalAuthorizer
     /**
      * "You are connected" page shown to the captive client's browser, optionally
      * bouncing back to the site they originally requested.
+     *
+     * That destination is an arbitrary external site by construction -- it is wherever
+     * the client was headed when the portal intercepted them -- so this page does
+     * redirect off-site on purpose. What it must not do is take anything with it: this
+     * page is rendered BY the SSO callback, whose own URL carries the authorization
+     * code and state on the query string, and both a meta refresh and a clicked link
+     * would hand that to the destination in the Referer. Hence the no-referrer meta,
+     * which also covers the header route since the page is self-contained.
      */
     public static function donePage(string $username, string $redirUrl = ''): string
     {
@@ -156,14 +164,14 @@ final class CaptivePortalAuthorizer
         // Re-validate here as well: donePage is the last thing between a verified
         // login and the browser following a URL that came in on the query string.
         $redirUrl = self::sanitizeRedirect($redirUrl);
-        $meta = '';
+        $meta = "<meta name='referrer' content='no-referrer'>";
         $link = '';
         if ($redirUrl !== '') {
             $r = htmlspecialchars($redirUrl, ENT_QUOTES);
-            $meta = "<meta http-equiv='refresh' content='3;url={$r}'>";
+            $meta .= "<meta http-equiv='refresh' content='3;url={$r}'>";
             // Name the destination instead of bouncing silently -- the user just typed
             // credentials at their IdP and deserves to see where they are being sent.
-            $link = "<p>Continuing to <a href='{$r}'>{$r}</a>&hellip;</p>";
+            $link = "<p>Continuing to <a rel='noreferrer noopener' href='{$r}'>{$r}</a>&hellip;</p>";
         }
         return "<!doctype html><html><head><meta charset='utf-8'><title>Connected</title>{$meta}"
             . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em;color:#1b5e20}"

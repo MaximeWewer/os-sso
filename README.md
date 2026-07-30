@@ -228,6 +228,14 @@ WebGUI with privileges from their mapped groups.
 
 A user who signs in through SSO gets their device authorized in that portal zone.
 
+The "connected" page then bounces them to wherever they were originally headed, which
+is an arbitrary external site by design - that is what a captive portal does. The URL
+is validated for shape only (no other scheme, no protocol-relative host, no userinfo),
+never against an allowlist, so treat `/api/sso/{oidc,saml}/{callback,acs}?cpurl=…` as
+an intentional redirector. It carries nothing with it: the page is sent `no-referrer`
+so the callback URL - which holds the authorization code and state - never reaches the
+destination.
+
 ### OpenVPN (deferred web-auth)
 
 OpenVPN 2.6+ “pending auth” lets the client authenticate in a browser:
