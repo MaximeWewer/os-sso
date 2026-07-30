@@ -118,11 +118,18 @@ the exact redirect/ACS URL to copy into the IdP.
    opaque reference; used automatically when the IdP declares it requires them), and
    **Extra authorization parameters** for things like `prompt=login`.
 
+A **signed userinfo response** (`userinfo_signed_response_alg`) needs nothing configured:
+the JWT is verified against the same keys as the ID token, and refused if it is signed
+symmetrically or names another issuer or audience. Worth knowing because userinfo is where
+groups usually come from, and a response os-sso cannot read is a login that arrives with
+none of them - which now says so in the log instead of looking like an IdP that sends no
+groups at all.
+
 Deliberately absent: a **request object** (JAR) adds little once PAR keeps the request
 off the browser entirely; **refresh tokens** would be an offline credential for calls
 os-sso never makes; **DPoP** binds access tokens the firewall does not keep; and an
-**encrypted ID token** (JWE) is a decryption key to hold for a token that already
-travels inside TLS to a back-channel endpoint.
+**encrypted ID token or userinfo response** (JWE) is a decryption key to hold for
+something that already travels inside TLS to a back-channel endpoint.
 
 **Client authentication.** `auto` picks `client_secret_basic` or `client_secret_post` from
 the discovery document. The others must be chosen explicitly - they need key material

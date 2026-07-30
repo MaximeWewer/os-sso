@@ -758,16 +758,20 @@ final class OidcProtocol implements ProtocolInterface
     }
 
     /**
-     * Reject a non-asymmetric (or "none") id_token signature by inspecting the JWS
-     * header alg before verification. Everything the vendored lib supports other
-     * than the HS family and "none" is asymmetric (RS, PS, ES, EdDSA), so an
-     * HS-prefixed or "none" alg is the only thing to refuse here.
+     * Reject a non-asymmetric (or "none") signature by inspecting the JWS header alg
+     * before verification. Everything the vendored lib supports other than the HS family
+     * and "none" is asymmetric (RS, PS, ES, EdDSA), so an HS-prefixed or "none" alg is
+     * the only thing to refuse here.
+     *
+     * @param string $what which token this is, for the message the operator reads
      */
-    private function assertAsymmetricAlg(string $jwt): void
+    private function assertAsymmetricAlg(string $jwt, string $what = 'id_token'): void
     {
         $alg = self::jwsAlg($jwt);
         if ($alg === '' || stripos($alg, 'HS') === 0 || strcasecmp($alg, 'none') === 0) {
-            throw new \RuntimeException('OIDC: id_token must use an asymmetric signature (got ' . ($alg ?: 'none') . ')');
+            throw new \RuntimeException(
+                'OIDC: ' . $what . ' must use an asymmetric signature (got ' . ($alg ?: 'none') . ')'
+            );
         }
     }
 
@@ -933,18 +937,71 @@ final class OidcProtocol implements ProtocolInterface
         return $this->clientAuth->method($disco);
     }
 
+    /**
+     * Ask the userinfo endpoint for the claims the ID token did not carry.
+     *
+     * Best-effort enrichment, not a gate -- but a SILENT best effort is how an IdP
+     * configured for a signed userinfo response (userinfo_signed_response_alg, a JWT
+     * rather than JSON) made groups and email vanish with nothing to read anywhere, and
+     * with required groups configured that is a refusal nobody can explain. So a
+     * response we cannot use says so, and a signed one is simply verified and used.
+     */
     private function fetchUserInfo(array $disco, string $accessToken): array
     {
         try {
             $resp = $this->httpGet((string)$disco['userinfo_endpoint'], [
                 'Authorization: Bearer ' . $accessToken,
-                'Accept: application/json',
+                'Accept: application/json, application/jwt',
             ]);
-            $json = json_decode($resp, true);
-            return is_array($json) ? $json : [];
         } catch (\Throwable $e) {
-            return []; // userinfo is best-effort enrichment, not a gate
+            syslog(LOG_WARNING, 'os-sso oidc: the userinfo request failed: ' . $e->getMessage());
+            return [];
         }
+        $json = json_decode($resp, true);
+        if (is_array($json)) {
+            return $json;
+        }
+        try {
+            return $this->decodeSignedUserInfo($disco, trim($resp));
+        } catch (\Throwable $e) {
+            syslog(LOG_WARNING, 'os-sso oidc: unusable userinfo response: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * A signed userinfo response (OIDC Core section 5.3.2): a JWT, not a JSON object.
+     *
+     * Verified exactly like an ID token -- same key set, same refusal of a symmetric or
+     * absent algorithm -- because it is about to override authorization claims. `iss` and
+     * `aud` are optional on this one per the spec, so they are checked when present rather
+     * than required; the `sub` equality the caller enforces is what actually binds the
+     * response to the token that asked for it.
+     *
+     * An encrypted response (JWE, five segments) lands here too and is refused by the
+     * segment count, which is the intended answer: os-sso holds no decryption key.
+     */
+    private function decodeSignedUserInfo(array $disco, string $jwt): array
+    {
+        if ($jwt === '' || substr_count($jwt, '.') !== 2) {
+            throw new \RuntimeException('the response is neither JSON nor a signed JWT');
+        }
+        $this->assertAsymmetricAlg($jwt, 'userinfo response');
+        try {
+            $claims = JWT::decode($jwt, $this->jwks($disco, false));
+        } catch (\UnexpectedValueException $e) {
+            if (stripos($e->getMessage(), 'kid') === false) {
+                throw $e;
+            }
+            $claims = JWT::decode($jwt, $this->jwks($disco, true));
+        }
+        if (isset($claims->iss) && $claims->iss !== $disco['issuer']) {
+            throw new \RuntimeException('signed userinfo: issuer mismatch');
+        }
+        if (isset($claims->aud) && !in_array($this->clientId, (array)$claims->aud, true)) {
+            throw new \RuntimeException('signed userinfo: audience does not contain client_id');
+        }
+        return (array)$claims;
     }
 
     private function toIdentity(array $claims): NormalizedIdentity
