@@ -126,7 +126,40 @@ final class GroupMapper
             $changed = $this->reconcileMemberships($system, $userNode, $uid, $granted) || $changed;
         }
 
+        $this->warnMissingTargets($system, $targets);
+
         return $changed;
+    }
+
+    /**
+     * Report a configured target group that does not exist on this firewall.
+     *
+     * The loop above walks the groups that DO exist, so a name it was asked for and did
+     * not find simply never comes up: a typo in "Default groups" or on the right-hand
+     * side of the group map produced a user with none of the privileges the operator
+     * thought they had granted, and left no trace anywhere to explain it.
+     *
+     * Only names the operator typed are reported. IdP-asserted ones are skipped, because
+     * the 1:1 fallback makes every group the IdP sends a target and most legitimately
+     * have no counterpart here -- warning about those would bury the real mistakes.
+     */
+    private function warnMissingTargets(\SimpleXMLElement $system, array $targets): void
+    {
+        $existing = [];
+        foreach ($system->group as $group) {
+            $existing[strtolower((string)$group->name)] = true;
+        }
+        foreach ($targets as $name => $origin) {
+            if ($origin === 'idp' || isset($existing[$name])) {
+                continue;
+            }
+            syslog(LOG_WARNING, sprintf(
+                "os-sso: %s group '%s' does not exist on this firewall, nothing was granted for it " .
+                "(groups are never created automatically -- add it under System > Access > Groups)",
+                $origin === 'explicit' ? 'mapped' : 'default',
+                $name
+            ));
+        }
     }
 
     /**
