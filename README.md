@@ -12,16 +12,22 @@ same IdP so account lifecycle does not wait for a login. The local password
 
 ## Features
 
-- **OpenID Connect** - automatic `.well-known` discovery, PKCE, JWKS key
-  rotation. Works with Keycloak, Authentik, Entra ID, Zitadel, …
-- **SAML 2.0** - signed assertions, metadata generation, Single Logout.
+- **OpenID Connect** - `.well-known` discovery, PKCE, JWKS rotation, and client
+  authentication beyond the shared secret: `client_secret_jwt`, `private_key_jwt`
+  (serving our own JWKS, so key rollover needs no copy-paste) or mutual TLS. MFA
+  context (`acr`) and re-authentication age (`max_age`) are *enforced* on the way
+  back, not merely requested. Keycloak, Authentik, Entra ID, Zitadel, …
+- **SAML 2.0** - signed and optionally encrypted assertions, metadata import and
+  generation, signed AuthnRequests, `ForceAuthn` checked against `AuthnInstant`,
+  Single Logout.
 - **JWT forward-auth** - trust a signed JWT from a reverse proxy in front of
   OPNsense (oauth2-proxy, Authelia, Authentik forward-auth, Cloudflare Access).
 - **WebGUI login** - one button per provider on the login page.
 - **Captive Portal login** via OIDC/SAML.
 - **OpenVPN** login through the browser (deferred web-auth / `WEB_AUTH`).
-- **Group mapping** - IdP groups become OPNsense group membership; privileges
-  are resolved by the normal ACL.
+- **Group mapping** - IdP groups become OPNsense group membership; privileges are
+  resolved by the normal ACL. Reads nested claims (`resource_access.<client>.roles`)
+  and follows Entra's group-overage pointer.
 - **Single Logout** - the WebGUI *Logout* button ends the IdP session too.
 - **SCIM 2.0 provisioning** - the IdP pushes account lifecycle, so a revoked user is
   disabled (and their sessions killed) when the directory says so, not at their next
@@ -66,55 +72,24 @@ Then reload the WebGUI (or reboot). The new server types appear under
 
 ## Configure an authentication server
 
-Go to **System ▸ Access ▸ Servers** and click **＋ Add**, then pick the **Type**.
-All types share a few options:
+**System ▸ Access ▸ Servers ▸ ＋ Add**, then pick the **Type**. Every field carries its
+own help in the form; below is only what is easy to get wrong, and shared by all types.
 
-- **Username claim/attribute** - which IdP field becomes the local username.
-  Use an immutable, IdP-administered value (e.g. `preferred_username`). For SAML the
-  username, email and display-name attributes are each configurable; left empty they
-  try the conventional friendly names and then the NameID - set them when your IdP
-  emits OID-style names such as `urn:oid:0.9.2342.19200300.100.1.1`.
-- **Automatic user creation** - off by default. When on, matched users are created
-  in `config.xml` with no local password (IdP-only login).
-- **Required groups** - access gate: comma separated IdP group names, at least one
-  of which the user must hold to get in through this provider (WebGUI, Captive
-  Portal and VPN alike). Checked on the IdP-asserted groups before any local
-  account is matched, created or updated. Empty means every account the IdP
-  authenticates may log in - set it unless that is what you want.
-- **Deprovision on refused login** - when the required groups above refuse a login,
-  also disable the local account behind it and end its open sessions. A login attempt
-  is the only moment a firewall plugin hears about a revocation at the IdP, so this is
-  what makes "removed from the group there" reach the account here. Only
-  os-sso-managed accounts are touched, never a privileged one, and they are disabled,
-  not deleted.
-- **Default groups** - OPNsense groups always granted to mapped users.
-- **Group mapping** - optional `idpGroup:opnsenseGroup` pairs (comma separated).
-  Mapped groups are trusted and may target privileged groups (e.g. `admins`). IdP
-  groups with no mapping fall back to a 1:1 name match that refuses privileged
-  groups (see Security).
-- **Strict group sync** - off by default (membership is additive: groups are only
-  ever added). When on, each login also *revokes* groups os-sso previously granted
-  but the IdP no longer asserts. Only groups os-sso itself granted are touched
-  (hand-assigned groups are kept), and the last member of a privileged group is
-  never removed.
-- **SCIM provisioning** - lets the IdP push account lifecycle instead of os-sso
-  waiting for a login. Needs a bearer token *and* the source addresses the IdP connects
-  from - both are required, an empty allowlist refuses every request.
-  See [SCIM provisioning](#scim-provisioning).
-- **Base URL** (required, OIDC/SAML) - the firewall's public `https://host[:port]`.
-  Every URL handed to the IdP is built from it: the OIDC redirect/callback, the SAML
-  SP EntityID/ACS/SLO. Mind a reverse proxy or port-forward. It is required because
-  the fallback would derive those URLs from the request `Host` header, which the
-  client controls - an IdP doing prefix/wildcard redirect matching could then be
-  talked into sending the authorization code elsewhere. The form shows the exact
-  **redirect/ACS URL** live underneath this field - copy it into your IdP.
-- **Maximum session lifetime** - end the WebGUI session this long after login
-  regardless of activity. The WebGUI's own timeout is *idle*-only, so a kept-open tab
-  otherwise never goes back through the IdP. Enforced on every SSO login and by the
-  configd action **os-sso: expire SSO sessions** - schedule it under
-  *System ▸ Settings ▸ Cron*, every 5 minutes is plenty. `0` disables it.
-- **Default landing URL** - where users land after login when no specific page was
-  requested (e.g. `/ui/dashboard`).
+| Option | What to watch |
+|---|---|
+| **Base URL** (required, OIDC/SAML) | Every URL the IdP is given is built from it; the fallback would trust the request `Host`. Mind a reverse proxy or port-forward. |
+| **Username claim/attribute** | Must be immutable and IdP-administered: `preferred_username`, not `email`. |
+| **Required groups** | Empty lets in *every* account the IdP authenticates - WebGUI, portal and VPN alike. |
+| **Automatic user creation** | Off by default; on, it writes users into `config.xml` with no local password. |
+| **Group mapping** | An explicit mapping may target `admins`; the 1:1 name fallback refuses privileged groups. |
+| **Strict group sync** | Off = additive. On, revokes only what os-sso granted, never the last privileged member. |
+| **Deprovision on refused login** | Disables the account behind a refused login. Does nothing without *Required groups*. |
+| **Maximum session lifetime** | The WebGUI timeout is *idle*-only. Needs the **os-sso: expire SSO sessions** cron job. |
+| **SCIM provisioning** | Token **and** source addresses, both required - see [SCIM](#scim-provisioning). |
+
+The Base URL matters more than it looks: an IdP doing wildcard redirect matching plus a
+forged `Host` header is how an authorization code ends up somewhere else. The form shows
+the exact redirect/ACS URL to copy into the IdP.
 
 ### OpenID Connect
 
@@ -162,21 +137,16 @@ usually live: `realm_access.roles` for Keycloak realm roles,
 `resource_access.<client-id>.roles` for its client roles. A claim whose own name
 contains dots (`urn:oid:…`) is matched whole first, so both styles work.
 
-**Entra ID group overage.** Past roughly 200 groups, Entra stops sending `groups` and
-substitutes a pointer (`_claim_names` / `_claim_sources`) to Microsoft Graph. Nothing in
-the token says "no groups" - the claim is just absent - so the most heavily grouped users
-in a tenant, usually the administrators, otherwise arrive with nothing and are refused by
-the required-groups gate for a reason no log explains.
-
-Tick **Follow Entra ID group overage** to have os-sso resolve it. The firewall asks Graph
-*on its own behalf* (the user's access token is scoped to another resource and cannot be
-exchanged), so the app registration needs the **application** permission
-`GroupMember.Read.All` - or `Directory.Read.All` - with **admin consent**. Graph answers
-with group object ids, the same values the ordinary claim carries, so the group map is
-written against ids either side of the threshold. Only Microsoft's own Graph hosts are
-ever called, whatever endpoint the claim names. If you would rather not grant the
-permission, keep the claim under the limit instead: use application roles, or a group
-filter on the token configuration.
+**Entra ID group overage.** Past ~200 groups Entra drops `groups` and substitutes a
+pointer to Microsoft Graph, so a tenant's most heavily grouped users - usually the
+administrators - arrive with no groups and are refused by the required-groups gate.
+Tick **Follow Entra ID group overage** to resolve it. The firewall asks Graph on its own
+behalf (the user's token is scoped elsewhere and cannot be exchanged), so the app
+registration needs the **application** permission `GroupMember.Read.All` with **admin
+consent**; only Microsoft's own Graph hosts are ever called. Graph returns object ids, the
+same values the ordinary claim carries, so the group map is written the same either side
+of the threshold. Rather not grant it? Keep the claim under the limit with application
+roles or a group filter.
 
 ### SAML 2.0
 
@@ -192,22 +162,22 @@ filter on the token configuration.
    - ACS: `https://<opnsense>/api/sso/saml/acs?provider=<name>`
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
    - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
-3. The IdP must **sign the assertion**. Map the NameID to the username. Optional:
-   **force re-authentication** (sends `ForceAuthn`) together with a **maximum
-   authentication age**, which checks the assertion's `AuthnInstant` and so verifies the
-   IdP honoured the request rather than reusing an old session - the SAML counterpart of
-   the OIDC `max_age`/`auth_time` pair;
-   **sign the AuthnRequest** (needs the SP certificate + key; required by ADFS in a
-   strict configuration and by Keycloak with *Client signature required*, and it makes
-   the SP metadata declare `AuthnRequestsSigned` so the IdP knows to expect one),
-   **HTTP-POST binding** for the AuthnRequest (when the IdP does not take a redirect),
-   **encrypted assertions** (needs the SP certificate + key), and **IdP-initiated
-   login** - the last one off by default, since an unsolicited assertion proves
-   nothing about who asked to log in.
-4. The IdP must send **at least one attribute** (configure attribute / property
-   mappings - e.g. groups, email). An empty `<AttributeStatement/>` is invalid per
-   the SAML schema and is rejected by the strict validation - and you need the
-   groups attribute for group mapping anyway.
+3. The IdP must **sign the assertion** and send **at least one attribute** - an empty
+   `<AttributeStatement/>` is invalid per the schema and the strict validation rejects
+   it, and you need the groups attribute anyway. Map the NameID to the username; set the
+   username/email/display-name attributes explicitly when your IdP emits OID-style names
+   (`urn:oid:0.9.2342.19200300.100.1.1`).
+4. Optional, all off by default:
+   - **Force re-authentication** + **maximum authentication age** - `ForceAuthn` is only
+     a request, so the age check on the assertion's `AuthnInstant` is what proves the IdP
+     honoured it. The SAML counterpart of OIDC's `max_age`/`auth_time`.
+   - **Sign the AuthnRequest** (needs the SP certificate + key) - required by ADFS in a
+     strict configuration and by Keycloak with *Client signature required*; it also makes
+     the SP metadata declare `AuthnRequestsSigned`.
+   - **HTTP-POST binding** for the AuthnRequest, when the IdP will not take a redirect.
+   - **Encrypted assertions** (needs the SP certificate + key).
+   - **IdP-initiated login** - an unsolicited assertion proves nothing about who asked to
+     log in, hence off.
 
 | Provider | IdP EntityID | SSO URL (redirect) |
 |---|---|---|
@@ -429,22 +399,23 @@ waiting out a TTL. Access is gated by its own ACL privilege,
   takeover a mutable username claim would otherwise allow. A second *provider* binds
   alongside the first, so one directory fronted by both OIDC and SAML maps onto a single
   local account, as it should.
-- The 1:1 group fallback won't grant a privileged group (`admins`, or any group
-  with full-GUI / shell / user-manager rights) without an explicit mapping.
-- Group membership is additive by default; **Strict group sync** additionally
-  revokes IdP-unasserted groups it earlier granted, but only those (never a
-  hand-assigned group) and never the last member of a privileged group.
+- Group membership is only ever *added* to a **privileged** group (`admins`, or any group
+  with full-GUI / shell / user-manager rights) through an explicit operator mapping - the
+  1:1 name fallback refuses them - and strict sync never revokes a hand-assigned group or
+  the last member of a privileged one.
 - A **disabled or expired** local account is refused, matching the local-password
   path (SSO is not a way around an account's expiry). The check runs before group
   sync writes anything and covers the VPN path too, not only the WebGUI session.
-- OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp` and requires an asymmetric
-  signature; SAML verifies the assertion signature and is replay-protected
-  (single-use request id + consumed-assertion cache).
-- The SCIM endpoint is gated by a bearer token **and** a source-address allowlist,
-  and refuses on the same principles as the login path: no privileged account is
-  ever modified or disabled, no password-owning account is taken over, a delete
-  deactivates rather than removes, and a group carrying administrative privileges
-  takes no membership from a directory.
+- OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp`/`iat`, binds `at_hash` to the access
+  token and requires an asymmetric signature; SAML verifies the assertion signature and is
+  replay-protected (single-use request id + consumed-assertion cache).
+- What the IdP is *asked* for is also *checked* on the way back: `max_age` against
+  `auth_time` (SAML: `AuthnInstant`), and the required `acr` against the returned one -
+  requesting an MFA context is voluntary per the spec, so only the answer proves anything.
+- The client can authenticate to the token endpoint **without a shared secret**
+  (`private_key_jwt`, mutual TLS), and the pre-auth endpoints are rate limited per source.
+- The SCIM endpoint needs a bearer token **and** a source-address allowlist, and refuses
+  on the same principles as the login path (see [SCIM provisioning](#scim-provisioning)).
 - The local password (+ native TOTP) is always left active as a **break-glass**
   path - keep at least one local admin.
 
@@ -489,9 +460,9 @@ bash keycloak/setup-keycloak.sh       # create realm, clients, test user
 bash authentik/setup.sh               # create OIDC/SAML providers + mappings
 ```
 
-Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. The VM gets a
-host-only address (`192.168.60.10` by default) *and* a NAT forward for the WebGUI;
-both are overridable when something else already owns them:
+Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. The VM gets a host-only
+address (`192.168.60.10`) *and* a NAT forward for the WebGUI; override either when
+something already owns it:
 
 ```sh
 SSO_LAN_IP=192.168.60.10 SSO_GUI_PORT=8444 vagrant up      # host-only + WebGUI forward
@@ -499,17 +470,15 @@ KC_HTTP_PORT=8091 ./up.sh keycloak                         # Keycloak admin port
 SP_BASE=https://192.168.60.10 bash keycloak/setup-keycloak.sh
 ```
 
-**Use one origin end to end.** The URL given to `SP_BASE`, the **Base URL** on the
-auth server, and `SSO_GUI_URL` for the suites must be the same - the OIDC/SAML
-anti-replay material (state, nonce, PKCE) lives in a session cookie, so a login
-started on one origin and a callback landing on another simply will not find it.
+**Use one origin end to end** - `SP_BASE`, the auth server's **Base URL** and
+`SSO_GUI_URL` must all be the same string. The OIDC/SAML anti-replay material (state,
+nonce, PKCE) lives in a session cookie, so a login started on one origin and a callback
+landing on another will not find it.
 
-The host-only address is what the **captive portal** needs: its listener sits on
-`8000+zoneid` on the zone interface and redirects there, so a NAT forward cannot
-reach it. On a machine with VMware installed, 192.168.56/57 are already taken by
-`vmnet2`/`vmnet3`, hence the 192.168.60.0/24 default - VirtualBox only allows
-host-only addresses inside 192.168.56.0/21 unless `/etc/vbox/networks.conf` says
-otherwise.
+Prefer the host-only address: the **captive portal** listens on `8000+zoneid` of the zone
+interface and redirects there, which a NAT forward cannot reach. (192.168.60/24 rather
+than the usual .56 because VMware takes `vmnet2`/`vmnet3` there, and VirtualBox only
+allows host-only addresses inside 192.168.56.0/21 without `/etc/vbox/networks.conf`.)
 
 Eight end-to-end suites under `test/e2e/`, run against either IdP:
 
@@ -521,16 +490,13 @@ test/e2e/run-all.sh oidc saml                  # a subset
 test/e2e/oidc.sh                               # or one suite on its own
 ```
 
-Each suite works from any directory - it resolves its own location first, symlinks
-included - and says so plainly rather than failing blank if it is run from an incomplete
-copy. The host-side suites still need `vagrant` to find `test/Vagrantfile` from there.
+Suites run from any directory - each resolves its own location first, symlinks included -
+and say so rather than failing blank if started from an incomplete copy.
 
-`run-all.sh` also resynchronises the guest clock from the host before it starts. A
-suspended VirtualBox guest drifts, its own NTP has no route out in this lab, and once the
-drift passes the 60s signing leeway every browser login fails on the *token* rather than
-the clock (`Cannot handle token with iat prior to ...`) - which reads like anything but a
-clock problem. Tune with `SSO_CLOCK_TOLERANCE` (seconds, default 5) or switch it off with
-`SSO_SKIP_CLOCK_SYNC=1`.
+`run-all.sh` resynchronises the guest clock from the host first. A suspended VirtualBox
+guest drifts, its NTP has no route out here, and past the 60s signing leeway every login
+fails on the *token* instead of the clock (`Cannot handle token with iat prior to ...`).
+Tune with `SSO_CLOCK_TOLERANCE` (default 5s), disable with `SSO_SKIP_CLOCK_SYNC=1`.
 
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
@@ -538,10 +504,10 @@ clock problem. Tune with `SSO_CLOCK_TOLERANCE` (seconds, default 5) or switch it
 | `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only, skipped on Authentik), POST binding, metadata import, SLO |
 | `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
-| `scim.sh` | host | 42-45 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and against Authentik its real SCIM client |
+| `scim.sh` | host | 46 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and against Authentik its real SCIM client |
 | `jwt.sh` | VM | 17 | source gate, signature/aud, `iat`, max-age, single-use, group mapping |
-| `cp.sh` | VM | 6 | the authorizer gates and a real configd allow |
-| `vpn.sh` | VM | 13 | the hook and the verdict writer, IP binding, single-use session ids |
+| `cp.sh` | VM | 8 | the authorizer gates, CORS scoping, and a real configd allow |
+| `vpn.sh` | VM | 22 | the hook and the verdict writer, IP binding, single-use session ids, username enforcement, stale-session sweep |
 
 The host-side suites drive the whole browser ceremony through
 `lib/idp_login.py`, which speaks both IdP dialects: Keycloak renders a login form,
