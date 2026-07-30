@@ -1,9 +1,9 @@
 # reference clones used for development only (opnsense/core, Lachee/opnsense-oidc)
 /ref/
 
-# composer artifacts vendored at build time
+# composer artifacts vendored at build time (the lock IS tracked: it is what makes a
+# package reproducible, and what "composer audit" checks the advisories against)
 src/opnsense/mvc/app/library/OPNsense/SSO/vendor/
-composer.lock
 
 # build output
 /work/

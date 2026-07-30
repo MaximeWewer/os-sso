@@ -111,8 +111,16 @@ jobs:
       - name: Vendor composer deps on the host
         # The build VM stays composer-free; we vendor here and the Makefile's
         # post-extract detects vendor/ and skips composer inside FreeBSD.
+        #
+        # From the lock file, not from the constraints: these two libraries are the
+        # signature verification of the whole plugin, so which exact versions a release
+        # shipped has to be a fact in git rather than whatever resolved that morning.
+        # And since it is pinned, the advisories can be checked against it -- a build
+        # that would ship a known-vulnerable php-saml is a build worth failing.
         run: |
           cd "plugins/${PLUGIN_CATEGORY}/${PLUGIN_NAME}/src/opnsense/mvc/app/library/OPNsense/SSO"
+          test -f composer.lock
+          composer audit --locked --no-interaction
           composer install --no-dev --no-interaction --classmap-authoritative --ignore-platform-reqs
           test -f vendor/autoload.php
 
