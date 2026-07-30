@@ -26,6 +26,19 @@
 $root = dirname(__DIR__, 2);
 $library = $root . '/src/opnsense/mvc/app/library';
 
+/*
+ * The pages os-sso renders itself run their user-facing strings through gettext(). The
+ * firewall always has the extension (core binds the OPNsense text domain on every WebGUI
+ * request); a bare php:cli does not, and the suite is meant to run on whatever PHP is at
+ * hand -- so stand in with what gettext() is when nothing is translated.
+ */
+if (!function_exists('gettext')) {
+    function gettext(string $message): string
+    {
+        return $message;
+    }
+}
+
 // Stubs for the core services the library talks to (Config, Backend). Must be defined
 // before anything else so the autoloader below never looks for them.
 require __DIR__ . '/lib/stubs.php';
