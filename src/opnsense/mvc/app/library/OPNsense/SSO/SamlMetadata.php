@@ -9,6 +9,7 @@ namespace OPNsense\SSO;
 
 use OneLogin\Saml2\Constants;
 use OneLogin\Saml2\IdPMetadataParser;
+use OPNsense\SSO\Protocol\SamlProtocol;
 
 /**
  * Reads an IdP's SAML metadata document so the operator does not have to retype the
@@ -31,12 +32,18 @@ final class SamlMetadata
     /**
      * @param string $url https URL of the IdP metadata document
      * @param string $entityId pick this EntityDescriptor when the document holds several
+     * @param string $signingCert PEM the document's own XML signature must verify
+     *        against; '' trusts TLS alone (see assertSigned)
      * @return array{entity_id:string,sso_url:string,slo_url:string,x509:string,x509_signing:string[]}
-     * @throws \RuntimeException when the document cannot be fetched or parsed
+     * @throws \RuntimeException when the document cannot be fetched, verified or parsed
      */
-    public static function fetch(string $url, string $entityId = ''): array
+    public static function fetch(string $url, string $entityId = '', string $signingCert = ''): array
     {
-        $cached = self::cacheGet($url, $entityId);
+        $signingCert = trim($signingCert);
+        // The certificate is part of the cache identity, not just of the fetch: an
+        // operator who pins one after the fact must not be handed the document that was
+        // cached while nothing was being checked.
+        $cached = self::cacheGet($url, $entityId, $signingCert);
         if (is_array($cached)) {
             return $cached;
         }
@@ -44,13 +51,61 @@ final class SamlMetadata
             throw new \RuntimeException('SAML: IdP metadata unavailable (cached failure)');
         }
         try {
-            $parsed = self::parse(self::get($url), $entityId);
+            $xml = self::get($url);
+            self::assertSigned($xml, $signingCert);
+            $parsed = self::parse($xml, $entityId);
         } catch (\Throwable $e) {
-            self::cacheSet($url, $entityId, null);
+            self::cacheSet($url, $entityId, $signingCert, null);
             throw new \RuntimeException('SAML: IdP metadata: ' . $e->getMessage());
         }
-        self::cacheSet($url, $entityId, $parsed);
+        self::cacheSet($url, $entityId, $signingCert, $parsed);
         return $parsed;
+    }
+
+    /** Where a metadata signature may sit: on the entity, or on a federation aggregate. */
+    private const SIGNATURE_PATHS = [
+        '/md:EntityDescriptor/ds:Signature',
+        '/md:EntitiesDescriptor/ds:Signature',
+    ];
+
+    /**
+     * Verify the document's own XML signature against the pinned certificate.
+     *
+     * Optional, because most deployments point at their own IdP over TLS and that is the
+     * whole trust chain they have -- but TLS only says the document came from that host,
+     * and this document is what names the keys every future assertion is checked with. A
+     * federation signs its metadata for exactly that reason, and it is the one place the
+     * signature is worth more than the transport: whoever can answer for the host, or
+     * mint a certificate for it, otherwise replaces the IdP wholesale.
+     *
+     * Refuses an unsigned document once a certificate is configured -- pinning something
+     * that is then silently not checked is worse than not offering the field -- and holds
+     * it to the same algorithms as an assertion, since a SHA-1 signature over the key
+     * list proves no more than one over the assertion.
+     */
+    private static function assertSigned(string $xml, string $signingCert): void
+    {
+        if ($signingCert === '') {
+            return;
+        }
+        $weak = SamlProtocol::weakAlgorithmAt($xml, self::SIGNATURE_PATHS);
+        if ($weak !== '') {
+            throw new \RuntimeException('the document is signed with a broken algorithm (' . $weak . ')');
+        }
+        foreach (self::SIGNATURE_PATHS as $path) {
+            try {
+                if (\OneLogin\Saml2\Utils::validateSign($xml, $signingCert, null, 'sha256', $path)) {
+                    return;
+                }
+            } catch (\Throwable $e) {
+                // No signature at that position, or one that does not verify there; the
+                // other position and the refusal below are the answer.
+            }
+        }
+        throw new \RuntimeException(
+            'the document is unsigned, or its signature does not verify against the configured '
+            . 'metadata signing certificate'
+        );
     }
 
     /**
@@ -137,10 +192,10 @@ final class SamlMetadata
     /* ---- disk cache, positive and negative --------------------------- */
 
     /** @return array|false|null parsed metadata, false for a cached failure, null for a miss */
-    private static function cacheGet(string $url, string $entityId)
+    private static function cacheGet(string $url, string $entityId, string $signingCert)
     {
         try {
-            $f = self::cacheFile($url, $entityId);
+            $f = self::cacheFile($url, $entityId, $signingCert);
         } catch (\RuntimeException $e) {
             return null;
         }
@@ -158,10 +213,10 @@ final class SamlMetadata
         return $miss ? false : $entry;
     }
 
-    private static function cacheSet(string $url, string $entityId, ?array $parsed): void
+    private static function cacheSet(string $url, string $entityId, string $signingCert, ?array $parsed): void
     {
         try {
-            $f = self::cacheFile($url, $entityId);
+            $f = self::cacheFile($url, $entityId, $signingCert);
         } catch (\RuntimeException $e) {
             return;
         }
@@ -169,8 +224,9 @@ final class SamlMetadata
         @chmod($f, 0600);
     }
 
-    private static function cacheFile(string $url, string $entityId): string
+    private static function cacheFile(string $url, string $entityId, string $signingCert): string
     {
-        return StateDir::path('saml-md') . '/' . hash('sha256', $url . '|' . $entityId) . '.json';
+        return StateDir::path('saml-md') . '/'
+            . hash('sha256', $url . '|' . $entityId . '|' . $signingCert) . '.json';
     }
 }

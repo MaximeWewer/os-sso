@@ -249,9 +249,13 @@ final class SamlProtocol implements ProtocolInterface
     /**
      * Same question at whichever signature positions the caller validated.
      *
+     * Public because a signed IdP metadata document is judged by the same rule and from
+     * another class (SamlMetadata): the algorithm that may sign an assertion is the one
+     * that may sign the document naming the key it is signed with.
+     *
      * @param string[] $signaturePaths xpaths of the ds:Signature elements that count
      */
-    private static function weakAlgorithmAt(string $xml, array $signaturePaths): string
+    public static function weakAlgorithmAt(string $xml, array $signaturePaths): string
     {
         if ($xml === '') {
             return '';
@@ -264,6 +268,8 @@ final class SamlProtocol implements ProtocolInterface
         $xpath->registerNamespace('samlp', 'urn:oasis:names:tc:SAML:2.0:protocol');
         $xpath->registerNamespace('saml', 'urn:oasis:names:tc:SAML:2.0:assertion');
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+        // For the callers judging a metadata document rather than a response.
+        $xpath->registerNamespace('md', 'urn:oasis:names:tc:SAML:2.0:metadata');
 
         // Spelled out rather than composed: "|" unions whole paths, so appending one
         // suffix to a union only reaches its last branch.

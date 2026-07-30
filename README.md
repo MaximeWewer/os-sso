@@ -168,7 +168,11 @@ roles or a group filter.
 
 1. In OPNsense either set the **IdP metadata URL** (https) and leave the rest empty -
    the EntityID, SSO/SLO endpoints and signing certificate are read from it and
-   cached for 24 h, so an IdP **signing-key rotation is picked up on its own** - or
+   cached for 24 h, so an IdP **signing-key rotation is picked up on its own** (set the
+   **metadata signing certificate** as well and the document's own XML signature is
+   checked against it before anything is read from it - worth it wherever the document
+   comes from a federation rather than from your own IdP, since TLS only says which host
+   sent the thing that names every future signing key) - or
    fill **IdP EntityID**, **IdP SSO URL** (HTTP-Redirect) and the **IdP x509
    certificate** (full PEM of the signing cert - not a fingerprint) by hand. Anything
    filled in by hand wins over the document.

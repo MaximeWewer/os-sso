@@ -208,9 +208,10 @@ class DiagnosticsController extends ApiControllerBase
                 'certificates' => trim((string)$auth->ssoIdpX509) !== '' ? 1 : 0,
             ];
         }
-        $meta = SamlMetadata::fetch($url, (string)$auth->ssoIdpEntityId);
+        $signed = trim((string)($auth->ssoIdpMetadataCert ?? '')) !== '';
+        $meta = SamlMetadata::fetch($url, (string)$auth->ssoIdpEntityId, (string)($auth->ssoIdpMetadataCert ?? ''));
         return [
-            'source' => 'metadata document',
+            'source' => $signed ? 'metadata document (signature verified)' : 'metadata document',
             'entity_id' => $meta['entity_id'],
             'sso_url' => $meta['sso_url'],
             'slo_url' => $meta['slo_url'],

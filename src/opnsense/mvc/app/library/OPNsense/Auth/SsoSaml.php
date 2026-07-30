@@ -15,6 +15,7 @@ namespace OPNsense\Auth;
 class SsoSaml extends Local implements IAuthConnector
 {
     public $ssoIdpMetadataUrl = null;
+    public $ssoIdpMetadataCert = null;
     public $ssoIdpEntityId = null;
     public $ssoIdpSsoUrl = null;
     public $ssoIdpSloUrl = null;
@@ -66,6 +67,7 @@ class SsoSaml extends Local implements IAuthConnector
     {
         $map = [
             'sso_idp_metadata_url' => 'ssoIdpMetadataUrl',
+            'sso_idp_metadata_cert' => 'ssoIdpMetadataCert',
             'sso_idp_entity_id' => 'ssoIdpEntityId',
             'sso_idp_sso_url' => 'ssoIdpSsoUrl',
             'sso_idp_slo_url' => 'ssoIdpSloUrl',
@@ -133,6 +135,16 @@ class SsoSaml extends Local implements IAuthConnector
                 'type' => 'text',
                 'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
                     ? [] : [gettext('Metadata URL must be a valid https URL.')],
+            ],
+            'sso_idp_metadata_cert' => [
+                'name' => gettext('IdP metadata signing certificate (PEM)'),
+                'help' => gettext('Optional. Certificate the metadata document\'s own XML signature is '
+                    . 'checked against before anything is read from it. Without it the document is trusted '
+                    . 'because TLS says it came from that host - but this is the document that names the '
+                    . 'keys every future assertion is verified with, so a federation (eduGAIN and friends) '
+                    . 'signs it, and that signature is worth more than the transport. Set it and an unsigned '
+                    . 'document, or one signed by anybody else, is refused rather than used.'),
+                'type' => 'text',
             ],
             'sso_idp_entity_id' => [
                 'name' => gettext('IdP EntityID'),
@@ -464,7 +476,7 @@ class SsoSaml extends Local implements IAuthConnector
         base._ssoDisp = 1;
     }
     function apply() {
-        ['sso_idp_x509', 'sso_sp_cert', 'sso_sp_key'].forEach(toTextarea);
+        ['sso_idp_x509', 'sso_idp_metadata_cert', 'sso_sp_cert', 'sso_sp_key'].forEach(toTextarea);
         showUrls();
         var a = document.getElementById('help_for_field_saml___sso_saml_script');
         if (a) { var tr = a.closest('tr'); if (tr) { tr.style.display = 'none'; } }

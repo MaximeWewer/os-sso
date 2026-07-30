@@ -70,6 +70,47 @@ $elsewhere = "<samlp:Response xmlns:samlp='urn:oasis:names:tc:SAML:2.0:protocol'
     . "</saml:Advice></samlp:Response>";
 eq('', SamlProtocol::weakAlgorithm($elsewhere), 'a signature outside the validated positions is ignored');
 
+T::group('SamlProtocol: the same rule over a metadata document');
+
+// A pinned metadata document is signed too, and it is what names the keys every future
+// assertion is checked with -- so it is held to the same algorithms, at the positions a
+// metadata signature actually sits (SamlMetadata::SIGNATURE_PATHS).
+$metadataPaths = ['/md:EntityDescriptor/ds:Signature', '/md:EntitiesDescriptor/ds:Signature'];
+
+/** A metadata document signed at its root, $root being EntityDescriptor or EntitiesDescriptor. */
+function samlMetadata(string $sigAlg, string $digestAlg, string $root = 'EntityDescriptor'): string
+{
+    $signature = "<ds:Signature xmlns:ds='http://www.w3.org/2000/09/xmldsig#'><ds:SignedInfo>"
+        . "<ds:SignatureMethod Algorithm='{$sigAlg}'/>"
+        . "<ds:Reference URI='#m1'><ds:DigestMethod Algorithm='{$digestAlg}'/>"
+        . "<ds:DigestValue>x</ds:DigestValue></ds:Reference>"
+        . "</ds:SignedInfo><ds:SignatureValue>y</ds:SignatureValue></ds:Signature>";
+    return "<md:{$root} xmlns:md='urn:oasis:names:tc:SAML:2.0:metadata' ID='m1'>"
+        . $signature . "</md:{$root}>";
+}
+
+eq(
+    '',
+    SamlProtocol::weakAlgorithmAt(samlMetadata($rsaSha256, $sha256), $metadataPaths),
+    'a metadata document signed RSA-SHA256 over SHA-256 passes'
+);
+eq(
+    $rsaSha1,
+    SamlProtocol::weakAlgorithmAt(samlMetadata($rsaSha1, $sha256), $metadataPaths),
+    'an RSA-SHA1 metadata signature is named'
+);
+eq(
+    $sha1,
+    SamlProtocol::weakAlgorithmAt(samlMetadata($rsaSha256, $sha1), $metadataPaths),
+    'and so is a SHA-1 digest under a strong one'
+);
+// A federation aggregate signs the EntitiesDescriptor rather than each entity.
+eq(
+    $rsaSha1,
+    SamlProtocol::weakAlgorithmAt(samlMetadata($rsaSha1, $sha256, 'EntitiesDescriptor'), $metadataPaths),
+    'the aggregate-level signature is checked as well'
+);
+
 T::group('SamlProtocol: the authentication context that came back');
 
 /** A response whose assertion declares $contexts (none when empty). */

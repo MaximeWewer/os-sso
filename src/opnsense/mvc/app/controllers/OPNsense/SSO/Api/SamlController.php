@@ -472,7 +472,7 @@ class SamlController extends ApiControllerBase
         ];
         $url = trim((string)($auth->ssoIdpMetadataUrl ?? ''));
         if ($url !== '') {
-            $meta = SamlMetadata::fetch($url, $idp['entity_id']);
+            $meta = SamlMetadata::fetch($url, $idp['entity_id'], (string)($auth->ssoIdpMetadataCert ?? ''));
             foreach (['entity_id', 'sso_url', 'slo_url', 'x509'] as $key) {
                 if ($idp[$key] === '') {
                     $idp[$key] = (string)$meta[$key];
