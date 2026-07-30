@@ -17,6 +17,7 @@ use OPNsense\SSO\SessionRegistry;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
+use OPNsense\SSO\HtmlPage;
 use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
@@ -74,8 +75,10 @@ class SamlController extends ApiControllerBase
             $cpurl = CaptivePortalAuthorizer::sanitizeRedirect((string)($this->request->get('cpurl') ?? ''));
             $begin = $protocol->beginLogin((string)($this->request->get('url') ?? '/'), $vpn, $cp, $cpurl);
             if ($begin['binding'] === 'post') {
-                // HTTP-POST binding: the request travels in a self-submitting form.
-                $this->response->setContentType('text/html', 'UTF-8');
+                // HTTP-POST binding: the request travels in a self-submitting form, so
+                // this is the one page of ours that needs its script and a form-action
+                // pointing somewhere other than here.
+                $this->html(HtmlPage::originOf((string)$begin['url']) ?: "'none'", true);
                 return $begin['html'];
             }
         } catch (\Throwable $e) {
@@ -131,9 +134,8 @@ class SamlController extends ApiControllerBase
                     $identity,
                     (string)($_SERVER['REMOTE_ADDR'] ?? '')
                 );
-                $this->response->setContentType('text/html', 'UTF-8');
                 // This page bounces off-site; keep our own URL out of the Referer.
-                $this->response->setHeader('Referrer-Policy', 'no-referrer');
+                $this->html("'self'", false, ['Referrer-Policy' => 'no-referrer']);
                 return CaptivePortalAuthorizer::donePage($cpRes['username'], (string)($state['cpurl'] ?? ''));
             }
 
@@ -150,7 +152,7 @@ class SamlController extends ApiControllerBase
             $vpn = (string)($state['vpn'] ?? '');
             if ($vpn !== '') {
                 VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
-                $this->response->setContentType('text/html', 'UTF-8');
+                $this->html();
                 return VpnAuthorizer::donePage($username);
             }
 
@@ -270,7 +272,7 @@ class SamlController extends ApiControllerBase
         if (!LogoutGuard::allow()) {
             $page = LogoutGuard::confirm('/api/sso/logout');
             session_write_close();
-            $this->response->setContentType('text/html', 'UTF-8');
+            $this->html();
             return $page;
         }
         $logout = $_SESSION['sso_logout'] ?? null;
@@ -472,6 +474,19 @@ class SamlController extends ApiControllerBase
     private function clientIp(): string
     {
         return (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    }
+
+    /**
+     * Send the headers for one of our own HTML pages: content type, no framing, no
+     * loading anything.
+     *
+     * @param array<string,string> $extra headers to add on top
+     */
+    private function html(string $formAction = "'self'", bool $inlineScript = false, array $extra = []): void
+    {
+        foreach (HtmlPage::headers($formAction, $inlineScript) + $extra as $header => $value) {
+            $this->response->setHeader($header, $value);
+        }
     }
 
     /** Reopen the native PHP session (the Mvc wrapper aborts it at dispatch). */

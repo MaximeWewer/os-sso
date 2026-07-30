@@ -8,6 +8,7 @@
 namespace OPNsense\SSO\Api;
 
 use OPNsense\Base\ApiControllerBase;
+use OPNsense\SSO\HtmlPage;
 use OPNsense\SSO\LogoutGuard;
 
 /**
@@ -39,7 +40,11 @@ class LogoutController extends ApiControllerBase
         if (!LogoutGuard::allow()) {
             $page = LogoutGuard::confirm('/api/sso/logout');
             session_write_close();
-            $this->response->setContentType('text/html', 'UTF-8');
+            // Not a frame, ever: framed, this button is a one-click logout for whoever
+            // embeds it.
+            foreach (HtmlPage::headers("'self'") as $header => $value) {
+                $this->response->setHeader($header, $value);
+            }
             return $page;
         }
         $type = is_array($_SESSION['sso_logout'] ?? null) ? ($_SESSION['sso_logout']['type'] ?? '') : '';
