@@ -178,17 +178,16 @@ final class Tree
         return null;
     }
 
-    /** Members of a group as a list of uids. */
+    /**
+     * Members of a group as a list of uids.
+     *
+     * Reading the list the same careful way the code under test does: array_filter()
+     * on its own would drop "0", so a test could not tell whether root survived a
+     * membership rewrite -- which is exactly the bug this suite has to catch.
+     */
     public static function members(\SimpleXMLElement $root, string $name): array
     {
         $group = self::group($root, $name);
-        if ($group === null) {
-            return [];
-        }
-        $out = [];
-        foreach ($group->member as $member) {
-            $out = array_merge($out, array_filter(explode(',', (string)$member)));
-        }
-        return array_values($out);
+        return $group === null ? [] : \OPNsense\SSO\GroupMembers::uids($group);
     }
 }

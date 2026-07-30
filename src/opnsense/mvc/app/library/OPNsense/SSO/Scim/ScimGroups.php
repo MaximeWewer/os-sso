@@ -9,6 +9,7 @@ namespace OPNsense\SSO\Scim;
 
 use OPNsense\Core\Config;
 use OPNsense\SSO\ConfigLock;
+use OPNsense\SSO\GroupMembers;
 use OPNsense\SSO\LocalAccountWriter;
 use OPNsense\SSO\Privilege;
 
@@ -172,21 +173,12 @@ final class ScimGroups
     /** @return string[] */
     private function membersOf(\SimpleXMLElement $group): array
     {
-        $members = [];
-        foreach ($group->member as $member) {
-            $members = array_merge($members, array_filter(explode(',', (string)$member)));
-        }
-        return array_values(array_unique($members));
+        return GroupMembers::uids($group);
     }
 
     private function setMembers(\SimpleXMLElement $group, array $members): void
     {
-        // SimpleXML cannot rewrite a scalar child cleanly with multiple <member>;
-        // collapse to a single comma-separated node, matching the core format.
-        unset($group->member);
-        if (!empty($members)) {
-            $group->addChild('member', implode(',', $members));
-        }
+        GroupMembers::set($group, $members);
     }
 
     /**

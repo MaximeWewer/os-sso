@@ -7,7 +7,9 @@
 
 namespace OPNsense\SSO\Scim;
 
+use OPNsense\Core\Config;
 use OPNsense\SSO\ConfigLock;
+use OPNsense\SSO\GroupMembers;
 use OPNsense\SSO\LocalAccountWriter;
 use OPNsense\SSO\SessionRegistry;
 
@@ -310,19 +312,17 @@ final class ScimUsers
             return [];
         }
         $out = [];
-        foreach ((\OPNsense\Core\Config::getInstance()->object()->system->group ?? []) as $group) {
-            foreach ($group->member as $member) {
-                if (in_array($uid, array_filter(explode(',', (string)$member)), true)) {
-                    $gid = (string)($group->gid ?? '');
-                    $out[] = [
-                        'value' => $gid,
-                        'display' => (string)$group->name,
-                        '$ref' => $this->base . '/Groups/' . rawurlencode($gid),
-                        'type' => 'direct',
-                    ];
-                    break;
-                }
+        foreach ((Config::getInstance()->object()->system->group ?? []) as $group) {
+            if (!GroupMembers::contains($group, $uid)) {
+                continue;
             }
+            $gid = (string)($group->gid ?? '');
+            $out[] = [
+                'value' => $gid,
+                'display' => (string)$group->name,
+                '$ref' => $this->base . '/Groups/' . rawurlencode($gid),
+                'type' => 'direct',
+            ];
         }
         return $out;
     }

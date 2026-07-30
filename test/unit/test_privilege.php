@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+use OPNsense\SSO\GroupMembers;
 use OPNsense\SSO\LocalAccountWriter;
 use OPNsense\SSO\Privilege;
 use OPNsense\SSO\Test\Tree;
@@ -66,3 +67,31 @@ falsy(Privilege::isPrivilegedAccount(Tree::user($root, 'reader')), 'an ordinary 
 $writer = new LocalAccountWriter();
 truthy($writer->isPrivileged(Tree::user($root, 'boss')), 'LocalAccountWriter::isPrivileged agrees for admins');
 falsy($writer->isPrivileged(Tree::user($root, 'ordinary')), 'LocalAccountWriter::isPrivileged agrees for staff');
+
+T::group('GroupMembers: uid 0 is root, not "nothing"');
+
+// The bug this class exists for: array_filter() on an exploded member list drops the
+// string "0", so every rewrite of a group's members silently dropped root -- and with it
+// the admins membership the anti-lockout rules are meant to protect.
+$root = Tree::build([
+    ['name' => 'root', 'uid' => '0', 'scope' => 'system'],
+    ['name' => 'alice', 'uid' => '2100', 'scrambled_password' => '1'],
+], [
+    ['name' => 'admins', 'gid' => '1999', 'member' => '0,2100'],
+    ['name' => 'empty', 'gid' => '2000'],
+    ['name' => 'spaced', 'gid' => '2001', 'member' => ' 0 , 2100 ,,'],
+]);
+
+eq(['0', '2100'], GroupMembers::uids(Tree::group($root, 'admins')), 'root is read back as a member');
+eq([], GroupMembers::uids(Tree::group($root, 'empty')), 'a group with no members is empty');
+eq(['0', '2100'], GroupMembers::uids(Tree::group($root, 'spaced')), 'whitespace and empty entries are dropped, uids are not');
+truthy(GroupMembers::contains(Tree::group($root, 'admins'), '0'), 'contains() finds uid 0');
+falsy(GroupMembers::contains(Tree::group($root, 'admins'), ''), 'and no uid at all is not a member');
+
+GroupMembers::set(Tree::group($root, 'admins'), ['0', '2100', '2101']);
+eq('0,2100,2101', (string)Tree::group($root, 'admins')->member, 'writing the list keeps root in it');
+
+// The account check reads the same list: root has to look privileged through its
+// membership, not only through its uid.
+truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'root')), 'root is privileged');
+truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'alice')), 'and so is the other admins member');

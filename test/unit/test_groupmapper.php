@@ -149,3 +149,38 @@ $identity = new NormalizedIdentity('kc');
 $identity->groups = ['staff'];
 falsy((new GroupMapper())->sync(Tree::user($root, 'nouid'), $identity, []), 'no uid means no membership change');
 eq([], Tree::members($root, 'staff'), 'and the group is untouched');
+
+T::group('GroupMapper: granting somebody a group must not evict root');
+
+// The failure this guards: rewriting a group's member list through array_filter() drops
+// the string "0", so adding any user to admins quietly removed root from it -- and the
+// firewall's own administrator lost every privilege at the next login.
+$root = Tree::build([
+    ['name' => 'root', 'uid' => '0', 'scope' => 'system'],
+    ['name' => 'alice', 'uid' => '2100', 'scrambled_password' => '1'],
+], [
+    ['name' => 'admins', 'gid' => '1999', 'member' => '0'],
+    ['name' => 'staff', 'gid' => '2000', 'member' => '0,2200'],
+]);
+
+/** An identity asserting these IdP groups. */
+function assertedGroups(array $groups): NormalizedIdentity
+{
+    $identity = new NormalizedIdentity('kc');
+    $identity->groups = $groups;
+    return $identity;
+}
+
+// Strict sync throughout, so the grant is recorded in the provenance stamp and the
+// second pass has something to reconcile.
+$strict = new GroupMapper(['idp-admins' => 'admins'], true);
+truthy(
+    $strict->sync(Tree::user($root, 'alice'), assertedGroups(['idp-admins']), []),
+    'the mapped group is granted'
+);
+eq(['0', '2100'], Tree::members($root, 'admins'), 'root is still a member of admins');
+
+// And on the way out: reconcile removes the user it granted, nobody else.
+$strict->sync(Tree::user($root, 'alice'), assertedGroups([]), []);
+eq(['0'], Tree::members($root, 'admins'), 'reconcile removed alice and left root');
+eq(['0', '2200'], Tree::members($root, 'staff'), 'a group os-sso never granted is untouched');

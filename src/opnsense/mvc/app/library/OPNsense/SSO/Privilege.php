@@ -92,10 +92,8 @@ final class Privilege
             if (strtolower((string)$group->name) !== 'admins') {
                 continue;
             }
-            foreach ($group->member as $member) {
-                if (in_array($uid, array_filter(explode(',', (string)$member)), true)) {
-                    return true;
-                }
+            if (GroupMembers::contains($group, $uid)) {
+                return true;
             }
         }
         return false;

@@ -233,18 +233,12 @@ final class GroupMapper
 
     private function addMember(\SimpleXMLElement $group, string $uid): bool
     {
-        $members = [];
-        foreach ($group->member as $member) {
-            $members = array_merge($members, array_filter(explode(',', (string)$member)));
-        }
+        $members = GroupMembers::uids($group);
         if (in_array($uid, $members, true)) {
             return false; // already a member
         }
         $members[] = $uid;
-        // SimpleXML cannot rewrite a scalar child cleanly with multiple <member>;
-        // collapse to a single comma-separated <member> node, matching core format.
-        unset($group->member);
-        $group->addChild('member', implode(',', $members));
+        GroupMembers::set($group, $members);
 
         syslog(LOG_NOTICE, sprintf(
             "os-sso: linked uid %s to group %s",
@@ -254,22 +248,14 @@ final class GroupMapper
         return true;
     }
 
-    /** Remove $uid from a group's comma-separated <member> list, collapsing to one
-     *  node (core format); drops the node entirely when no member remains. */
+    /** Remove $uid from the group's member list. */
     private function removeMember(\SimpleXMLElement $group, string $uid): bool
     {
-        $members = [];
-        foreach ($group->member as $member) {
-            $members = array_merge($members, array_filter(explode(',', (string)$member)));
-        }
+        $members = GroupMembers::uids($group);
         if (!in_array($uid, $members, true)) {
             return false; // not a member
         }
-        $members = array_values(array_diff($members, [$uid]));
-        unset($group->member);
-        if (!empty($members)) {
-            $group->addChild('member', implode(',', $members));
-        }
+        GroupMembers::set($group, array_values(array_diff($members, [$uid])));
         syslog(LOG_NOTICE, sprintf(
             "os-sso: removed uid %s from group %s (reconcile)",
             $uid,
@@ -286,11 +272,9 @@ final class GroupMapper
     private function isLastEnabledMember(\SimpleXMLElement $group, string $uid): bool
     {
         $others = [];
-        foreach ($group->member as $member) {
-            foreach (array_filter(explode(',', (string)$member)) as $m) {
-                if ($m !== $uid) {
-                    $others[$m] = true;
-                }
+        foreach (GroupMembers::uids($group) as $member) {
+            if ($member !== $uid) {
+                $others[$member] = true;
             }
         }
         if (empty($others)) {
