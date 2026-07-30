@@ -48,6 +48,49 @@ for line in open("../idp/authentik/.env"):
     *) echo "unknown IDP '$IDP' (keycloak|authentik)"; exit 1 ;;
 esac
 
+# How far the VM clock may be off before it is corrected. The signing checks tolerate
+# 60s of skew (OidcProtocol::LEEWAY, and the JWT clock-skew setting), so anything under a
+# few seconds is nothing; the margin above that is what a long run can eat into.
+CLOCK_TOLERANCE="${SSO_CLOCK_TOLERANCE:-5}"
+
+# Bring the VM clock back in line with the host's.
+#
+# A VirtualBox guest that was suspended and resumed drifts, and the WAN interface is
+# disabled in this lab so its own NTP has no route out. When the drift passes the leeway,
+# every browser login fails on the ID token instead of the clock:
+#
+#   os-sso oidc: Cannot handle token with iat prior to 2026-07-30T12:14:38+00:00
+#
+# The IdPs run on the host, so the host clock is the reference. Set SSO_SKIP_CLOCK_SYNC=1
+# to leave the guest alone.
+sync_vm_clock() {
+    [ -n "${SSO_SKIP_CLOCK_SYNC:-}" ] && return 0
+
+    local host_epoch vm_epoch drift
+    host_epoch=$(date -u +%s)
+    vm_epoch=$(vagrant ssh -c 'date -u +%s' 2>/dev/null | tr -d '\r')
+    case "$vm_epoch" in
+        '' | *[!0-9]*)
+            echo ">>> clock: cannot read the VM clock, skipping the check (is the VM up?)"
+            return 0
+            ;;
+    esac
+
+    # Includes the ssh round trip, which is why the tolerance is seconds and not zero.
+    drift=$((vm_epoch - host_epoch))
+    [ "$drift" -lt 0 ] && drift=$((-drift))
+    if [ "$drift" -le "$CLOCK_TOLERANCE" ]; then
+        return 0
+    fi
+
+    echo ">>> clock: the VM is ${drift}s off the host, resynchronising"
+    if vagrant ssh -c "sudo date -u $(date -u +%Y%m%d%H%M.%S)" >/dev/null 2>&1; then
+        echo ">>> clock: set from the host"
+    else
+        echo ">>> clock: WARNING could not set it; logins may fail on token freshness"
+    fi
+}
+
 run_host() {
     echo "############ ${1} (host, idp=$IDP) ############"
     SSO_GUI_PORT="$PORT" SSO_GUI_URL="$GUI_URL" IDP="$IDP" IDP_BASE="$IDP_BASE" \
@@ -60,6 +103,8 @@ run_vm() {
     echo "############ ${1} (VM) ############"
     vagrant ssh -c "sudo sh /home/vagrant/os-sso/test/e2e/$1.sh" 2>/dev/null || rc=1
 }
+
+sync_vm_clock
 
 for suite in $WANT; do
     case " $HOST_SUITES " in *" $suite "*) run_host "$suite"; continue ;; esac

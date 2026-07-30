@@ -525,6 +525,13 @@ Each suite works from any directory - it resolves its own location first, symlin
 included - and says so plainly rather than failing blank if it is run from an incomplete
 copy. The host-side suites still need `vagrant` to find `test/Vagrantfile` from there.
 
+`run-all.sh` also resynchronises the guest clock from the host before it starts. A
+suspended VirtualBox guest drifts, its own NTP has no route out in this lab, and once the
+drift passes the 60s signing leeway every browser login fails on the *token* rather than
+the clock (`Cannot handle token with iat prior to ...`) - which reads like anything but a
+clock problem. Tune with `SSO_CLOCK_TOLERANCE` (seconds, default 5) or switch it off with
+`SSO_SKIP_CLOCK_SYNC=1`.
+
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
 | `oidc.sh` | host | 28 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, rate limiting, required groups, deprovisioning, session expiry, back-channel logout |
