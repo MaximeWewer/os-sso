@@ -220,6 +220,9 @@ class SamlController extends ApiControllerBase
         if (!empty($_GET['SAMLResponse']) || !empty($_GET['SAMLRequest'])) {
             $redirect = '/';
             try {
+                // Pre-auth endpoint, like login and acs: inflating and parsing an
+                // attacker-supplied message then verifying a signature is not free.
+                RateLimiter::hit('saml-slo', $this->clientIp(), 20);
                 // Prefer the provider whose IdP EntityID matches the message Issuer
                 // (correct for IdP-initiated SLO with several SAML providers), then
                 // the one named on our own per-provider SLO endpoint, then the

@@ -65,6 +65,9 @@ final class SamlProtocol implements ProtocolInterface
      *  Lives under StateDir (root-owned /var/db, not world-writable /var/tmp). */
     private const STATE_TTL = 600; // seconds
 
+    /** Ceiling on an inflated redirect-binding message (they run a few KiB). */
+    private const MAX_INFLATE = 1048576;
+
     private static function stateDir(): string
     {
         return StateDir::path("saml");
@@ -284,8 +287,13 @@ final class SamlProtocol implements ProtocolInterface
         if ($decoded === false || $decoded === "") {
             return "";
         }
-        // Redirect binding deflates the payload; POST binding does not.
-        $xml = @gzinflate($decoded);
+        // Redirect binding deflates the payload; POST binding does not. Inflate under a
+        // hard ceiling: this runs pre-auth on an unauthenticated GET, and DEFLATE
+        // compresses well enough that a few kilobytes of query string expand into as
+        // much memory as the worker will give. Past the limit gzinflate truncates, the
+        // XML no longer parses, and the message is refused -- which is the right answer
+        // for anything that far outside a real SLO message.
+        $xml = @gzinflate($decoded, self::MAX_INFLATE);
         if ($xml === false) {
             $xml = $decoded;
         }
