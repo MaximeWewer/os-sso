@@ -290,14 +290,16 @@ final class LocalAccountWriter
     /**
      * Persist config.xml and tell the rest of the system about it.
      *
-     * @param bool $isNew a fresh account needs "auth sync user" (it creates the unix
-     *                    side); an edit only needs "auth user changed"
+     * @param bool $syncAccount the account appeared or changed name, so the unix side
+     *                          has to be reconciled ("auth sync user", which also drops
+     *                          a local entry left behind under the old name); an
+     *                          ordinary edit only needs "auth user changed"
      */
-    public function persist(string $username, bool $isNew = false): void
+    public function persist(string $username, bool $syncAccount = false): void
     {
         Config::getInstance()->save();
-        (new Backend())->configdpRun($isNew ? 'auth sync user' : 'auth user changed', [$username]);
-        if ($isNew) {
+        (new Backend())->configdpRun($syncAccount ? 'auth sync user' : 'auth user changed', [$username]);
+        if ($syncAccount) {
             Config::getInstance()->forceReload();
         }
     }

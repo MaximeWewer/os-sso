@@ -8,6 +8,7 @@
  * account database. What it refuses matters more than what it does.
  */
 
+use OPNsense\Core\Backend;
 use OPNsense\SSO\Scim\ScimGroups;
 use OPNsense\SSO\Scim\ScimUsers;
 use OPNsense\SSO\Test\Tree;
@@ -148,6 +149,19 @@ $users()->patch('2100', [['op' => 'replace', 'path' => 'emails', 'value' => 'a@e
 eq('a@example.com', (string)Tree::user($root, 'alice')->email, 'emails lands on email');
 $users()->patch('2100', [['op' => 'replace', 'path' => 'userName', 'value' => 'alice.renamed']]);
 eq('alice.renamed', (string)Tree::user($root, 'alice.renamed')->name, 'userName renames the account');
+// A rename has to be reconciled, not just announced: core's sync is what drops the local
+// entry the old name left behind. An ordinary edit stays on the cheaper notification.
+eq(
+    ['auth sync user', ['alice.renamed']],
+    Backend::$calls[count(Backend::$calls) - 1],
+    'and the rename is synced rather than merely announced'
+);
+$users()->patch('2100', [['op' => 'replace', 'path' => 'displayName', 'value' => 'Alice B']]);
+eq(
+    ['auth user changed', ['alice.renamed']],
+    Backend::$calls[count(Backend::$calls) - 1],
+    'while an ordinary edit only announces the change'
+);
 throws(
     fn() => $users()->patch('2101', [['op' => 'replace', 'path' => 'userName', 'value' => 'alice.renamed']]),
     'already exists',
@@ -155,8 +169,33 @@ throws(
 );
 // A no-op patch must not churn config.xml.
 $before = \OPNsense\Core\Config::$saves;
-$users()->patch('2100', [['op' => 'replace', 'path' => 'displayName', 'value' => 'Alice A']]);
+$users()->patch('2100', [['op' => 'replace', 'path' => 'displayName', 'value' => 'Alice B']]);
 eq($before, \OPNsense\Core\Config::$saves, 'an unchanged patch does not save config.xml');
+
+T::group('ScimUsers: replace');
+
+$root = Tree::build([
+    ['name' => 'bob', 'uid' => '2100', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext-b'],
+    ['name' => 'occupied', 'uid' => '2101', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext-o'],
+]);
+
+// PUT states the whole resource. A userName it no longer agrees with is a rename, not a
+// field to drop on the floor -- the login path falls back to the username when the
+// subject does not match, so the two sides disagreeing about it is not cosmetic.
+$put = $users()->replace('2100', ['userName' => 'bob.renamed', 'displayName' => 'Bob B', 'active' => true]);
+eq('bob.renamed', $put['userName'], 'a PUT with a new userName renames the account');
+eq('bob.renamed', (string)Tree::user($root, 'bob.renamed')->name, 'and config.xml follows');
+eq('Bob B', (string)Tree::user($root, 'bob.renamed')->descr, 'the other attributes land too');
+eq(
+    ['auth sync user', ['bob.renamed']],
+    Backend::$calls[count(Backend::$calls) - 1],
+    'and it is synced like any rename'
+);
+throws(
+    fn() => $users()->replace('2100', ['userName' => 'occupied']),
+    'already exists',
+    'a PUT cannot rename onto an existing account either'
+);
 
 T::group('ScimGroups: membership only, and only ours');
 

@@ -146,10 +146,15 @@ final class ScimUsers
         return ConfigLock::with(function () use ($id, $payload) {
             $node = $this->requireNode($id);
             $this->assertMayTouch($node);
-            $changed = $this->applyAttributes($node, $payload);
+            // A PUT states the whole resource, userName included: ignoring a renamed one
+            // left the directory and the firewall disagreeing about who this account is,
+            // and the login path falls back to the username when the subject does not
+            // match, so that disagreement is not cosmetic.
+            $renamed = $this->rename($node, (string)($payload['userName'] ?? ''));
+            $changed = $this->applyAttributes($node, $payload) || $renamed;
             $changed = $this->setActive($node, $this->activeFlag($payload, true)) || $changed;
             if ($changed) {
-                $this->accounts->persist((string)$node->name);
+                $this->accounts->persist((string)$node->name, $renamed);
             }
             return $this->toResource($node);
         });
@@ -169,6 +174,7 @@ final class ScimUsers
             $node = $this->requireNode($id);
             $this->assertMayTouch($node);
             $changed = false;
+            $renamed = false;
 
             foreach ($operations as $operation) {
                 $op = strtolower((string)($operation['op'] ?? ''));
@@ -195,7 +201,8 @@ final class ScimUsers
                         $changed = $this->setActive($node, $this->truthy($value)) || $changed;
                         break;
                     case 'username':
-                        $changed = $this->rename($node, (string)$value) || $changed;
+                        $renamed = $this->rename($node, (string)$value) || $renamed;
+                        $changed = $renamed || $changed;
                         break;
                     case 'displayname':
                         $changed = $this->accounts->setField($node, 'descr', (string)$value) || $changed;
@@ -211,7 +218,9 @@ final class ScimUsers
             }
 
             if ($changed) {
-                $this->accounts->persist((string)$node->name);
+                // A rename needs the account reconciled, not just announced: core's
+                // sync drops whatever local entry the old name left behind.
+                $this->accounts->persist((string)$node->name, $renamed);
             }
             return $this->toResource($node);
         });
