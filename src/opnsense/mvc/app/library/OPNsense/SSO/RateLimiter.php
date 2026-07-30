@@ -111,6 +111,25 @@ final class RateLimiter
 
     private static function bucketFile(string $action, string $clientIp): string
     {
-        return StateDir::path('ratelimit') . '/' . hash('sha256', $action . '|' . $clientIp) . '.json';
+        return StateDir::path('ratelimit') . '/' . hash('sha256', $action . '|' . self::bucket($clientIp)) . '.json';
+    }
+
+    /**
+     * The source a request is counted against.
+     *
+     * IPv4 counts per address, IPv6 per /64. Counting a v6 client per address is not a
+     * limit at all: the smallest prefix anyone is handed is a /64, so a single machine
+     * picks a fresh source address for every request and every one of them starts with
+     * an empty bucket. The /64 is the smallest unit that actually belongs to one
+     * customer, and it is what other throttles on this box work in too.
+     */
+    public static function bucket(string $clientIp): string
+    {
+        $binary = @inet_pton($clientIp);
+        if ($binary === false || strlen($binary) !== 16) {
+            return $clientIp;
+        }
+        $network = @inet_ntop(substr($binary, 0, 8) . str_repeat("\0", 8));
+        return $network === false ? $clientIp : $network . '/64';
     }
 }
