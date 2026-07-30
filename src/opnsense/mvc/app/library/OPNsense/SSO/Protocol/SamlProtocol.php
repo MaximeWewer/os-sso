@@ -68,6 +68,9 @@ final class SamlProtocol implements ProtocolInterface
     /** Ceiling on an inflated redirect-binding message (they run a few KiB). */
     private const MAX_INFLATE = 1048576;
 
+    /** Tolerated clock difference when judging how old an authentication is. */
+    private const CLOCK_SKEW = 60;
+
     private static function stateDir(): string
     {
         return StateDir::path("saml");
@@ -89,7 +92,9 @@ final class SamlProtocol implements ProtocolInterface
     {
         $auth = new Saml2Auth($this->settings());
         // login() with stay=true returns the redirect URL instead of redirecting.
-        $url = (string) $auth->login(null, [], false, false, true);
+        // ForceAuthn asks the IdP to re-authenticate rather than reuse its session; what
+        // it actually did is checked back in assertAuthnAge().
+        $url = (string) $auth->login(null, [], !empty($this->cfg["force_authn"]), false, true);
         // Persist {provider, return, vpn, cp} keyed by the AuthnRequest id for
         // recovery + single-use InResponseTo replay protection at the ACS. The vpn
         // sid / captive-portal zone ride here (not in the session) because the ACS
@@ -179,6 +184,7 @@ final class SamlProtocol implements ProtocolInterface
         // closes the window where an attacker replays the response before the
         // victim's browser delivers it.
         $this->guardAssertionReplay((string) $auth->getLastAssertionId());
+        $this->assertAuthnAge($auth);
 
         // Keep what Single Logout needs from the (verified) assertion.
         $this->lastNameId = (string) $auth->getNameId();
@@ -186,6 +192,70 @@ final class SamlProtocol implements ProtocolInterface
         $this->lastNameIdFormat = (string) $auth->getNameIdFormat();
 
         return $this->toIdentity($auth);
+    }
+
+    /**
+     * Enforce the configured maximum age of the IdP authentication.
+     *
+     * The SAML counterpart of the OIDC max_age / auth_time pair, and needed for the same
+     * reason: ForceAuthn is a *request*, and an IdP is free to answer it with a session
+     * from this morning. AuthnInstant is the only evidence of when the user actually
+     * authenticated, so a missing one is a failure rather than a reason to accept an
+     * authentication of unknown age.
+     */
+    private function assertAuthnAge(Saml2Auth $auth): void
+    {
+        $maxAge = (int) ($this->cfg["max_age"] ?? 0);
+        if ($maxAge <= 0) {
+            return;
+        }
+        $instant = self::authnInstant((string) $auth->getLastResponseXML());
+        if ($instant === null) {
+            throw new \RuntimeException(
+                "SAML: a maximum authentication age is configured but the assertion carries no AuthnInstant"
+            );
+        }
+        if ((time() - $instant) > $maxAge + self::CLOCK_SKEW) {
+            throw new \RuntimeException(
+                "SAML: the IdP authentication is older than the configured maximum age"
+            );
+        }
+    }
+
+    /**
+     * AuthnInstant of the assertion, as a unix timestamp.
+     *
+     * php-saml surfaces SessionNotOnOrAfter but not AuthnInstant, so read it off the
+     * document it kept. Safe to trust: _lastResponse is only set once processResponse()
+     * has verified the signature, and it holds the DECRYPTED assertion, so this is the
+     * same XML the toolkit validated -- not the raw POST body.
+     */
+    private static function authnInstant(string $xml): ?int
+    {
+        if ($xml === "") {
+            return null;
+        }
+        $doc = new \DOMDocument();
+        if (!@$doc->loadXML($xml, LIBXML_NONET | LIBXML_NSCLEAN)) {
+            return null;
+        }
+        $nodes = $doc->getElementsByTagNameNS(
+            "urn:oasis:names:tc:SAML:2.0:assertion",
+            "AuthnStatement",
+        );
+        for ($i = 0; $i < $nodes->length; $i++) {
+            $value = trim((string) $nodes->item($i)->getAttribute("AuthnInstant"));
+            if ($value === "") {
+                continue;
+            }
+            try {
+                $ts = \OneLogin\Saml2\Utils::parseSAML2Time($value);
+            } catch (\Throwable $e) {
+                return null;
+            }
+            return is_int($ts) ? $ts : null;
+        }
+        return null;
     }
 
     public function getLastNameId(): string

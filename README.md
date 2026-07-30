@@ -166,6 +166,10 @@ contains dots (`urn:oid:…`) is matched whole first, so both styles work.
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
    - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
 3. The IdP must **sign the assertion**. Map the NameID to the username. Optional:
+   **force re-authentication** (sends `ForceAuthn`) together with a **maximum
+   authentication age**, which checks the assertion's `AuthnInstant` and so verifies the
+   IdP honoured the request rather than reusing an old session - the SAML counterpart of
+   the OIDC `max_age`/`auth_time` pair;
    **sign the AuthnRequest** (needs the SP certificate + key; required by ADFS in a
    strict configuration and by Keycloak with *Client signature required*, and it makes
    the SP metadata declare `AuthnRequestsSigned` so the IdP knows to expect one),

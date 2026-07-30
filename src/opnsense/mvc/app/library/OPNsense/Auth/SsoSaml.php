@@ -29,6 +29,8 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoWantMessagesSigned = false;
     public $ssoAuthnPostBinding = false;
     public $ssoAuthnRequestsSigned = false;
+    public $ssoForceAuthn = false;
+    public $ssoMaxAge = 0;
     public $ssoAllowIdpInitiated = false;
     public $ssoWantAssertionsEncrypted = false;
     public $ssoWantNameIdEncrypted = false;
@@ -93,6 +95,10 @@ class SsoSaml extends Local implements IAuthConnector
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
         $this->ssoAuthnPostBinding = !empty($config['sso_authn_post_binding']);
         $this->ssoAuthnRequestsSigned = !empty($config['sso_authn_requests_signed']);
+        $this->ssoForceAuthn = !empty($config['sso_force_authn']);
+        if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
+            $this->ssoMaxAge = (int)$config['sso_max_age'];
+        }
         $this->ssoAllowIdpInitiated = !empty($config['sso_allow_idp_initiated']);
         $this->ssoWantAssertionsEncrypted = !empty($config['sso_want_assertions_encrypted']);
         $this->ssoWantNameIdEncrypted = !empty($config['sso_want_nameid_encrypted']);
@@ -193,6 +199,24 @@ class SsoSaml extends Local implements IAuthConnector
                 'name' => gettext('Require signed response'),
                 'help' => gettext('Require the SAML Response (message) itself to be signed, not only the assertion. Enable when the IdP supports it (mitigates signature-wrapping).'),
                 'type' => 'checkbox',
+            ],
+            'sso_force_authn' => [
+                'name' => gettext('Force re-authentication'),
+                'help' => gettext('Send ForceAuthn, asking the IdP to authenticate the user again instead '
+                    . 'of silently reusing its existing session. Combine with the maximum authentication '
+                    . 'age below, which checks the IdP actually did: ForceAuthn is only a request.'),
+                'type' => 'checkbox',
+            ],
+            'sso_max_age' => [
+                'name' => gettext('Maximum authentication age (s)'),
+                'help' => gettext('Refuse the login when the assertion says the user authenticated at the '
+                    . 'IdP longer ago than this (its AuthnInstant). The SAML counterpart of the OIDC '
+                    . 'max_age check. An assertion with no AuthnInstant is refused rather than trusted. '
+                    . '0 disables it (any session age is accepted).'),
+                'type' => 'text',
+                'default' => '0',
+                'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))
+                    ? [] : [gettext('Maximum authentication age must be a number of seconds (0 = disabled).')],
             ],
             'sso_authn_requests_signed' => [
                 'name' => gettext('Sign the AuthnRequest'),
