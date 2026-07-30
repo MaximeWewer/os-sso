@@ -28,6 +28,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoDisplayNameAttribute = null;
     public $ssoWantMessagesSigned = false;
     public $ssoAuthnPostBinding = false;
+    public $ssoAuthnRequestsSigned = false;
     public $ssoAllowIdpInitiated = false;
     public $ssoWantAssertionsEncrypted = false;
     public $ssoWantNameIdEncrypted = false;
@@ -91,6 +92,7 @@ class SsoSaml extends Local implements IAuthConnector
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
         $this->ssoAuthnPostBinding = !empty($config['sso_authn_post_binding']);
+        $this->ssoAuthnRequestsSigned = !empty($config['sso_authn_requests_signed']);
         $this->ssoAllowIdpInitiated = !empty($config['sso_allow_idp_initiated']);
         $this->ssoWantAssertionsEncrypted = !empty($config['sso_want_assertions_encrypted']);
         $this->ssoWantNameIdEncrypted = !empty($config['sso_want_nameid_encrypted']);
@@ -190,6 +192,14 @@ class SsoSaml extends Local implements IAuthConnector
             'sso_want_messages_signed' => [
                 'name' => gettext('Require signed response'),
                 'help' => gettext('Require the SAML Response (message) itself to be signed, not only the assertion. Enable when the IdP supports it (mitigates signature-wrapping).'),
+                'type' => 'checkbox',
+            ],
+            'sso_authn_requests_signed' => [
+                'name' => gettext('Sign the AuthnRequest'),
+                'help' => gettext('Sign the login request we send, and declare it in the SP metadata. '
+                    . 'Needs the SP certificate and private key below. Required by some IdPs (ADFS in a '
+                    . 'strict configuration, Keycloak with "Client signature required"); harmless '
+                    . 'otherwise, since the IdP learns our signing certificate from the same metadata.'),
                 'type' => 'checkbox',
             ],
             'sso_authn_post_binding' => [

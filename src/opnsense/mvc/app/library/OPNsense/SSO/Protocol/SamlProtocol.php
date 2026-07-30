@@ -483,8 +483,20 @@ final class SamlProtocol implements ProtocolInterface
             );
         }
 
+        // Signing the AuthnRequest is the IdP's call, not ours: some require it and
+        // refuse an unsigned request outright. Setting it here also makes the generated
+        // SP metadata declare AuthnRequestsSigned, which is how an IdP that reads
+        // metadata learns to expect one -- and which certificate to check it with.
+        $signAuthn = !empty($this->cfg["authn_requests_signed"]);
+        if ($signAuthn && (empty($this->cfg["sp_key"]) || empty($this->cfg["sp_cert"]))) {
+            throw new \RuntimeException(
+                "SAML: signing the AuthnRequest requires an SP certificate and private key"
+            );
+        }
+
         $security = [
             "wantAssertionsSigned" => true,
+            "authnRequestsSigned" => $signAuthn,
             // The assertion is always required signed; optionally also require the
             // response message signed (stronger, mitigates XSW) when the IdP supports it.
             "wantMessagesSigned" => !empty($this->cfg["want_messages_signed"]),

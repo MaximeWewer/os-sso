@@ -166,6 +166,9 @@ contains dots (`urn:oid:…`) is matched whole first, so both styles work.
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
    - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
 3. The IdP must **sign the assertion**. Map the NameID to the username. Optional:
+   **sign the AuthnRequest** (needs the SP certificate + key; required by ADFS in a
+   strict configuration and by Keycloak with *Client signature required*, and it makes
+   the SP metadata declare `AuthnRequestsSigned` so the IdP knows to expect one),
    **HTTP-POST binding** for the AuthnRequest (when the IdP does not take a redirect),
    **encrypted assertions** (needs the SP certificate + key), and **IdP-initiated
    login** - the last one off by default, since an unsolicited assertion proves

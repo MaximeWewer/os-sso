@@ -420,6 +420,7 @@ class SamlController extends ApiControllerBase
             'display_name_attribute' => $auth->ssoDisplayNameAttribute,
             'want_messages_signed' => (bool)$auth->ssoWantMessagesSigned,
             'authn_post_binding' => (bool)$auth->ssoAuthnPostBinding,
+            'authn_requests_signed' => (bool)$auth->ssoAuthnRequestsSigned,
             'allow_idp_initiated' => (bool)$auth->ssoAllowIdpInitiated,
             'want_assertions_encrypted' => (bool)$auth->ssoWantAssertionsEncrypted,
             'want_nameid_encrypted' => (bool)$auth->ssoWantNameIdEncrypted,
