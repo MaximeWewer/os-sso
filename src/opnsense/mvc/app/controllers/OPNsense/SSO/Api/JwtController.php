@@ -52,7 +52,11 @@ class JwtController extends ApiControllerBase
         }
         try {
             // A forward-auth login is whatever request reaches the proxy, header and
-            // all, so it must at least be a navigation the user's browser made.
+            // all, so it must at least be a navigation the user's browser made -- when
+            // the browser says. Best-effort by construction (see NavigationGuard), and
+            // that is proportionate here: the proxy mints the token, so the session an
+            // <img> tag could conjure is the victim's own rather than one of the
+            // attacker's choosing.
             NavigationGuard::assertNavigation();
             $auth = $this->authServer($this->request->get('provider'));
             // Forward-auth opens a WebGUI session and nothing else, so a provider the
