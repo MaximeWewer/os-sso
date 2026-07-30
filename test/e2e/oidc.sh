@@ -198,7 +198,22 @@ case "$DUMP" in
     *) ko "account not disabled ($DUMP)" ;;
 esac
 
-echo ">>> case 8b: a privileged account is never deprovisioned (anti-lockout)"
+echo ">>> case 8b: a login that passes undoes the deprovisioning"
+# The account is disabled by case 8 above. Lift the gate it failed -- the IdP now says
+# this person is allowed again, which is precisely the event a login-driven plugin was
+# waiting for and could not hear. Without the revival that event is unreachable: the
+# login that would carry it is refused by the flag its own earlier refusal set, and
+# somebody has to go and tick the box back by hand.
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups= sso_deprovision=1" >/dev/null
+check "the login that disproves the refusal succeeds" 302 "$(login "$W/jar3r")"
+is_live "$W/jar3r" "and the session it opened authenticates"
+DUMP=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php $IDP_USER")
+case "$DUMP" in
+    *disabled=0*) ok "the account was re-enabled ($DUMP)" ;;
+    *) ko "account still disabled ($DUMP)" ;;
+esac
+
+echo ">>> case 8c: a privileged account is never deprovisioned (anti-lockout)"
 vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_required_groups= sso_default_groups=admins sso_deprovision=0" >/dev/null
 vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null
 login "$W/jar3c" >/dev/null

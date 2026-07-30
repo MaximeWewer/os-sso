@@ -74,7 +74,7 @@ e2e/oidc.sh                                    # or one suite on its own
 
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
-| `oidc.sh` | host | 42-43 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, pushed authorization requests, rate limiting, required groups, deprovisioning, session expiry, back-channel logout, service scoping, ending a session from the diagnostics page |
+| `oidc.sh` | host | 45-46 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, pushed authorization requests, rate limiting, required groups, deprovisioning *and the login that undoes it*, session expiry, back-channel logout, service scoping, ending a session from the diagnostics page |
 | `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only), POST binding, metadata import, SLO |
 | `portal.sh` | host | 11 | a captive client signing in, being authorized in its zone, and being disconnected again when its grant is revoked |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
