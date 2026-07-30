@@ -186,6 +186,7 @@ final class SamlProtocol implements ProtocolInterface
         $this->guardAssertionReplay((string) $auth->getLastAssertionId());
         $this->assertStrongSignature((string) $auth->getLastResponseXML());
         $this->assertAuthnAge($auth);
+        $this->assertAuthnContext((string) $auth->getLastResponseXML());
 
         // Keep what Single Logout needs from the (verified) assertion.
         $this->lastNameId = (string) $auth->getNameId();
@@ -285,6 +286,68 @@ final class SamlProtocol implements ProtocolInterface
                 );
             }
         }
+    }
+
+    /**
+     * Enforce the configured authentication context class.
+     *
+     * The SAML half of what OIDC does with acr_values and the acr claim, and needed for
+     * the same reason: RequestedAuthnContext is a request, and an IdP that will not
+     * honour it answers with an ordinary session rather than an error. So asking is not
+     * enforcing -- what the assertion says it did is the only evidence there is, and an
+     * assertion with no AuthnContextClassRef at all is a failure rather than a reason to
+     * accept an authentication of unknown strength.
+     *
+     * The comparison is exact, as for acr: a context is an identifier, not a level.
+     */
+    private function assertAuthnContext(string $xml): void
+    {
+        $required = array_values(array_filter(array_map('strval', (array) ($this->cfg['required_acr'] ?? []))));
+        if ($required === []) {
+            return;
+        }
+        $got = self::authnContexts($xml);
+        foreach ($got as $context) {
+            if (in_array($context, $required, true)) {
+                return;
+            }
+        }
+        throw new \RuntimeException(sprintf(
+            'SAML: the assertion authentication context (%s) is none of the required values (%s)',
+            $got !== [] ? implode(', ', $got) : 'absent',
+            implode(', ', $required)
+        ));
+    }
+
+    /**
+     * The AuthnContextClassRef values of a (validated) response.
+     *
+     * php-saml surfaces neither, so read them off the document it kept -- the same
+     * decrypted, signature-checked XML assertAuthnAge() reads AuthnInstant from.
+     *
+     * @return string[]
+     */
+    public static function authnContexts(string $xml): array
+    {
+        if ($xml === '') {
+            return [];
+        }
+        $doc = new \DOMDocument();
+        if (!@$doc->loadXML($xml, LIBXML_NONET | LIBXML_NSCLEAN)) {
+            return [];
+        }
+        $out = [];
+        $nodes = $doc->getElementsByTagNameNS(
+            'urn:oasis:names:tc:SAML:2.0:assertion',
+            'AuthnContextClassRef'
+        );
+        for ($i = 0; $i < $nodes->length; $i++) {
+            $value = trim((string) $nodes->item($i)->textContent);
+            if ($value !== '' && !in_array($value, $out, true)) {
+                $out[] = $value;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -708,6 +771,8 @@ final class SamlProtocol implements ProtocolInterface
             );
         }
 
+        $requiredAcr = array_values(array_filter(array_map('strval', (array) ($this->cfg["required_acr"] ?? []))));
+
         $security = [
             "wantAssertionsSigned" => true,
             "authnRequestsSigned" => $signAuthn,
@@ -716,7 +781,12 @@ final class SamlProtocol implements ProtocolInterface
             "wantMessagesSigned" => !empty($this->cfg["want_messages_signed"]),
             "wantAssertionsEncrypted" => $wantEncrypted,
             "wantNameIdEncrypted" => $wantNameIdEncrypted,
-            "requestedAuthnContext" => false,
+            // Ask for the context we are going to insist on in assertAuthnContext().
+            // false = ask for nothing, which is the right request when nothing is
+            // required: php-saml's own default asks for PasswordProtectedTransport,
+            // which several IdPs answer by refusing anything stronger.
+            "requestedAuthnContext" => $requiredAcr !== [] ? $requiredAcr : false,
+            "requestedAuthnContextComparison" => "exact",
             "signatureAlgorithm" =>
                 "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
             "rejectUnsolicitedResponsesWithInResponseTo" => true,

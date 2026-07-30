@@ -69,3 +69,32 @@ $elsewhere = "<samlp:Response xmlns:samlp='urn:oasis:names:tc:SAML:2.0:protocol'
     . "<ds:SignatureMethod Algorithm='{$rsaSha1}'/></ds:SignedInfo></ds:Signature>"
     . "</saml:Advice></samlp:Response>";
 eq('', SamlProtocol::weakAlgorithm($elsewhere), 'a signature outside the validated positions is ignored');
+
+T::group('SamlProtocol: the authentication context that came back');
+
+/** A response whose assertion declares $contexts (none when empty). */
+function samlContexts(array $contexts): string
+{
+    $statements = '';
+    foreach ($contexts as $context) {
+        $statements .= "<saml:AuthnStatement AuthnInstant='2026-01-01T00:00:00Z'><saml:AuthnContext>"
+            . "<saml:AuthnContextClassRef>{$context}</saml:AuthnContextClassRef>"
+            . "</saml:AuthnContext></saml:AuthnStatement>";
+    }
+    return "<samlp:Response xmlns:samlp='urn:oasis:names:tc:SAML:2.0:protocol' "
+        . "xmlns:saml='urn:oasis:names:tc:SAML:2.0:assertion'><saml:Assertion>"
+        . ($statements ?: "<saml:AuthnStatement AuthnInstant='2026-01-01T00:00:00Z'/>")
+        . "</saml:Assertion></samlp:Response>";
+}
+
+$mfa = 'urn:oasis:names:tc:SAML:2.0:ac:classes:MultiFactor';
+$password = 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport';
+
+eq([$mfa], SamlProtocol::authnContexts(samlContexts([$mfa])), 'the declared context is read back');
+eq([$password, $mfa], SamlProtocol::authnContexts(samlContexts([$password, $mfa])), 'several statements are all read');
+eq([$mfa], SamlProtocol::authnContexts(samlContexts([$mfa, $mfa])), 'repeats collapse');
+// An assertion that says nothing about how the user authenticated is the case that
+// matters: it must read as absent, so the caller refuses rather than assumes.
+eq([], SamlProtocol::authnContexts(samlContexts([])), 'an assertion with no context reads as none');
+eq([], SamlProtocol::authnContexts(''), 'nothing to read is not a context');
+eq([], SamlProtocol::authnContexts('<not xml'), 'nor is an unparsable document');

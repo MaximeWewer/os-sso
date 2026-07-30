@@ -31,6 +31,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoAuthnPostBinding = false;
     public $ssoAuthnRequestsSigned = false;
     public $ssoForceAuthn = false;
+    public $ssoRequiredAcr = [];
     public $ssoMaxAge = 0;
     public $ssoAllowIdpInitiated = false;
     public $ssoWantAssertionsEncrypted = false;
@@ -100,6 +101,7 @@ class SsoSaml extends Local implements IAuthConnector
         $this->ssoAuthnPostBinding = !empty($config['sso_authn_post_binding']);
         $this->ssoAuthnRequestsSigned = !empty($config['sso_authn_requests_signed']);
         $this->ssoForceAuthn = !empty($config['sso_force_authn']);
+        $this->ssoRequiredAcr = array_filter(array_map('trim', explode(',', $config['sso_required_acr'] ?? '')));
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
             $this->ssoMaxAge = (int)$config['sso_max_age'];
         }
@@ -230,6 +232,17 @@ class SsoSaml extends Local implements IAuthConnector
                 'default' => '0',
                 'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))
                     ? [] : [gettext('Maximum authentication age must be a number of seconds (0 = disabled).')],
+            ],
+            'sso_required_acr' => [
+                'name' => gettext('Required authentication context'),
+                'help' => gettext('Comma separated AuthnContextClassRef values, typically the one your IdP '
+                    . 'uses for MFA (e.g. urn:oasis:names:tc:SAML:2.0:ac:classes:MultiFactor or an IdP '
+                    . 'specific one). They are sent as a RequestedAuthnContext AND the '
+                    . 'AuthnContextClassRef that comes back must be one of them - both halves matter, '
+                    . 'because honouring the request is voluntary, so only the answer proves anything. An '
+                    . 'assertion carrying no context at all is refused rather than trusted. Empty accepts '
+                    . 'whatever context the IdP used. The SAML counterpart of the OIDC acr check.'),
+                'type' => 'text',
             ],
             'sso_authn_requests_signed' => [
                 'name' => gettext('Sign the AuthnRequest'),

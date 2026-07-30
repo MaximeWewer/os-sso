@@ -173,6 +173,10 @@ roles or a group filter.
    - **Force re-authentication** + **maximum authentication age** - `ForceAuthn` is only
      a request, so the age check on the assertion's `AuthnInstant` is what proves the IdP
      honoured it. The SAML counterpart of OIDC's `max_age`/`auth_time`.
+   - **Required authentication context** - sent as a `RequestedAuthnContext` *and*
+     checked against the `AuthnContextClassRef` the assertion comes back with, which is
+     the only way to actually require the IdP's MFA context. The SAML counterpart of
+     OIDC's `acr_values`/`acr`.
    - **Sign the AuthnRequest** (needs the SP certificate + key) - required by ADFS in a
      strict configuration and by Keycloak with *Client signature required*; it also makes
      the SP metadata declare `AuthnRequestsSigned`.
