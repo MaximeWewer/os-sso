@@ -153,6 +153,9 @@ final class SessionRegistry
         try {
             $dir = StateDir::path('sessions');
         } catch (\RuntimeException $e) {
+            // Say so: everything here degrades to "no sessions known", which reads
+            // exactly like "nothing to expire" in the sweeper's output.
+            syslog(LOG_WARNING, 'os-sso: the session registry is unreachable: ' . $e->getMessage());
             return [];
         }
         $out = [];

@@ -51,12 +51,53 @@ final class StateDir
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new \RuntimeException(sprintf('SSO: cannot create the state directory %s', $dir));
         }
+        self::adopt($dir);
         self::assertSafe($dir);
     }
 
     /**
-     * A directory is safe when it is not a symlink, is owned by this process or by
-     * root, and grants nothing to group or other.
+     * Hand a root-created directory over to the WebGUI user.
+     *
+     * Two processes share this tree: php-fpm (www), which writes everything during a
+     * login, and the scheduled session sweeper, which runs as root out of configd.
+     * Whichever ran first used to own the tree at 0700 and lock the other one out --
+     * root first meant every SSO login failed on the config lock, www first meant the
+     * sweeper silently found nothing and the maximum session lifetime was never
+     * enforced by the cron job at all. www is the owner that makes both work, since
+     * root writes into it regardless.
+     */
+    private static function adopt(string $dir): void
+    {
+        $web = self::webUid();
+        if ($web === null || self::uid() !== 0) {
+            return;
+        }
+        clearstatcache(true, $dir);
+        if (@fileowner($dir) === 0) {
+            @chown($dir, $web['uid']);
+            @chgrp($dir, $web['gid']);
+            clearstatcache(true, $dir);
+        }
+    }
+
+    /**
+     * uid/gid of the WebGUI user, null when there is none (a build host, a test run).
+     *
+     * @return array{uid:int,gid:int}|null
+     */
+    private static function webUid(): ?array
+    {
+        if (!function_exists('posix_getpwnam')) {
+            return null;
+        }
+        $pw = @posix_getpwnam('www');
+        return is_array($pw) ? ['uid' => (int)$pw['uid'], 'gid' => (int)$pw['gid']] : null;
+    }
+
+    /**
+     * A directory is safe when it is not a symlink, is owned by one of the two users
+     * that legitimately share it -- this process, root, or the WebGUI user -- and
+     * grants nothing to group or other.
      */
     private static function assertSafe(string $dir): void
     {
@@ -64,8 +105,13 @@ final class StateDir
         if (is_link($dir) || !is_dir($dir)) {
             throw new \RuntimeException(sprintf('SSO: %s is not a directory', $dir));
         }
+        $trusted = [0, self::uid()];
+        $web = self::webUid();
+        if ($web !== null) {
+            $trusted[] = $web['uid'];
+        }
         $owner = @fileowner($dir);
-        if ($owner === false || ($owner !== 0 && $owner !== self::uid())) {
+        if ($owner === false || !in_array($owner, $trusted, true)) {
             throw new \RuntimeException(sprintf('SSO: %s is owned by another user', $dir));
         }
         $perms = @fileperms($dir);
