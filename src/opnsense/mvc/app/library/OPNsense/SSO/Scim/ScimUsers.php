@@ -93,7 +93,6 @@ final class ScimUsers
                 // An account with that name is already here. Adopt it only if os-sso
                 // may -- otherwise this is someone's real local account.
                 $this->assertMayTouch($existing);
-                $this->assertNotClaimedElsewhere($existing);
                 $changed = $this->accounts->stampOnce($existing, 'scim_ref', $ref);
                 $changed = $this->applyAttributes($existing, $payload) || $changed;
                 if ($changed) {
@@ -267,19 +266,29 @@ final class ScimUsers
     }
 
     /**
-     * Refuse an account another directory already claimed.
+     * Refuse an account another provider already claimed.
      *
-     * stampOnce never overwrites, so without this check a second provider could adopt
-     * a name the first one owns and then quietly diverge: its writes would land on the
-     * account while its external id was never recorded, so nothing would ever match it
-     * back. Better to say so than to have two directories fighting over one account.
+     * Both bindings are namespaced by provider name, so both answer the question: a
+     * scim_ref from a directory that is not ours, or an sso_subject from someone else's
+     * login flow. stampOnce never overwrites, so without this an account claimed by one
+     * provider takes writes from a second while its own external id is never recorded,
+     * and nothing ever matches it back.
+     *
+     * It is also the authorization boundary between directories. Enabling SCIM on one
+     * authentication server must not hand it the accounts of another: the bearer token
+     * says which provider a request belongs to, and this is what makes that mean
+     * something on writes as well as on reads.
      */
     private function assertNotClaimedElsewhere(\SimpleXMLElement $node): void
     {
-        $ref = (string)($node->scim_ref ?? '');
-        if ($ref !== '' && !str_starts_with($ref, $this->provider . '|')) {
+        $prefix = $this->provider . '|';
+        foreach (['scim_ref', 'sso_subject'] as $field) {
+            $ref = (string)($node->{$field} ?? '');
+            if ($ref === '' || str_starts_with($ref, $prefix)) {
+                continue;
+            }
             throw ScimError::conflict(sprintf(
-                "'%s' is already provisioned by another SCIM provider (%s)",
+                "'%s' belongs to another provider (%s)",
                 (string)$node->name,
                 explode('|', $ref)[0]
             ));
@@ -300,6 +309,9 @@ final class ScimUsers
                 (string)$node->name
             ));
         }
+        // Every write goes through here, so the cross-provider boundary does too --
+        // replace(), patch() and deactivate() used to skip it entirely.
+        $this->assertNotClaimedElsewhere($node);
     }
 
     /** Namespaced by provider: two directories may well use the same external ids. */
