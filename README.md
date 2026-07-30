@@ -68,7 +68,8 @@ pkg add os-sso-devel-*-FreeBSD-14.pkg   # pick the file matching your ABI
 Then reload the WebGUI (or reboot). The new server types appear under
 **System ▸ Access ▸ Servers**.
 
-> Building from source instead: see [Build](#build).
+> Building from source instead: `make package` on an OPNsense dev VM, or the
+> `.github/workflows/build-pkg.yml` job CI runs on a `v*.*.*` tag.
 
 ## Configure an authentication server
 
@@ -97,34 +98,32 @@ the exact redirect/ACS URL to copy into the IdP.
    `https://<opnsense>/api/sso/oidc/callback` (shown live in the form).
 2. In OPNsense fill **Issuer URL** + **Client ID/Secret**. Discovery and keys are
    fetched automatically from `<issuer>/.well-known/openid-configuration`.
-3. Keep **PKCE** on; scopes `openid email profile` (+ a groups scope if you map
-   groups). **Client authentication method** defaults to `auto`, which picks
-   `client_secret_basic` or `client_secret_post` from the IdP's discovery document.
-   Set it explicitly for the methods that get the shared secret off the wire - or
-   remove it entirely:
+3. Keep **PKCE** on; scopes `openid email profile`, plus a groups scope if you map
+   groups.
+4. Optional hardening — **Maximum authentication age** (`max_age`, checked against the
+   returned `auth_time`), **Required authentication context** (`acr_values`, checked
+   against the returned `acr` — the only way to actually require the IdP's MFA context,
+   since honouring the request is voluntary per the spec), **form_post response mode** to
+   keep the authorization code out of the URL, and **Extra authorization parameters** for
+   things like `prompt=login`.
 
-   | Method | What it needs here | Shared secret |
-   |---|---|---|
-   | `client_secret_basic` / `client_secret_post` | the client secret | sent on every token request |
-   | `client_secret_jwt` | the client secret, ≥32 chars for HS256 | never leaves the firewall (signs an assertion) |
-   | `private_key_jwt` | a **client private key** (PEM) + algorithm, optional `kid` | none |
-   | `tls_client_auth` / `self_signed_tls_client_auth` | a **client certificate** + key (PEM) | none |
+**Client authentication.** `auto` picks `client_secret_basic` or `client_secret_post` from
+the discovery document. The others must be chosen explicitly — they need key material
+registered at the IdP first, so auto-selecting one the moment an IdP advertises it would
+break every login:
 
-   These are not auto-selected even when the IdP advertises them, because they need key
-   material registered over there first. For `private_key_jwt`, point the IdP's *JWKS
-   URL* at `https://<opnsense>/api/sso/oidc/jwks?provider=<name>` (shown on the
-   diagnostics page) and a key rollover on this side needs no copy-paste - the endpoint
-   serves the public key derived from the private one, and nothing else. Mutual TLS
-   follows RFC 8705: when the IdP publishes `mtls_endpoint_aliases`, the aliased token
-   endpoint is used automatically.
-4. Optional hardening: **Maximum authentication age** sends `max_age` and enforces
-   the returned `auth_time`, so an old IdP session must re-authenticate;
-   **Required authentication context** sends `acr_values` and enforces the returned
-   `acr`, which is how you actually require the IdP's MFA context (requesting one is
-   voluntary per the spec - an IdP may ignore it, so only the returned `acr` proves
-   anything); **form_post response mode** keeps the authorization code out of the URL;
-   **Extra authorization parameters** passes things like `prompt=login` through to the
-   IdP.
+| Method | Needs here | Shared secret |
+|---|---|---|
+| `client_secret_basic` / `_post` | the client secret | sent on every token request |
+| `client_secret_jwt` | the secret, ≥32 chars for HS256 | never leaves the firewall |
+| `private_key_jwt` | a client private key (PEM) + algorithm, optional `kid` | none |
+| `tls_client_auth` / `self_signed_…` | a client certificate + key (PEM) | none |
+
+For `private_key_jwt`, point the IdP's *JWKS URL* at
+`https://<opnsense>/api/sso/oidc/jwks?provider=<name>` (listed on the diagnostics page):
+it serves the public key derived from the private one and nothing else, so a rollover needs
+no copy-paste. Mutual TLS follows RFC 8705 — an `mtls_endpoint_aliases` token endpoint is
+used automatically.
 
 | Provider | Issuer URL | Groups |
 |---|---|---|
@@ -338,38 +337,22 @@ One base URL serves every provider: the bearer token is what says which one a re
 belongs to, and an account provisioned under one provider is not silently adopted by
 another.
 
-Supported: `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
-(GET/POST/PUT/PATCH/DELETE, `filter=userName eq "..."` and `externalId eq "..."`,
-pagination, `count=0` for a total-only probe) and `/Groups` (GET, and PATCH of
-membership). Not supported: bulk, sort, ETags, `meta.created`/`meta.lastModified`
-(config.xml keeps no per-account timestamps, and advertising ones we do not maintain
-would be worse than omitting them), and filters beyond `eq` on the indexed attributes -
-an unsupported filter is refused rather than silently answered with the wrong set.
+**Supported:** `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
+(GET/POST/PUT/PATCH/DELETE, `filter` on `userName` and `externalId`, pagination,
+`count=0` as a total-only probe) and `/Groups` (GET plus PATCH of membership). `POST
+/Users` answers **201** when it created the account, **200** when it adopted one already
+carrying the `userName`, **409** on a repeated `externalId`.
 
-A `POST /Users` answers **201** for an account that did not exist and **200** when it
-adopted one that already carried the `userName`; a repeat POST of the same `externalId`
-is a **409**.
+**Not supported:** bulk, sort, ETags, `meta.created`/`meta.lastModified` (config.xml keeps
+no per-account timestamps), and filters beyond `eq` — an unsupported filter is refused
+rather than silently answered with the wrong set.
 
-Four things it deliberately refuses, because this is a write API into a firewall's
-account database:
-
-- a **privileged** account (system, uid 0, member of `admins`) is never modified,
-  disabled or deleted;
-- an account with a **real local password** is never taken over;
-- **DELETE deactivates**, it does not remove - a user can own firewall rules,
-  certificates and API keys;
-- a **group carrying administrative privileges** takes no membership from SCIM.
-  Granting administration stays an operator action, by hand or through the provider's
-  explicit group map.
-
-Groups are never created or deleted over SCIM either; the client fills the groups
-that already exist.
-
-**Authentik**, the client this was tested against: create a *SCIM Provider* with URL
-`https://<opnsense>/api/sso/scim` and the token, then attach it to the application as
-a **backchannel provider** - a SCIM provider that is not backchannel-attached syncs
-"successfully" and pushes nothing. Untick *Verify certificates* if the firewall serves
-a self-signed WebGUI certificate; that failure is just as silent.
+This is a write API into a firewall's account database, so four refusals are absolute: a
+**privileged** account (system, uid 0, `admins` member) is never touched; an account with a
+**real local password** is never taken over; **DELETE deactivates** rather than removes,
+because a user can own rules, certificates and API keys; and a **group carrying
+administrative privileges** takes no membership from a directory. Groups themselves are
+never created or deleted either — the client fills the ones that exist.
 
 ## Diagnostics
 
@@ -385,150 +368,57 @@ waiting out a TTL. Access is gated by its own ACL privilege,
 
 ## Security
 
-- Privileges are **never** stored in the session - the OPNsense ACL resolves them
-  from group membership on every request.
-- New sessions regenerate their ID (anti session-fixation).
-- SSO will not bind the username claim to an existing local account that has its
-  own password (only to os-sso-owned or passwordless accounts), and never to a
-  privileged account (`root`/system or `admins`) it didn't create; email matching
-  requires a verified email and an account os-sso already owns. A scrambled password is
-  *not* ownership - that is the WebGUI's own "no local login" checkbox, and LDAP-backed
-  administrators wear it.
-- An account is bound to **one subject per provider**, recorded on first login. A second
-  subject of the same provider presenting that account's username is refused - that is the
-  takeover a mutable username claim would otherwise allow. A second *provider* binds
-  alongside the first, so one directory fronted by both OIDC and SAML maps onto a single
-  local account, as it should.
-- Group membership is only ever *added* to a **privileged** group (`admins`, or any group
-  with full-GUI / shell / user-manager rights) through an explicit operator mapping - the
-  1:1 name fallback refuses them - and strict sync never revokes a hand-assigned group or
-  the last member of a privileged one.
-- A **disabled or expired** local account is refused, matching the local-password
-  path (SSO is not a way around an account's expiry). The check runs before group
-  sync writes anything and covers the VPN path too, not only the WebGUI session.
-- OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp`/`iat`, binds `at_hash` to the access
-  token and requires an asymmetric signature; SAML verifies the assertion signature and is
-  replay-protected (single-use request id + consumed-assertion cache).
-- What the IdP is *asked* for is also *checked* on the way back: `max_age` against
-  `auth_time` (SAML: `AuthnInstant`), and the required `acr` against the returned one -
-  requesting an MFA context is voluntary per the spec, so only the answer proves anything.
-- The client can authenticate to the token endpoint **without a shared secret**
-  (`private_key_jwt`, mutual TLS), and the pre-auth endpoints are rate limited per source.
-- The SCIM endpoint needs a bearer token **and** a source-address allowlist, and refuses
-  on the same principles as the login path (see [SCIM provisioning](#scim-provisioning)).
-- The local password (+ native TOTP) is always left active as a **break-glass**
-  path - keep at least one local admin.
+**Sessions.** Privileges are never stored in the session — the OPNsense ACL resolves them
+from group membership on every request. A new session regenerates its ID (anti
+session-fixation). A **disabled or expired** account is refused before group sync writes
+anything, on the VPN path as well as the WebGUI.
 
-> `client_secret` and SP keys are stored in `config.xml` like other OPNsense
-> credentials (e.g. LDAP bind passwords) and are never written to logs.
+**Account binding.** An asserted identity binds only to an account os-sso owns or one with
+no usable local password — never to one with a real password, and never to a privileged
+account (`root`/system, `admins`) it did not create. A scrambled password is *not*
+ownership: that is the WebGUI's own "no local login" checkbox, which LDAP-backed
+administrators wear. Email matching additionally requires a verified address.
+
+Each account is bound to **one subject per provider**, recorded on first login. A second
+subject of the same provider presenting that account's username is refused — the takeover
+a mutable username claim would otherwise allow. A second *provider* binds alongside, so
+one directory fronted by both OIDC and SAML maps onto a single local account.
+
+**Groups.** A **privileged** group (`admins`, or any carrying full-GUI / shell /
+user-manager rights) only ever gains members through an explicit operator mapping; the 1:1
+name fallback refuses them. Strict sync revokes only what os-sso granted, never a
+hand-assigned group, never the last privileged member.
+
+**Protocols.** OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp`/`iat`, binds `at_hash` to the
+access token and requires an asymmetric signature; SAML verifies the assertion signature
+and is replay-protected (single-use request id plus a consumed-assertion cache). What the
+IdP is *asked* for is also *checked* on return — `max_age` against `auth_time` (SAML:
+`AuthnInstant`), the required `acr` against the returned one — because requesting an MFA
+context is voluntary per the spec, so only the answer proves anything. The client can
+authenticate to the token endpoint with no shared secret at all (`private_key_jwt`, mutual
+TLS), and the pre-auth endpoints are rate limited per source.
+
+**SCIM** needs a bearer token **and** a source-address allowlist, and refuses on the same
+principles as the login path — see [SCIM provisioning](#scim-provisioning).
+
+The local password (+ native TOTP) always stays active as a **break-glass** path: keep at
+least one local admin.
+
+> `client_secret`, client keys and SP keys live in `config.xml` like other OPNsense
+> credentials (LDAP bind passwords and the like) and are never written to logs.
 
 ## Test / lab
 
-### Unit tests
-
-`test/unit/` covers the logic that decides security and is pure enough to call directly:
-which local account an asserted identity may bind to, which group a directory may fill,
-what counts as a same-site return URL, how the client authenticates to a token endpoint.
-Every case there is a *refusal* - which is exactly what an end-to-end run never reaches,
-since it drives the happy path.
-
-No dependency beyond PHP itself:
+Two layers, both under [`test/`](test/) with their own
+[README](test/README.md): a dependency-free **unit suite** over the logic that decides
+security (every case is a refusal — the part an end-to-end run never reaches), and **eight
+end-to-end suites** against a Vagrant OPNsense VM with Authentik and Keycloak in Docker,
+driving real browser ceremonies and a real OpenVPN client.
 
 ```sh
-php test/unit/run.php                 # everything
-php test/unit/run.php scim            # only matching suites
-```
-
-A couple of groups need `/var/db/os-sso` (the state directory the config lock lives in)
-and report `skip` rather than fail without it, so the suite still runs unprivileged. For
-the full set:
-
-```sh
-docker run --rm -v "$PWD:/w" -w /w php:8.3-cli php test/unit/run.php
-```
-
-### End-to-end lab
-
-A reproducible lab lives under `test/` - a Vagrant OPNsense VM plus Authentik and
-Keycloak in Docker behind a TLS proxy. `vagrant up` is self-contained: it pushes
-the source over SCP and deploys the plugin into the live tree (no manual steps).
-
-```sh
-cd test && vagrant up                 # boot the OPNsense VM + deploy the plugin
-cd test/idp && ./up.sh                # start Authentik + Keycloak (+ TLS proxy)
-bash keycloak/setup-keycloak.sh       # create realm, clients, test user
-bash authentik/setup.sh               # create OIDC/SAML providers + mappings
-```
-
-Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. The VM gets a host-only
-address (`192.168.60.10`) *and* a NAT forward for the WebGUI; override either when
-something already owns it:
-
-```sh
-SSO_LAN_IP=192.168.60.10 SSO_GUI_PORT=8444 vagrant up      # host-only + WebGUI forward
-KC_HTTP_PORT=8091 ./up.sh keycloak                         # Keycloak admin port
-SP_BASE=https://192.168.60.10 bash keycloak/setup-keycloak.sh
-```
-
-**Use one origin end to end** - `SP_BASE`, the auth server's **Base URL** and
-`SSO_GUI_URL` must all be the same string. The OIDC/SAML anti-replay material (state,
-nonce, PKCE) lives in a session cookie, so a login started on one origin and a callback
-landing on another will not find it.
-
-Prefer the host-only address: the **captive portal** listens on `8000+zoneid` of the zone
-interface and redirects there, which a NAT forward cannot reach. (192.168.60/24 rather
-than the usual .56 because VMware takes `vmnet2`/`vmnet3` there, and VirtualBox only
-allows host-only addresses inside 192.168.56.0/21 without `/etc/vbox/networks.conf`.)
-
-Eight end-to-end suites under `test/e2e/`, run against either IdP:
-
-```sh
-export SSO_GUI_URL=https://192.168.60.10       # must match the provider Base URL
-test/e2e/run-all.sh                            # everything, Keycloak
-IDP=authentik test/e2e/run-all.sh              # same, Authentik
-test/e2e/run-all.sh oidc saml                  # a subset
-test/e2e/oidc.sh                               # or one suite on its own
-```
-
-Suites run from any directory - each resolves its own location first, symlinks included -
-and say so rather than failing blank if started from an incomplete copy.
-
-`run-all.sh` resynchronises the guest clock from the host first. A suspended VirtualBox
-guest drifts, its NTP has no route out here, and past the 60s signing leeway every login
-fails on the *token* instead of the clock (`Cannot handle token with iat prior to ...`).
-Tune with `SSO_CLOCK_TOLERANCE` (default 5s), disable with `SSO_SKIP_CLOCK_SYNC=1`.
-
-| Suite | Where | Checks | Covers |
-|---|---|---|---|
-| `oidc.sh` | host | 28 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, rate limiting, required groups, deprovisioning, session expiry, back-channel logout |
-| `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only, skipped on Authentik), POST binding, metadata import, SLO |
-| `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
-| `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
-| `scim.sh` | host | 46 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and against Authentik its real SCIM client |
-| `jwt.sh` | VM | 17 | source gate, signature/aud, `iat`, max-age, single-use, group mapping |
-| `cp.sh` | VM | 8 | the authorizer gates, CORS scoping, and a real configd allow |
-| `vpn.sh` | VM | 22 | the hook and the verdict writer, IP binding, single-use session ids, username enforcement, stale-session sweep |
-
-The host-side suites drive the whole browser ceremony through
-`lib/idp_login.py`, which speaks both IdP dialects: Keycloak renders a login form,
-Authentik drives a flow-executor API.
-
-`vpn-client.sh` needs `openvpn` on the host and the lab VPN server started with
-`vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/setup-vpn-server.sh'`;
-it skips itself when openvpn is missing.
-
-## Build
-
-CI builds the `.pkg` in a FreeBSD VM and publishes a GitHub release on a
-`v*.*.*` tag (or a manual run) - see `.github/workflows/build-pkg.yml`. Versions
-follow `YEAR.MONTH.INDEX` (e.g. `2026.6.3`).
-
-Locally on an OPNsense dev VM (plugin name `sso`, category `security`):
-
-```sh
-cd /usr/plugins/security/sso
-make package
-pkg add ./work/pkg/*.pkg
+php test/unit/run.php                                       # ~400 assertions, no setup
+cd test && vagrant up && (cd idp && ./up.sh)                # bring the lab up
+SSO_GUI_URL=https://192.168.60.10 test/e2e/run-all.sh       # ~150 checks, either IdP
 ```
 
 ## License
