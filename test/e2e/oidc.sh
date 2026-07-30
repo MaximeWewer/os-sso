@@ -129,6 +129,27 @@ grep -q 'logout_token' "$W/logout.html" && ok "cross-site logout asks for confir
 check "same-origin logout proceeds" 302 \
     "$(curl -sk -b "$W/jar" -H 'Sec-Fetch-Site: same-origin' -o /dev/null -w '%{http_code}' "$GUI/api/sso/logout")"
 
+# --- 5b. pushed authorization requests -----------------------------------------
+# PAR moves the request off the browser entirely, so what changes is the shape of the
+# redirect: client_id and an opaque reference, nothing else. The login has to still
+# work, which is the half a URL check cannot tell you.
+echo ">>> case 5b: pushed authorization requests (PAR)"
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_use_par=1" >/dev/null
+PARURL=$(curl -sk -o /dev/null -w '%{redirect_url}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")
+case "$PARURL" in
+    *request_uri=urn*) ok "the redirect carries a request_uri reference" ;;
+    *) ko "no request_uri in the redirect ($PARURL)" ;;
+esac
+case "$PARURL" in
+    *state=*|*code_challenge=*|*redirect_uri=*) ko "the request parameters still travel in the URL" ;;
+    *) ok "no state, PKCE challenge or redirect_uri left in the URL" ;;
+esac
+rm -f "$W/parjar"
+check "a PAR login completes" 302 "$(login "$W/parjar")"
+is_live "$W/parjar" "and the session it opened is authenticated"
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_use_par=0" >/dev/null
+vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+
 # --- 6. rate limiting ----------------------------------------------------------
 echo ">>> case 6: pre-auth rate limit"
 # The ceiling is 60 a minute per source: one source is regularly a whole NATed office
