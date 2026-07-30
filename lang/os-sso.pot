@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-07-30 19:32+0200\n"
+"POT-Creation-Date: 2026-07-30 19:41+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -966,16 +966,16 @@ msgid ""
 "signed Destination/ACS match."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:236
+#: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:297
 #, php-format
 msgid "Continuing to %s"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:240
+#: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:301
 msgid "Connected"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:242
+#: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:303
 #, php-format
 msgid "Signed in as %s. You now have network access."
 msgstr ""

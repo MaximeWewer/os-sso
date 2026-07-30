@@ -280,7 +280,11 @@ the part an attacker does not need.
 4. Make sure the zone lets unauthenticated clients reach the firewall WebGUI and
    the IdP (zone *allowed addresses* / pre-auth) so the login can complete.
 
-A user who signs in through SSO gets their device authorized in that portal zone.
+A user who signs in through SSO gets their device authorized in that portal zone. If that
+grant cannot be written down, the authorization is taken straight back and the login
+refused: the record is the only handle a back-channel logout, a SCIM deactivation, the
+session sweeper or the *End* button has on a portal client, so an access nothing has a
+record of is one nothing can revoke.
 
 The "connected" page then bounces them to wherever they were originally headed, which
 is an arbitrary external site by design - that is what a captive portal does. The URL

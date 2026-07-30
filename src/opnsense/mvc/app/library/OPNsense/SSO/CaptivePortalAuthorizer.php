@@ -160,6 +160,67 @@ final class CaptivePortalAuthorizer
     }
 
     /**
+     * Record what authorize() just granted, and take it straight back if it cannot be
+     * recorded.
+     *
+     * The portal is the one door that reaches the network without going through
+     * IdentityMapper, and therefore without the config lock -- so where every other path
+     * already fails closed on an unusable state directory, this one happily let a client
+     * onto the wifi and then found nowhere to write the record down. That record is the
+     * only handle a back-channel logout, a SCIM deactivation, the session sweeper or the
+     * diagnostics page has on a portal client: without it the access is not merely
+     * untracked, it is unrevocable, which is the opposite of what this plugin promises.
+     *
+     * So the grant is undone rather than kept. Refusing a guest onto the wifi is a
+     * visible, self-correcting failure; leaving one there with nothing able to remove
+     * them is not.
+     *
+     * @param array $cpRes what authorize() returned
+     * @param array $idpSession provider, issuer, sub, sid, lifetime
+     * @throws \RuntimeException when the grant was taken back
+     */
+    public static function recordGrant(array $cpRes, array $idpSession): void
+    {
+        // Ours on the left: "+" keeps the left-hand key on a collision, and what this
+        // record is FOR -- which zone, which portal session to end -- is not something a
+        // caller's metadata should be able to overwrite.
+        $recorded = SessionRegistry::recordGrant([
+            'kind' => SessionRegistry::PORTAL,
+            'username' => (string)$cpRes['username'],
+            'zone' => (string)$cpRes['zone'],
+            'cp_session' => (string)($cpRes['session']['sessionId'] ?? ''),
+        ] + $idpSession);
+        if ($recorded) {
+            return;
+        }
+        self::disconnect($cpRes);
+        throw new \RuntimeException(
+            'captive portal authorization was taken back: the grant could not be recorded, '
+            . 'and an access nothing has a record of is one nothing can revoke'
+        );
+    }
+
+    /** Drop a portal session we just created. */
+    private static function disconnect(array $cpRes): void
+    {
+        $session = (string)($cpRes['session']['sessionId'] ?? '');
+        if ($session === '') {
+            // "already AUTHORIZED": the address was on the network before this login, so
+            // there is no session of ours to end and something else granted it.
+            syslog(LOG_WARNING, sprintf(
+                "os-sso cp: could not record the grant for '%s' and it had no session of its own to end",
+                (string)$cpRes['username']
+            ));
+            return;
+        }
+        (new Backend())->configdpRun('captiveportal disconnect', [$session, 'os-sso: grant not recordable']);
+        syslog(LOG_WARNING, sprintf(
+            "os-sso cp: disconnected '%s' again -- the grant could not be recorded",
+            (string)$cpRes['username']
+        ));
+    }
+
+    /**
      * Normalise the captive client's original destination into an absolute http(s)
      * URL, or '' if it is not one.
      *

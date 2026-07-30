@@ -162,3 +162,41 @@ throws(
 );
 nothrow(fn() => CP::authorize('1', 'kc', cpIdentity('carol', [], 'sub-carol'), '10.0.0.1'), 'an enabled account still gets in');
 nothrow(fn() => CP::authorize('1', 'kc', cpIdentity('dave', [], 'sub-dave'), '10.0.0.1'), 'and so does an identity with no local account at all');
+
+T::group('CaptivePortalAuthorizer: a grant that cannot be recorded is given back');
+
+// The portal reaches the network without going through IdentityMapper, so it is the one
+// door that does not already fail closed on an unusable state directory. The record is
+// the only handle anything has on a portal client -- back-channel logout, SCIM, the
+// sweeper, the End button -- so an unrecordable grant is an access nothing can revoke.
+$grant = ['username' => 'carol', 'zone' => '1', 'session' => ['sessionId' => 'cp-session-1']];
+$idpSession = ['provider' => 'kc', 'issuer' => 'https://idp', 'sub' => 'sub-carol'];
+
+if (!stateDirUsable()) {
+    T::skip('the whole case', 'needs a writable /var/db/os-sso');
+} else {
+    nothrow(fn() => CP::recordGrant($grant, $idpSession), 'a recordable grant is kept');
+
+    // Make the record undeliverable the way StateDir itself judges it -- a bucket owned
+    // by somebody else is refused rather than written into -- and put it back after.
+    $sessions = \OPNsense\SSO\StateDir::path('sessions');
+    $nobody = function_exists('posix_getpwnam') ? @posix_getpwnam('nobody') : false;
+    if (!(function_exists('posix_geteuid') && posix_geteuid() === 0 && is_array($nobody))) {
+        T::skip('the unrecordable case', 'needs root and a "nobody" account to break the bucket');
+    } else {
+        $owner = fileowner($sessions);
+        chown($sessions, (int)$nobody['uid']);
+        Backend::$calls = [];
+        throws(
+            fn() => CP::recordGrant($grant, $idpSession),
+            'could not be recorded',
+            'an unrecordable grant refuses the login'
+        );
+        eq(
+            ['captiveportal disconnect', ['cp-session-1', 'os-sso: grant not recordable']],
+            Backend::$calls[count(Backend::$calls) - 1],
+            'and the client is disconnected again rather than left on the network'
+        );
+        chown($sessions, (int)$owner);
+    }
+}

@@ -89,15 +89,18 @@ final class SessionRegistry
      * @param array $meta kind (portal|vpn), username, provider, issuer, sub, sid,
      *        lifetime (s, 0 = none), plus what it takes to take it away: cp_session +
      *        zone, or vpn_cn
+     * @return bool whether the record was actually written -- a caller that grants
+     *         network access has to know, since an access nothing recorded is one
+     *         nothing can revoke
      */
-    public static function recordGrant(array $meta): void
+    public static function recordGrant(array $meta): bool
     {
         $kind = (string)($meta['kind'] ?? '');
         if (!in_array($kind, [self::PORTAL, self::VPN], true)) {
-            return;
+            return false;
         }
         $lifetime = max(0, (int)($meta['lifetime'] ?? 0));
-        self::write(hash('sha256', $kind . '|' . bin2hex(random_bytes(16))), [
+        return self::write(hash('sha256', $kind . '|' . bin2hex(random_bytes(16))), [
             'kind' => $kind,
             'username' => (string)($meta['username'] ?? ''),
             'provider' => (string)($meta['provider'] ?? ''),
@@ -112,16 +115,28 @@ final class SessionRegistry
         ]);
     }
 
-    /** Persist one record, 0600, named by the handle the diagnostics page hands back. */
-    private static function write(string $handle, array $entry): void
+    /**
+     * Persist one record, 0600, named by the handle the diagnostics page hands back.
+     *
+     * @return bool whether the record is on disk. A failure used to be a warning and
+     *         nothing else, which is fine for a WebGUI session -- it still has a session
+     *         file, an idle timeout and an account behind it -- and not fine for a grant
+     *         whose record is the ONLY handle anything has on it.
+     */
+    private static function write(string $handle, array $entry): bool
     {
         try {
             $file = StateDir::path('sessions') . '/' . $handle . '.json';
-            @file_put_contents($file, json_encode($entry), LOCK_EX);
-            @chmod($file, 0600);
         } catch (\RuntimeException $e) {
             syslog(LOG_WARNING, 'os-sso: cannot record the session: ' . $e->getMessage());
+            return false;
         }
+        if (@file_put_contents($file, json_encode($entry), LOCK_EX) === false) {
+            syslog(LOG_WARNING, 'os-sso: cannot write the session record ' . $file);
+            return false;
+        }
+        @chmod($file, 0600);
+        return true;
     }
 
     /** Drop the record for a session that ended normally. */

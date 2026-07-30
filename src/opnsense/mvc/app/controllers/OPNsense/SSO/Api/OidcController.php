@@ -164,16 +164,13 @@ class OidcController extends ApiControllerBase
                     (string)($_SERVER['REMOTE_ADDR'] ?? '')
                 );
                 // Record what was granted, so a back-channel logout, a SCIM
-                // deactivation or an administrator can take it back.
-                SessionRegistry::recordGrant([
-                    'kind' => SessionRegistry::PORTAL,
-                    'username' => $cpRes['username'],
+                // deactivation or an administrator can take it back -- and give the
+                // access back up if that record cannot be written.
+                CaptivePortalAuthorizer::recordGrant($cpRes, [
                     'provider' => (string)$provider,
                     'issuer' => $protocol->getIssuer(),
                     'sub' => $identity->subject,
                     'sid' => $protocol->getLastSessionId(),
-                    'cp_session' => (string)($cpRes['session']['sessionId'] ?? ''),
-                    'zone' => $cpRes['zone'],
                     'lifetime' => (int)$auth->ssoSessionLifetime,
                 ]);
                 session_write_close();
