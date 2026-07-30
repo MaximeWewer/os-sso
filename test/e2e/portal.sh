@@ -96,6 +96,31 @@ grep -q 'javascript:' "$W/evil.html" 2>/dev/null \
     || ok "the javascript: destination was dropped"
 
 # Leave the LAN interface un-intercepted for the next suite (see disable_cp_zones.php).
+echo ">>> case 5: a portal client is revoked, not only a WebGUI session"
+# The gap this closes: a back-channel logout, a SCIM deactivation or the End button used
+# to end WebGUI sessions and leave the person on the wifi. The grant is recorded like any
+# other access, so ending it disconnects the portal session too.
+vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+portal_login "$ZONE" '' "$W/again.html" >/dev/null
+# Our own portal session, by the id the grant records -- the zone can hold clients
+# from earlier runs, so counting rows would prove nothing.
+# Newest first, so the one this suite just made is the first line.
+CPSESSION=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_grants.php portal" | head -1 | awk '{print $3}')
+[ -n "$CPSESSION" ] && [ "$CPSESSION" != "-" ] \
+    && ok "the portal authorization was recorded as a revocable grant" \
+    || ko "no portal grant in the registry"
+vm "configctl captiveportal list_clients $ZONE" | grep -qF "$CPSESSION" \
+    && ok "and the client is authorized in the zone" \
+    || ko "the portal session $CPSESSION is not in the zone"
+# Ending it goes through the same registry call every revocation path uses.
+ENDED=$(vm "php /home/vagrant/os-sso/test/vagrant/revoke_grants.php portal")
+[ "${ENDED:-0}" -gt 0 ] 2>/dev/null && ok "the grant was revoked ($ENDED)" \
+    || ko "nothing was revoked (got '$ENDED')"
+sleep 1
+vm "configctl captiveportal list_clients $ZONE" | grep -qF "$CPSESSION" \
+    && ko "the portal session survived the revocation" \
+    || ok "the captive-portal client was disconnected from the network"
+
 vm "php /home/vagrant/os-sso/test/vagrant/disable_cp_zones.php" >/dev/null 2>&1
 vm "configctl captiveportal reconfigure" >/dev/null 2>&1
 
