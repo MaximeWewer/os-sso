@@ -161,7 +161,9 @@ roles or a group filter.
    share an EntityID or ACS:
    - ACS: `https://<opnsense>/api/sso/saml/acs?provider=<name>`
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
-   - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
+   - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>` (HTTP-Redirect or
+     HTTP-POST; a posted message must carry an XML signature, since it has no query
+     string to sign)
 3. The IdP must **sign the assertion** with RSA-SHA256 (a SHA-1 signature *or digest* is
    refused, unless **Accept SHA-1 signatures** is ticked for an IdP that cannot be moved
    yet) and send **at least one attribute** - an empty

@@ -98,3 +98,57 @@ eq([$mfa], SamlProtocol::authnContexts(samlContexts([$mfa, $mfa])), 'repeats col
 eq([], SamlProtocol::authnContexts(samlContexts([])), 'an assertion with no context reads as none');
 eq([], SamlProtocol::authnContexts(''), 'nothing to read is not a context');
 eq([], SamlProtocol::authnContexts('<not xml'), 'nor is an unparsable document');
+
+T::group('SamlProtocol: a Single Logout message posted rather than redirected');
+
+// php-saml only knows the redirect binding's query signature for logout messages, so
+// the embedded one is verified here -- and everything below is a refusal, because that
+// verification is the only thing standing between a stranger and "log everybody out".
+$sloProtocol = new SamlProtocol([
+    'provider_name' => 'kc',
+    'base_url' => 'https://fw.example',
+    'sp_entity_id' => 'https://fw.example/api/sso/saml/metadata?provider=kc',
+    'acs_url' => 'https://fw.example/api/sso/saml/acs?provider=kc',
+    'idp_entity_id' => 'https://idp.example',
+    'idp_sso_url' => 'https://idp.example/sso',
+    'idp_x509' => 'MIIB-not-a-real-certificate',
+]);
+
+$unsigned = base64_encode(
+    "<samlp:LogoutRequest xmlns:samlp='urn:oasis:names:tc:SAML:2.0:protocol' "
+    . "xmlns:saml='urn:oasis:names:tc:SAML:2.0:assertion' ID='r1'>"
+    . "<saml:Issuer>https://idp.example</saml:Issuer><saml:NameID>alice</saml:NameID>"
+    . "</samlp:LogoutRequest>"
+);
+throws(
+    fn() => $sloProtocol->processSloPost('', ['SAMLRequest' => $unsigned]),
+    'carries no signature',
+    'an unsigned posted LogoutRequest is refused'
+);
+throws(
+    fn() => $sloProtocol->processSloPost('', ['SAMLRequest' => 'not base64 at all !!']),
+    'carries no signature',
+    'so is one that does not decode'
+);
+
+$sha1Signed = base64_encode(
+    "<samlp:LogoutRequest xmlns:samlp='urn:oasis:names:tc:SAML:2.0:protocol' "
+    . "xmlns:saml='urn:oasis:names:tc:SAML:2.0:assertion' ID='r1'>"
+    . "<saml:Issuer>https://idp.example</saml:Issuer>"
+    . "<ds:Signature xmlns:ds='http://www.w3.org/2000/09/xmldsig#'><ds:SignedInfo>"
+    . "<ds:SignatureMethod Algorithm='{$rsaSha1}'/></ds:SignedInfo>"
+    . "<ds:SignatureValue>x</ds:SignatureValue></ds:Signature>"
+    . "</samlp:LogoutRequest>"
+);
+throws(
+    fn() => $sloProtocol->processSloPost('', ['SAMLRequest' => $sha1Signed]),
+    'broken algorithm',
+    'a posted message signed with SHA-1 is refused before its signature is even checked'
+);
+
+$sha256Signed = str_replace($rsaSha1, $rsaSha256, base64_decode($sha1Signed));
+throws(
+    fn() => $sloProtocol->processSloPost('', ['SAMLRequest' => base64_encode($sha256Signed)]),
+    'does not verify',
+    'and a signature that is not the IdP\'s is refused'
+);

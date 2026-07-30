@@ -238,6 +238,19 @@ final class SamlProtocol implements ProtocolInterface
      */
     public static function weakAlgorithm(string $xml): string
     {
+        return self::weakAlgorithmAt($xml, [
+            '/samlp:Response/ds:Signature',
+            '/samlp:Response/saml:Assertion/ds:Signature',
+        ]);
+    }
+
+    /**
+     * Same question at whichever signature positions the caller validated.
+     *
+     * @param string[] $signaturePaths xpaths of the ds:Signature elements that count
+     */
+    private static function weakAlgorithmAt(string $xml, array $signaturePaths): string
+    {
         if ($xml === '') {
             return '';
         }
@@ -253,7 +266,7 @@ final class SamlProtocol implements ProtocolInterface
         // Spelled out rather than composed: "|" unions whole paths, so appending one
         // suffix to a union only reaches its last branch.
         $paths = [];
-        foreach (['/samlp:Response/ds:Signature', '/samlp:Response/saml:Assertion/ds:Signature'] as $signature) {
+        foreach ($signaturePaths as $signature) {
             $paths[] = $signature . '//ds:SignatureMethod';
             $paths[] = $signature . '//ds:DigestMethod';
         }
@@ -456,10 +469,113 @@ final class SamlProtocol implements ProtocolInterface
      * validated against $requestId) or a LogoutRequest (IdP-initiated -- returns
      * the LogoutResponse redirect to send back). Throws on validation failure.
      */
-    public function processSlo(string $requestId): array
+    /**
+     * The HTTP-POST counterpart: the same message, in the request body, signed inside
+     * the XML instead of over the query string.
+     *
+     * php-saml only knows the redirect binding here -- it demands a Signature query
+     * parameter and never looks at an embedded ds:Signature on a logout message -- so
+     * an IdP that posts its SLO could not be answered at all. What it does know is
+     * everything else that has to be checked (issuer, destination, InResponseTo, status,
+     * NotOnOrAfter) and how to build the LogoutResponse to send back. So the signature
+     * is verified here, against the same certificates the assertions are, and the
+     * message is then handed to the toolkit with the query-signature requirement lifted
+     * -- lifted only after this method has proved the message is signed.
+     *
+     * @param array $post the request body ($_POST)
+     */
+    public function processSloPost(string $requestId, array $post): array
     {
-        $this->assertStrongSloSignature($_GET);
-        $auth = new Saml2Auth($this->settings(true));
+        $type = !empty($post['SAMLRequest']) ? 'SAMLRequest' : 'SAMLResponse';
+        $raw = (string) ($post[$type] ?? '');
+        $root = $type === 'SAMLRequest' ? 'LogoutRequest' : 'LogoutResponse';
+        $this->assertPostSloSigned($root, self::decodeMessage($raw));
+
+        // php-saml reads the message off $_GET whatever the binding; give it the one we
+        // just verified, and nothing else from the body.
+        $_GET[$type] = $raw;
+        if (isset($post['RelayState'])) {
+            $_GET['RelayState'] = (string) $post['RelayState'];
+        }
+        return $this->processSlo($requestId, false);
+    }
+
+    /**
+     * Verify the XML signature of a posted logout message against the IdP certificate.
+     *
+     * @throws \RuntimeException when it is unsigned, signed by somebody else, or signed
+     *         with an algorithm that proves nothing
+     */
+    private function assertPostSloSigned(string $root, string $xml): void
+    {
+        $path = '/samlp:' . $root . '/ds:Signature';
+        if ($xml === '' || \OneLogin\Saml2\Utils::query(self::parse($xml), $path)->length === 0) {
+            throw new \RuntimeException('SAML SLO: the posted ' . $root . ' carries no signature');
+        }
+        $weak = $this->cfg['allow_sha1'] ?? false ? '' : self::weakAlgorithmAt($xml, [$path]);
+        if ($weak !== '') {
+            throw new \RuntimeException(
+                'SAML SLO: the posted ' . $root . ' is signed with a broken algorithm (' . $weak . ')'
+            );
+        }
+        foreach ($this->idpCerts() as $cert) {
+            try {
+                if (\OneLogin\Saml2\Utils::validateSign($xml, $cert, null, 'sha256', $path)) {
+                    return;
+                }
+            } catch (\Throwable $e) {
+                // try the next certificate: an IdP mid key-rotation publishes several
+            }
+        }
+        throw new \RuntimeException('SAML SLO: the posted ' . $root . ' signature does not verify');
+    }
+
+    /** Every certificate this provider accepts an IdP signature from. @return string[] */
+    private function idpCerts(): array
+    {
+        $certs = array_values(array_filter((array) ($this->cfg['idp_x509_signing'] ?? [])));
+        $pinned = trim((string) ($this->cfg['idp_x509'] ?? ''));
+        if ($pinned !== '') {
+            array_unshift($certs, $pinned);
+        }
+        return $certs;
+    }
+
+    /** base64, deflated or not, with the same DTD guard as every other message. */
+    private static function decodeMessage(string $raw): string
+    {
+        $decoded = base64_decode($raw, true);
+        if ($decoded === false || $decoded === '') {
+            return '';
+        }
+        $xml = @gzinflate($decoded, self::MAX_INFLATE);
+        if ($xml === false) {
+            $xml = $decoded;
+        }
+        return preg_match('/<!DOCTYPE|<!ENTITY/i', $xml) ? '' : $xml;
+    }
+
+    /** A parsed document, or an empty one when it will not parse. */
+    private static function parse(string $xml): \DOMDocument
+    {
+        $doc = new \DOMDocument();
+        if ($xml === '' || !@$doc->loadXML($xml, LIBXML_NONET | LIBXML_NSCLEAN) || $doc->doctype !== null) {
+            return new \DOMDocument();
+        }
+        return $doc;
+    }
+
+    /**
+     * @param bool $querySigned whether the signature travelled on the query string, as
+     *        the redirect binding puts it -- false when this class already verified an
+     *        embedded one (processSloPost)
+     */
+    public function processSlo(string $requestId, bool $querySigned = true): array
+    {
+        if ($querySigned) {
+            $this->assertStrongSloSignature($_GET);
+        }
+        $auth = new Saml2Auth($this->settings(true, $querySigned));
         $url = $auth->processSLO(false, $requestId !== '' ? $requestId : null, false, null, true);
         $errors = $auth->getErrors();
         if (!empty($errors)) {
@@ -746,8 +862,12 @@ final class SamlProtocol implements ProtocolInterface
      * @param bool $forSlo when true, REQUIRE incoming Single Logout messages to be
      *   signed (an unsigned LogoutRequest is otherwise a forced-logout / CSRF lever)
      *   and sign our own outgoing SLO messages when an SP key is configured.
+     * @param bool $sloQuerySigned whether that requirement is php-saml's to enforce.
+     *   It only knows the redirect binding's query signature; for a posted message
+     *   processSloPost() has already verified the embedded one, and leaving the flag on
+     *   would reject it for lacking a signature it does not carry by construction.
      */
-    private function settings(bool $forSlo = false): array
+    private function settings(bool $forSlo = false, bool $sloQuerySigned = true): array
     {
         // Encryption is decided by the IdP (it encrypts to our SP certificate) and
         // merely REQUIRED here; php-saml decrypts with the SP private key either way.
@@ -793,7 +913,7 @@ final class SamlProtocol implements ProtocolInterface
             "allowRepeatAttributeName" => true,
         ];
         if ($forSlo) {
-            $security["wantMessagesSigned"] = true;
+            $security["wantMessagesSigned"] = $sloQuerySigned;
             if (!empty($this->cfg["sp_key"]) && !empty($this->cfg["sp_cert"])) {
                 $security["logoutRequestSigned"] = true;
                 $security["logoutResponseSigned"] = true;

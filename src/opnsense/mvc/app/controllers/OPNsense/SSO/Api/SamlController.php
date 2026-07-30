@@ -247,8 +247,12 @@ class SamlController extends ApiControllerBase
     {
         $this->startSession();
 
-        // Incoming SLO message (response to ours, or IdP-initiated request).
-        if (!empty($_GET['SAMLResponse']) || !empty($_GET['SAMLRequest'])) {
+        // Incoming SLO message (response to ours, or IdP-initiated request), over
+        // either binding: the redirect one signs the query string, the POST one signs
+        // inside the XML, and SamlProtocol knows the difference.
+        $posted = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
+            && (!empty($_POST['SAMLResponse']) || !empty($_POST['SAMLRequest']));
+        if ($posted || !empty($_GET['SAMLResponse']) || !empty($_GET['SAMLRequest'])) {
             $redirect = '/';
             try {
                 // Pre-auth endpoint, like login and acs: inflating and parsing an
@@ -259,8 +263,9 @@ class SamlController extends ApiControllerBase
                 // the one named on our own per-provider SLO endpoint, then the
                 // session, then the first configured SAML provider. Only a selector:
                 // whichever we land on, the message is validated against ITS cert.
-                $provider = $this->samlProviderByIssuer(SamlProtocol::peekSloIssuer($_GET))
-                    ?: ($this->knownSamlProvider((string)($_GET['provider'] ?? ''))
+                $message = $posted ? $_POST : $_GET;
+                $provider = $this->samlProviderByIssuer(SamlProtocol::peekSloIssuer($message))
+                    ?: ($this->knownSamlProvider((string)($this->request->get('provider') ?? ''))
                         ?: (($_SESSION['sso_logout']['provider'] ?? '') ?: $this->firstSamlProvider()));
                 $protocol = $this->protocolFor($provider);
                 // Single use, and dropped before validation rather than after: the
@@ -269,7 +274,7 @@ class SamlController extends ApiControllerBase
                 // was matched against must not still be sitting there for the next try.
                 $reqId = (string)($_SESSION['sso_saml_logout_reqid'] ?? '');
                 unset($_SESSION['sso_saml_logout_reqid']);
-                $slo = $protocol->processSlo($reqId);
+                $slo = $posted ? $protocol->processSloPost($reqId, $_POST) : $protocol->processSlo($reqId);
                 $redirect = $slo['redirect'] ?: '/';
                 // Front-channel SLO only logs out the browser that followed the
                 // redirect. End the subject's other sessions on this firewall too --
