@@ -32,6 +32,12 @@ case "$PROTOCOL" in
     *) echo "os-sso vpn: invalid PROTOCOL '$PROTOCOL' (oidc|saml)" >&2; exit 1 ;;
 esac
 
+# The GUI keeps this between 30 and 900, but the file can be hand-edited and we do
+# arithmetic on it below.
+case "$TIMEOUT" in
+    ''|*[!0-9]*) echo "os-sso vpn: invalid TIMEOUT '$TIMEOUT' (seconds)" >&2; exit 1 ;;
+esac
+
 if [ -z "$PROVIDER" ] || [ -z "$HOST" ]; then
     echo "os-sso vpn: PROVIDER/HOST not set in $CONF" >&2
     exit 1
@@ -56,6 +62,13 @@ mkdir -p "$STATE_DIR"
 # IP -- that file is what a later verdict trusts to pick the file it writes 1 into.
 [ ! -h "$STATE_DIR" ] || { echo "os-sso vpn: $STATE_DIR is a symlink" >&2; exit 1; }
 chmod 700 "$STATE_DIR" || { echo "os-sso vpn: cannot secure $STATE_DIR" >&2; exit 1; }
+
+# Sweep abandoned attempts. A session file is only consumed by a verdict, so every
+# login the user walked away from used to stay here for good -- this is the one store
+# in the plugin with no expiry of its own. Anything older than the web-auth timeout
+# can no longer be completed: OpenVPN has long dropped the handshake it belonged to.
+# Also collects any ".$$" work file a verdict left behind if it was killed mid-write.
+find "$STATE_DIR" -type f -mmin "+$((TIMEOUT / 60 + 2))" -delete 2>/dev/null || true
 
 # One-time, unguessable session id mapped to this attempt's control file, the
 # client's source IP and the username it asked for. The web callback resolves +
