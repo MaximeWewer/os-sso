@@ -48,8 +48,13 @@
         // portal link cannot turn this into an off-site/JS redirect (open redirect).
         function safeRedir(v) {
             if (!v) { return ''; }
+            // The scheme test skips a scheme-less "host:port", whose colon is followed
+            // by digits and then the end or a path -- otherwise any destination on a
+            // non-default port is silently dropped. Mirrors the server-side check in
+            // CaptivePortalAuthorizer::sanitizeRedirect.
             if (/[\s\\]/.test(v) || v.indexOf('//') === 0
-                || v.indexOf('@') !== -1 || /^[a-z][a-z0-9+.-]*:/i.test(v)) {
+                || v.indexOf('@') !== -1
+                || /^[a-z][a-z0-9+.-]*:(?![0-9]+([/?#]|$))/i.test(v)) {
                 return '';
             }
             return v;

@@ -76,10 +76,10 @@ final class ScimUsers
     /* ---- writes ------------------------------------------------------ */
 
     /**
-     * Whether the last create() actually made an account, as opposed to adopting one
-     * that already carried the userName. The caller answers 201 or 200 accordingly:
-     * reporting "Created" for a resource that was already there tells the directory
-     * something untrue about its own state.
+     * Whether the last create() on THIS instance actually made an account, as opposed to
+     * adopting one that already carried the userName. The caller answers 201 or 200
+     * accordingly: reporting "Created" for a resource that was already there tells the
+     * directory something untrue about its own state.
      */
     public function createdNew(): bool
     {

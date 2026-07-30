@@ -134,7 +134,12 @@ final class CaptivePortalAuthorizer
             return ''; // protocol-relative: the host is not what it looks like
         }
         if (!preg_match('#^https?://#i', $raw)) {
-            if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $raw)) {
+            // A scheme, or a scheme-less "host:port"? Both start with letters and a
+            // colon. What tells them apart is what follows: a port is digits and then
+            // the end or a path/query/fragment. Reading "example.com:8080/x" as a
+            // scheme silently dropped the bounce for any destination on a non-default
+            // port, which is a shape core hands over routinely.
+            if (preg_match('#^[a-z][a-z0-9+.-]*:(?![0-9]+(?:[/?\#]|$))#i', $raw)) {
                 return ''; // some other scheme (javascript:, data:, ...)
             }
             $raw = 'http://' . ltrim($raw, '/'); // core's scheme-less host[/path]

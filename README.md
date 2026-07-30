@@ -446,6 +446,31 @@ waiting out a TTL. Access is gated by its own ACL privilege,
 
 ## Test / lab
 
+### Unit tests
+
+`test/unit/` covers the logic that decides security and is pure enough to call directly:
+which local account an asserted identity may bind to, which group a directory may fill,
+what counts as a same-site return URL, how the client authenticates to a token endpoint.
+Every case there is a *refusal* - which is exactly what an end-to-end run never reaches,
+since it drives the happy path.
+
+No dependency beyond PHP itself:
+
+```sh
+php test/unit/run.php                 # everything
+php test/unit/run.php scim            # only matching suites
+```
+
+A couple of groups need `/var/db/os-sso` (the state directory the config lock lives in)
+and report `skip` rather than fail without it, so the suite still runs unprivileged. For
+the full set:
+
+```sh
+docker run --rm -v "$PWD:/w" -w /w php:8.3-cli php test/unit/run.php
+```
+
+### End-to-end lab
+
 A reproducible lab lives under `test/` - a Vagrant OPNsense VM plus Authentik and
 Keycloak in Docker behind a TLS proxy. `vagrant up` is self-contained: it pushes
 the source over SCP and deploys the plugin into the live tree (no manual steps).
