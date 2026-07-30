@@ -45,7 +45,13 @@ final class RateLimiter
         try {
             $file = self::bucketFile($action, $clientIp);
         } catch (\RuntimeException $e) {
-            return; // no state directory: never let the throttle break logins
+            // No usable state directory. Staying open is deliberate -- there is no secret
+            // to guess here, and the paths that matter already fail closed without us
+            // (ConfigLock and the SAML request store both need the same directory) -- but
+            // going quiet is not: this is a security control switching itself off, and it
+            // was the one StateDir consumer that said nothing while every other one warns.
+            self::warnDisabled($action, 'the state directory is unusable: ' . $e->getMessage());
+            return;
         }
         self::sweep();
 
@@ -55,10 +61,14 @@ final class RateLimiter
         // throttle exists to stop was the one case it did not catch.
         $fp = @fopen($file, 'c+');
         if ($fp === false) {
-            return; // cannot account for this hit; not a reason to break the login
+            // Cannot account for this hit; not a reason to break the login, but the
+            // operator still needs to know the ceiling is not being applied.
+            self::warnDisabled($action, 'the bucket file cannot be opened');
+            return;
         }
         try {
             if (!flock($fp, LOCK_EX)) {
+                self::warnDisabled($action, 'the bucket lock cannot be taken');
                 return;
             }
             @chmod($file, 0600);
@@ -90,6 +100,27 @@ final class RateLimiter
             flock($fp, LOCK_UN);
             fclose($fp);
         }
+    }
+
+    /**
+     * Say once, per process, that the throttle is not being applied.
+     *
+     * Once, because this sits on endpoints that are hit in bursts and a line per request
+     * would bury the thing it is reporting -- and a php-fpm worker handling one request
+     * is exactly the granularity that makes "it happened" visible without the noise.
+     */
+    private static function warnDisabled(string $action, string $why): void
+    {
+        static $warned = false;
+        if ($warned) {
+            return;
+        }
+        $warned = true;
+        syslog(LOG_WARNING, sprintf(
+            'os-sso: the rate limit on %s is NOT being applied -- %s',
+            $action,
+            $why
+        ));
     }
 
     /** Drop buckets nobody has touched in a while. */
