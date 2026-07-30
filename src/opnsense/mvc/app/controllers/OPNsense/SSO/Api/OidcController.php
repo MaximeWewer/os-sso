@@ -196,8 +196,9 @@ class OidcController extends ApiControllerBase
             $this->response->setStatusCode(404, 'Not Found');
             return '';
         }
-        $this->response->setHeader('Content-Type', $icon['type']);
-        $this->response->setHeader('Cache-Control', 'public, max-age=86400');
+        foreach (FaviconProxy::headers($icon['type']) as $header => $value) {
+            $this->response->setHeader($header, $value);
+        }
         return $icon['data'];
     }
 

@@ -87,8 +87,8 @@ final class FaviconProxy
         $origin = 'https://' . $host . (isset($p['port']) ? ':' . $p['port'] : '');
 
         // 1. the conventional /favicon.ico
-        $icon = self::get($origin . '/favicon.ico', $host, $resolve);
-        if ($icon !== null && str_starts_with($icon['type'], 'image/')) {
+        $icon = self::asIcon(self::get($origin . '/favicon.ico', $host, $resolve));
+        if ($icon !== null) {
             return $icon;
         }
 
@@ -101,14 +101,65 @@ final class FaviconProxy
         ) && preg_match('/href=["\']([^"\']+)["\']/i', $m[0], $h)) {
             $href = self::resolveHref($h[1], $origin, $host);
             if ($href !== null) {
-                $icon = self::get($href, $host, $resolve);
-                if ($icon !== null && str_starts_with($icon['type'], 'image/')) {
+                $icon = self::asIcon(self::get($href, $host, $resolve));
+                if ($icon !== null) {
                     return $icon;
                 }
             }
         }
 
         throw new \RuntimeException('icon: no favicon found');
+    }
+
+    /**
+     * Response headers for serving one of these back.
+     *
+     * fetch() only ever returns a raster type; these make sure the browser treats it as
+     * one. nosniff stops a mislabelled body being reinterpreted, and the CSP neuters
+     * the response as a document should anyone navigate straight to the /icon endpoint,
+     * which is a pre-auth GET on the firewall's own origin.
+     *
+     * @return array<string,string>
+     */
+    public static function headers(string $type): array
+    {
+        return [
+            'Content-Type' => $type,
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+            'Cache-Control' => 'public, max-age=86400',
+        ];
+    }
+
+    /** Raster favicon formats. Anything else is not something we will re-serve. */
+    private const SAFE_TYPES = [
+        'image/png',
+        'image/x-icon',
+        'image/vnd.microsoft.icon',
+        'image/gif',
+        'image/jpeg',
+        'image/webp',
+    ];
+
+    /**
+     * Accept a fetched response as an icon, with its Content-Type normalised to the
+     * bare media type the caller will echo back.
+     *
+     * Deliberately an allowlist and not "image/*": image/svg+xml is a document, script
+     * elements and all, and the /icon endpoints are pre-auth GETs served from the
+     * firewall's own origin -- navigating directly to one would run the IdP's markup
+     * there, against the WebGUI. Raster formats only; the endpoints additionally send
+     * nosniff so a mislabelled body cannot be reinterpreted.
+     */
+    private static function asIcon(?array $fetched): ?array
+    {
+        if ($fetched === null) {
+            return null;
+        }
+        $type = strtolower(trim(explode(';', (string)($fetched['type'] ?? ''))[0]));
+        return in_array($type, self::SAFE_TYPES, true)
+            ? ['type' => $type, 'data' => (string)$fetched['data']]
+            : null;
     }
 
     /* ---- on-disk cache (positive + negative), inside the vetted state dir ---- */
@@ -135,9 +186,15 @@ final class FaviconProxy
         if ((time() - (int)@filemtime($f)) > ($miss ? self::MISS_TTL : self::CACHE_TTL)) {
             return null;
         }
-        return $miss
-            ? false
-            : ['type' => (string)$entry['type'], 'data' => (string)base64_decode((string)($entry['data'] ?? ''))];
+        if ($miss) {
+            return false;
+        }
+        // Re-check the type on the way out: a cache file written by an older build may
+        // hold something we no longer serve. An entry that fails is simply a miss.
+        return self::asIcon([
+            'type' => (string)$entry['type'],
+            'data' => (string)base64_decode((string)($entry['data'] ?? '')),
+        ]);
     }
 
     /** @param array{type:string,data:string}|null $icon null records a failure */
