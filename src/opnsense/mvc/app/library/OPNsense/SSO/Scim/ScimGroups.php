@@ -202,10 +202,29 @@ final class ScimGroups
         }
     }
 
+    /**
+     * A uid a directory may add to, or remove from, a group: one os-sso owns.
+     *
+     * Not merely "an account that exists". A group that gets past assertMayTouch() can
+     * still carry real privileges -- firewall rules, the diagnostics pages -- and
+     * without this a directory could hand those to any pre-existing local account it
+     * never provisioned. The reverse matters just as much: it must not strip the
+     * operator's hand-assigned member out of a group it happens to sync. Membership
+     * os-sso did not grant is not membership it manages.
+     */
+    private function isManageable(string $uid): bool
+    {
+        if ($uid === '') {
+            return false;
+        }
+        $user = $this->accounts->findByUid($uid);
+        return $user !== null && $this->accounts->isSsoManaged($user);
+    }
+
     private function addMember(\SimpleXMLElement $group, string $uid): bool
     {
-        if ($uid === '' || $this->accounts->findByUid($uid) === null) {
-            return false; // not provisioned here; nothing to add
+        if (!$this->isManageable($uid)) {
+            return false; // not ours to grant
         }
         $members = $this->membersOf($group);
         if (in_array($uid, $members, true)) {
@@ -219,6 +238,9 @@ final class ScimGroups
 
     private function removeMember(\SimpleXMLElement $group, string $uid): bool
     {
+        if (!$this->isManageable($uid)) {
+            return false; // not ours to revoke
+        }
         $members = $this->membersOf($group);
         if (!in_array($uid, $members, true)) {
             return false;
@@ -237,13 +259,12 @@ final class ScimGroups
     {
         $kept = [];
         foreach ($this->membersOf($group) as $uid) {
-            $user = $this->accounts->findByUid($uid);
-            if ($user === null || !$this->accounts->isSsoManaged($user)) {
+            if (!$this->isManageable($uid)) {
                 $kept[] = $uid;
             }
         }
         foreach ($uids as $uid) {
-            if ($uid !== '' && $this->accounts->findByUid($uid) !== null && !in_array($uid, $kept, true)) {
+            if ($this->isManageable($uid) && !in_array($uid, $kept, true)) {
                 $kept[] = $uid;
             }
         }
