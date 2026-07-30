@@ -95,10 +95,10 @@ class ScimController extends ApiControllerBase
                 case 'GET':
                     return $id === ''
                         ? $users->search($this->filter(), $this->startIndex(), $this->count())
-                        : $users->get($id);
+                        : $this->tagged($users->get($id));
                 case 'POST':
                     $this->requireCollection($id);
-                    $resource = $users->create($this->body());
+                    $resource = $this->tagged($users->create($this->body()));
                     // 201 only for an account that did not exist a moment ago; adopting
                     // one that already carried the userName is a 200.
                     if ($users->createdNew()) {
@@ -109,12 +109,15 @@ class ScimController extends ApiControllerBase
                     return $resource;
                 case 'PUT':
                     $this->requireResource($id);
-                    return $users->replace($id, $this->body());
+                    $this->assertIfMatch($users, $id);
+                    return $this->tagged($users->replace($id, $this->body()));
                 case 'PATCH':
                     $this->requireResource($id);
-                    return $users->patch($id, $this->operations());
+                    $this->assertIfMatch($users, $id);
+                    return $this->tagged($users->patch($id, $this->operations()));
                 case 'DELETE':
                     $this->requireResource($id);
+                    $this->assertIfMatch($users, $id);
                     $users->deactivate($id);
                     $this->response->setStatusCode(204, 'No Content');
                     return null;
@@ -177,6 +180,44 @@ class ScimController extends ApiControllerBase
             return $this->render((new ScimError(500, 'the request could not be processed'))->toResource());
         }
         return $result === null ? '' : $this->render($result);
+    }
+
+    /**
+     * Send a resource's entity tag alongside it, and return the resource unchanged.
+     *
+     * With no tag a client has no way to say "only if nobody else changed it", so two
+     * directories (or a directory and an administrator) editing the same account both
+     * win, in whichever order the writes landed.
+     */
+    private function tagged(array $resource): array
+    {
+        $version = (string)($resource['meta']['version'] ?? '');
+        if ($version !== '') {
+            $this->response->setHeader('ETag', $version);
+        }
+        return $resource;
+    }
+
+    /**
+     * Honour a conditional write.
+     *
+     * "*" means "as long as it exists", which requireNode() has already answered by
+     * throwing 404 if it does not. A tag that no longer matches is a 412: the client
+     * re-reads and decides, rather than overwriting a change it never saw.
+     */
+    private function assertIfMatch(ScimUsers $users, string $id): void
+    {
+        $header = trim((string)($_SERVER['HTTP_IF_MATCH'] ?? ''));
+        if ($header === '' || $header === '*') {
+            return;
+        }
+        $current = (string)($users->get($id)['meta']['version'] ?? '');
+        foreach (array_map('trim', explode(',', $header)) as $candidate) {
+            if ($candidate !== '' && hash_equals($current, $candidate)) {
+                return;
+            }
+        }
+        throw new ScimError(412, 'the resource has changed since the tag you presented');
     }
 
     private function render(array $document): string

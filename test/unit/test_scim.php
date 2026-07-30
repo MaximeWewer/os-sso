@@ -53,7 +53,11 @@ eq(1, $users()->search('userName eq "ours"', 1, 100)['totalResults'], 'filter on
 eq(0, $users()->search('userName eq "human"', 1, 100)['totalResults'], 'a filter cannot reach an unowned account');
 eq(1, $users()->search('externalId eq "ext-1"', 1, 100)['totalResults'], 'filter on externalId');
 eq(1, $users()->search('id eq "2102"', 1, 100)['totalResults'], 'filter on id');
-throws(fn() => $users()->search('userName co "ou"', 1, 100), 'unsupported filter', 'a co filter is refused');
+eq(1, $users()->search('userName eq "ours" and active eq "true"', 1, 100)['totalResults'],
+    'two terms joined by and');
+eq(1, $users()->search('userName eq "nobody" or externalId eq "ext-1"', 1, 100)['totalResults'],
+    'two terms joined by or');
+throws(fn() => $users()->search('userName co "ou"', 1, 100), 'only the "eq" operator', 'a co filter is refused');
 throws(fn() => $users()->search('userType eq "x"', 1, 100), 'not supported', 'an unindexed attribute is refused');
 
 // count=0 is how a client sizes a sync before walking it.
@@ -233,3 +237,35 @@ eq(['2102', '2101'], Tree::members($root, 'staff'), 'replace keeps unowned membe
 $resource = $groups()->get('2002');
 eq('staff', $resource['displayName'], 'the group resource names the group');
 eq(['2101'], array_column($resource['members'], 'value'), 'and lists only the members we own');
+
+T::group('ScimFilter: what a directory may ask for');
+
+use OPNsense\SSO\Scim\ScimFilter;
+
+/** Compile against a fixed resource. */
+function filterOn(array $resource, string $filter): bool
+{
+    $predicate = ScimFilter::compile($filter, fn(string $attr) => $resource[$attr] ?? null);
+    return $predicate();
+}
+
+$row = ['username' => 'alice', 'externalid' => 'ext-1', 'active' => 'true', 'displayname' => 'Alice A'];
+
+truthy(filterOn($row, 'userName eq "alice"'), 'a single eq still works');
+falsy(filterOn($row, 'userName eq "bob"'), 'and still says no when it should');
+truthy(filterOn($row, 'userName eq "ALICE"'), 'string comparison is case-insensitive per the spec');
+// The reconciliation shapes that used to be refused outright, sending the client back to
+// walking every page.
+truthy(filterOn($row, 'userName eq "alice" and active eq "true"'), 'two terms joined by and');
+falsy(filterOn($row, 'userName eq "alice" and active eq "false"'), 'and is not or');
+truthy(filterOn($row, 'userName eq "bob" or externalId eq "ext-1"'), 'two terms joined by or');
+truthy(filterOn($row, '(userName eq "bob" or externalId eq "ext-1") and active eq "true"'), 'parentheses group');
+falsy(filterOn($row, 'userName eq "bob" or externalId eq "ext-2"'), 'or with neither side true');
+
+// Everything else is refused rather than approximated: a client that believes it
+// filtered, and did not, acts on every row that came back.
+throws(fn() => filterOn($row, 'userName co "ali"'), 'only the "eq" operator', 'co is refused');
+throws(fn() => filterOn($row, 'userType eq "x"'), 'not supported', 'an attribute we cannot index is refused');
+throws(fn() => filterOn($row, 'userName eq'), 'incomplete filter', 'a truncated expression is refused');
+throws(fn() => filterOn($row, '(userName eq "alice"'), 'unbalanced parentheses', 'an unclosed group is refused');
+throws(fn() => filterOn($row, 'userName eq "alice" bogus'), 'unsupported filter', 'trailing junk is refused');

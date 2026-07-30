@@ -287,18 +287,17 @@ final class ScimGroups
 
     private function matches(\SimpleXMLElement $group, string $filter): bool
     {
-        if (!preg_match('/^\s*(\w+)\s+eq\s+"([^"]*)"\s*$/i', $filter, $m)) {
-            throw ScimError::badRequest('unsupported filter: ' . $filter, 'invalidFilter');
-        }
-        [, $attribute, $value] = $m;
-        switch (strtolower($attribute)) {
-            case 'displayname':
-                return strcasecmp((string)$group->name, $value) === 0;
-            case 'id':
-                return (string)($group->gid ?? '') === $value;
-            default:
-                throw ScimError::badRequest('filtering on ' . $attribute . ' is not supported', 'invalidFilter');
-        }
+        $predicate = ScimFilter::compile($filter, function (string $attribute) use ($group) {
+            switch ($attribute) {
+                case 'displayname':
+                    return (string)$group->name;
+                case 'id':
+                    return (string)($group->gid ?? '');
+                default:
+                    return null;
+            }
+        });
+        return $predicate();
     }
 
     private function persist(string $groupName): void

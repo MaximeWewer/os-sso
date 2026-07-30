@@ -27,10 +27,12 @@ final class ScimSchema
             // No bulk: every write is a config.xml save under a lock, so batching at
             // the protocol level would only hide how expensive that is.
             'bulk' => ['supported' => false, 'maxOperations' => 0, 'maxPayloadSize' => 0],
+            // "eq", combined with and/or and parentheses -- see ScimFilter.
             'filter' => ['supported' => true, 'maxResults' => ScimUsers::MAX_RESULTS],
             'changePassword' => ['supported' => false],
             'sort' => ['supported' => false],
-            'etag' => ['supported' => false],
+            // Weak tags over the rendered resource, honoured on If-Match.
+            'etag' => ['supported' => true],
             'authenticationSchemes' => [[
                 'type' => 'oauthbearertoken',
                 'name' => 'OAuth Bearer Token',

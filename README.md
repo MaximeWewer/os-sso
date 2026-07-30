@@ -354,14 +354,18 @@ belongs to, and an account provisioned under one provider is not silently adopte
 another.
 
 **Supported:** `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
-(GET/POST/PUT/PATCH/DELETE, `filter` on `userName` and `externalId`, pagination,
-`count=0` as a total-only probe) and `/Groups` (GET plus PATCH of membership). `POST
-/Users` answers **201** when it created the account, **200** when it adopted one already
-carrying the `userName`, **409** on a repeated `externalId`.
+(GET/POST/PUT/PATCH/DELETE, pagination, `count=0` as a total-only probe) and `/Groups`
+(GET plus PATCH of membership). `POST /Users` answers **201** when it created the
+account, **200** when it adopted one already carrying the `userName`, **409** on a
+repeated `externalId`. Filters take `eq` on `userName`, `externalId`, `id`,
+`displayName`, `emails` and `active`, combined with `and`, `or` and parentheses.
+Resources carry `meta.created` / `meta.lastModified` (os-sso keeps its own timestamps -
+config.xml has none), the groups the account is in, and a weak **ETag** that `If-Match`
+is honoured against, so a conditional write that lost a race gets **412** instead of
+overwriting a change it never saw.
 
-**Not supported:** bulk, sort, ETags, `meta.created`/`meta.lastModified` (config.xml keeps
-no per-account timestamps), and filters beyond `eq` - an unsupported filter is refused
-rather than silently answered with the wrong set.
+**Not supported:** bulk, sort, and anything beyond that filter subset - an unsupported
+filter is refused rather than silently answered with the wrong set.
 
 This is a write API into a firewall's account database, so four refusals are absolute: a
 **privileged** account (system, uid 0, `admins` member) is never touched; an account with a

@@ -121,6 +121,7 @@ final class ScimUsers
                 // nothing to see on either side.
                 $changed = $this->setActive($existing, $this->activeFlag($payload, true)) || $changed;
                 if ($changed) {
+                    $this->touch($existing);
                     $this->accounts->persist($userName);
                 }
                 return $this->toResource($existing);
@@ -135,6 +136,7 @@ final class ScimUsers
                 'scim_ref' => $ref,
                 'disabled' => !$this->activeFlag($payload, true),
             ]);
+            $this->touch($node, true);
             $this->accounts->persist($userName, true);
             return $this->toResource($node);
         });
@@ -154,6 +156,7 @@ final class ScimUsers
             $changed = $this->applyAttributes($node, $payload) || $renamed;
             $changed = $this->setActive($node, $this->activeFlag($payload, true)) || $changed;
             if ($changed) {
+                $this->touch($node);
                 $this->accounts->persist((string)$node->name, $renamed);
             }
             return $this->toResource($node);
@@ -218,6 +221,7 @@ final class ScimUsers
             }
 
             if ($changed) {
+                $this->touch($node);
                 // A rename needs the account reconciled, not just announced: core's
                 // sync drops whatever local entry the old name left behind.
                 $this->accounts->persist((string)$node->name, $renamed);
@@ -238,6 +242,7 @@ final class ScimUsers
             $node = $this->requireNode($id);
             $this->assertMayTouch($node);
             if ($this->setActive($node, false)) {
+                $this->touch($node);
                 $this->accounts->persist((string)$node->name);
             }
             return true;
@@ -249,16 +254,27 @@ final class ScimUsers
     public function toResource(\SimpleXMLElement $node): array
     {
         $id = (string)($node->uid ?? '');
+        $meta = [
+            'resourceType' => 'User',
+            'location' => $this->base . '/Users/' . rawurlencode($id),
+        ];
+        // config.xml keeps no per-account timestamps, so os-sso keeps its own on the
+        // accounts it owns. A client that reconciles by lastModified was told nothing
+        // at all before, and had to re-read every resource on every run.
+        foreach (['created' => 'scim_created', 'lastModified' => 'scim_modified'] as $key => $field) {
+            $stamp = (int)((string)($node->{$field} ?? ''));
+            if ($stamp > 0) {
+                $meta[$key] = gmdate('Y-m-d\TH:i:s\Z', $stamp);
+            }
+        }
         $out = [
             'schemas' => ['urn:ietf:params:scim:schemas:core:2.0:User'],
             'id' => $id,
             'userName' => (string)$node->name,
             'displayName' => (string)($node->descr ?? ''),
             'active' => empty((string)($node->disabled ?? '')),
-            'meta' => [
-                'resourceType' => 'User',
-                'location' => $this->base . '/Users/' . rawurlencode($id),
-            ],
+            'groups' => $this->groupsOf($node),
+            'meta' => $meta,
         ];
         $externalId = $this->externalIdOf($node);
         if ($externalId !== '') {
@@ -266,6 +282,47 @@ final class ScimUsers
         }
         if ((string)($node->email ?? '') !== '') {
             $out['emails'] = [['value' => (string)$node->email, 'primary' => true]];
+        }
+        // The entity tag is over the resource we just built, so it changes exactly when
+        // something a client can see changes -- which is what makes If-Match mean
+        // "nobody edited this behind me".
+        $out['meta']['version'] = self::version($out);
+        return $out;
+    }
+
+    /** The weak entity tag of a rendered resource. */
+    public static function version(array $resource): string
+    {
+        unset($resource['meta']['version']);
+        return 'W/"' . substr(hash('sha256', (string)json_encode($resource)), 0, 32) . '"';
+    }
+
+    /**
+     * The groups this account is in, as SCIM expects them on a User: read-only, and
+     * only the ones os-sso would manage. Membership is changed through /Groups.
+     *
+     * @return array<int,array<string,string>>
+     */
+    private function groupsOf(\SimpleXMLElement $node): array
+    {
+        $uid = (string)($node->uid ?? '');
+        if ($uid === '') {
+            return [];
+        }
+        $out = [];
+        foreach ((\OPNsense\Core\Config::getInstance()->object()->system->group ?? []) as $group) {
+            foreach ($group->member as $member) {
+                if (in_array($uid, array_filter(explode(',', (string)$member)), true)) {
+                    $gid = (string)($group->gid ?? '');
+                    $out[] = [
+                        'value' => $gid,
+                        'display' => (string)$group->name,
+                        '$ref' => $this->base . '/Groups/' . rawurlencode($gid),
+                        'type' => 'direct',
+                    ];
+                    break;
+                }
+            }
         }
         return $out;
     }
@@ -356,6 +413,22 @@ final class ScimUsers
         // Every write goes through here, so the cross-provider boundary does too --
         // replace(), patch() and deactivate() used to skip it entirely.
         $this->assertNotClaimedElsewhere($node);
+    }
+
+    /**
+     * Record when this account was made and when it last changed.
+     *
+     * config.xml has no timestamps of its own, so these are ours, kept only on the
+     * accounts os-sso owns and only for what SCIM reports. Called on every write that
+     * actually changed something, which is also when a new entity tag is due.
+     */
+    private function touch(\SimpleXMLElement $node, bool $created = false): void
+    {
+        $now = (string)time();
+        if ($created) {
+            $this->accounts->stampOnce($node, 'scim_created', $now);
+        }
+        $this->accounts->setField($node, 'scim_modified', $now);
     }
 
     /** Namespaced by provider: two directories may well use the same external ids. */
@@ -477,19 +550,25 @@ final class ScimUsers
      */
     private function matches(\SimpleXMLElement $node, string $filter): bool
     {
-        if (!preg_match('/^\s*(\w+)\s+eq\s+"([^"]*)"\s*$/i', $filter, $m)) {
-            throw ScimError::badRequest('unsupported filter: ' . $filter, 'invalidFilter');
-        }
-        [, $attribute, $value] = $m;
-        switch (strtolower($attribute)) {
-            case 'username':
-                return (string)$node->name === $value;
-            case 'externalid':
-                return $this->externalIdOf($node) === $value;
-            case 'id':
-                return (string)($node->uid ?? '') === $value;
-            default:
-                throw ScimError::badRequest('filtering on ' . $attribute . ' is not supported', 'invalidFilter');
-        }
+        $predicate = ScimFilter::compile($filter, function (string $attribute) use ($node) {
+            switch ($attribute) {
+                case 'username':
+                    return (string)$node->name;
+                case 'externalid':
+                    return $this->externalIdOf($node);
+                case 'id':
+                    return (string)($node->uid ?? '');
+                case 'displayname':
+                    return (string)($node->descr ?? '');
+                case 'emails.value':
+                case 'emails':
+                    return (string)($node->email ?? '');
+                case 'active':
+                    return empty((string)($node->disabled ?? '')) ? 'true' : 'false';
+                default:
+                    return null; // not indexable here: the filter is refused, not guessed
+            }
+        });
+        return $predicate();
     }
 }
