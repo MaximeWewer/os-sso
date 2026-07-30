@@ -113,6 +113,13 @@ final class ScimUsers
                 $this->assertMayTouch($existing);
                 $changed = $this->accounts->stampOnce($existing, 'scim_ref', $ref);
                 $changed = $this->applyAttributes($existing, $payload) || $changed;
+                // A POST states the whole resource, so its "active" applies here as much
+                // as it does on a fresh create -- and re-creating a user is how several
+                // directories (Okta among them) reactivate one they deactivated earlier.
+                // Ignoring it answered 200 for an account that stayed disabled, which
+                // tells the directory something untrue and locks the person out with
+                // nothing to see on either side.
+                $changed = $this->setActive($existing, $this->activeFlag($payload, true)) || $changed;
                 if ($changed) {
                     $this->accounts->persist($userName);
                 }

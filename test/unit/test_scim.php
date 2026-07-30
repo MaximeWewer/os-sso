@@ -115,6 +115,19 @@ throws(fn() => $users()->create(['userName' => 'human']), 'own password', 'a pas
 throws(fn() => $users()->create(['userName' => '']), 'userName is required', 'userName is required');
 throws(fn() => $users()->create(['userName' => 'bad/name']), 'not a valid local', 'the username is validated');
 
+// Re-creating a user is how several directories reactivate one they deactivated, so a
+// POST that adopts an account has to apply "active" like any other statement of the
+// resource -- otherwise the client gets a 200 for an account that stays disabled.
+$root = Tree::build([
+    ['name' => 'back', 'uid' => '2100', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext-back', 'disabled' => '1'],
+    ['name' => 'gone', 'uid' => '2101', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext-gone'],
+]);
+$resource = $users()->create(['userName' => 'back', 'active' => true]);
+eq('0', (string)Tree::user($root, 'back')->disabled, 'adopting with active=true re-enables the account');
+truthy($resource['active'], 'and the resource says so');
+$users()->create(['userName' => 'gone', 'active' => false]);
+eq('1', (string)Tree::user($root, 'gone')->disabled, 'adopting with active=false disables it');
+
 T::group('ScimUsers: patch');
 
 $root = Tree::build([
