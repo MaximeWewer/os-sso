@@ -239,7 +239,12 @@ class SamlController extends ApiControllerBase
                     ?: ($this->knownSamlProvider((string)($_GET['provider'] ?? ''))
                         ?: (($_SESSION['sso_logout']['provider'] ?? '') ?: $this->firstSamlProvider()));
                 $protocol = $this->protocolFor($provider);
+                // Single use, and dropped before validation rather than after: the
+                // session is destroyed further down on the happy path, but a
+                // LogoutResponse that fails to validate returns early, and the id it
+                // was matched against must not still be sitting there for the next try.
                 $reqId = (string)($_SESSION['sso_saml_logout_reqid'] ?? '');
+                unset($_SESSION['sso_saml_logout_reqid']);
                 $redirect = $protocol->processSlo($reqId) ?: '/';
             } catch (\Throwable $e) {
                 return $this->fail($e);
