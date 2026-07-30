@@ -53,7 +53,10 @@ final class ScimGroups
             }
         }
         $total = count($matches);
-        $page = array_slice($matches, max(0, $startIndex - 1), max(1, min($count, ScimUsers::MAX_RESULTS)));
+        // count=0 asks for the total only -- see the same case in ScimUsers::search().
+        $page = $count <= 0
+            ? []
+            : array_slice($matches, max(0, $startIndex - 1), min($count, ScimUsers::MAX_RESULTS));
         return ScimSchema::listResponse(array_map([$this, 'toResource'], $page), $total, $startIndex);
     }
 

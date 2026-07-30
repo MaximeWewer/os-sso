@@ -325,9 +325,15 @@ another.
 
 Supported: `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users`
 (GET/POST/PUT/PATCH/DELETE, `filter=userName eq "..."` and `externalId eq "..."`,
-pagination) and `/Groups` (GET, and PATCH of membership). Not supported: bulk, sort,
-ETags, and filters beyond `eq` on the indexed attributes - an unsupported filter is
-refused rather than silently answered with the wrong set.
+pagination, `count=0` for a total-only probe) and `/Groups` (GET, and PATCH of
+membership). Not supported: bulk, sort, ETags, `meta.created`/`meta.lastModified`
+(config.xml keeps no per-account timestamps, and advertising ones we do not maintain
+would be worse than omitting them), and filters beyond `eq` on the indexed attributes -
+an unsupported filter is refused rather than silently answered with the wrong set.
+
+A `POST /Users` answers **201** for an account that did not exist and **200** when it
+adopted one that already carried the `userName`; a repeat POST of the same `externalId`
+is a **409**.
 
 Four things it deliberately refuses, because this is a write API into a firewall's
 account database:

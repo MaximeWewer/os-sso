@@ -65,11 +65,28 @@ final class ScimUsers
             }
         }
         $total = count($matches);
-        $page = array_slice($matches, max(0, $startIndex - 1), max(1, min($count, self::MAX_RESULTS)));
+        // count=0 means "just tell me how many" (RFC 7644 section 3.4.2.4), which is how
+        // a client sizes a sync before walking it -- it must not come back with a row.
+        $page = $count <= 0
+            ? []
+            : array_slice($matches, max(0, $startIndex - 1), min($count, self::MAX_RESULTS));
         return ScimSchema::listResponse(array_map([$this, 'toResource'], $page), $total, $startIndex);
     }
 
     /* ---- writes ------------------------------------------------------ */
+
+    /**
+     * Whether the last create() actually made an account, as opposed to adopting one
+     * that already carried the userName. The caller answers 201 or 200 accordingly:
+     * reporting "Created" for a resource that was already there tells the directory
+     * something untrue about its own state.
+     */
+    public function createdNew(): bool
+    {
+        return $this->createdNew;
+    }
+
+    private bool $createdNew = false;
 
     public function create(array $payload): array
     {
@@ -90,6 +107,7 @@ final class ScimUsers
             }
             $existing = $this->accounts->findByName($userName);
             if ($existing !== null) {
+                $this->createdNew = false;
                 // An account with that name is already here. Adopt it only if os-sso
                 // may -- otherwise this is someone's real local account.
                 $this->assertMayTouch($existing);
@@ -101,6 +119,7 @@ final class ScimUsers
                 return $this->toResource($existing);
             }
 
+            $this->createdNew = true;
             $node = $this->accounts->create([
                 'name' => $userName,
                 'descr' => $this->displayName($payload),

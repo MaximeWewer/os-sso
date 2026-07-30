@@ -98,8 +98,15 @@ class ScimController extends ApiControllerBase
                         : $users->get($id);
                 case 'POST':
                     $this->requireCollection($id);
-                    $this->response->setStatusCode(201, 'Created');
-                    return $users->create($this->body());
+                    $resource = $users->create($this->body());
+                    // 201 only for an account that did not exist a moment ago; adopting
+                    // one that already carried the userName is a 200.
+                    if ($users->createdNew()) {
+                        $this->response->setStatusCode(201, 'Created');
+                    } else {
+                        $this->response->setStatusCode(200, 'OK');
+                    }
+                    return $resource;
                 case 'PUT':
                     $this->requireResource($id);
                     return $users->replace($id, $this->body());

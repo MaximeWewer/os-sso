@@ -88,6 +88,12 @@ code -H "$AUTH" -G "$BASE/Users" --data-urlencode 'filter=externalId eq "ext-ali
 check "an unsupported filter is refused" 400 \
     "$(code -H "$AUTH" -G "$BASE/Users" --data-urlencode 'filter=userType co "x"')"
 grep -q 'invalidFilter' "$W/out" && ok "refusal carries scimType invalidFilter" || ko "no scimType on the error"
+# count=0 is how a client sizes a sync before walking it: the total, and no rows.
+code -H "$AUTH" -G "$BASE/Users" --data-urlencode 'count=0' >/dev/null
+[ "$(json "['itemsPerPage']")" = "0" ] && ok "count=0 returns no resources" \
+    || ko "count=0 returned $(json "['itemsPerPage']") resource(s)"
+[ "$(json "['totalResults']")" -ge 1 ] && ok "count=0 still reports the total" \
+    || ko "count=0 lost totalResults"
 
 echo ">>> case 5: PATCH and DELETE"
 check "PATCH active=false" 200 "$(code -H "$AUTH" -H "$CT" -X PATCH "$BASE/Users/$UID_" \
