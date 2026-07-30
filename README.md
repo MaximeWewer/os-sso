@@ -19,7 +19,8 @@ same IdP so account lifecycle does not wait for a login. The local password
   (`max_age`) are *enforced* on the way back, not merely requested. Keycloak,
   Authentik, Entra ID, Zitadel, …
 - **SAML 2.0** - signed (RSA-SHA256; SHA-1 refused) and optionally encrypted
-  assertions, metadata import and generation, signed AuthnRequests, `ForceAuthn`
+  assertions, metadata import (the document's own signature verified too, when you pin
+  its certificate) and generation, signed AuthnRequests, `ForceAuthn`
   checked against `AuthnInstant`, the requested authentication context checked against
   the one that comes back, Single Logout over either binding.
 - **JWT forward-auth** - trust a signed JWT from a reverse proxy in front of
@@ -521,7 +522,7 @@ end-to-end suites** against a Vagrant OPNsense VM with Authentik and Keycloak in
 driving real browser ceremonies and a real OpenVPN client.
 
 ```sh
-php test/unit/run.php                                       # ~550 assertions, no setup
+php test/unit/run.php                                       # ~590 assertions, no setup
 cd test && vagrant up && (cd idp && ./up.sh)                # bring the lab up
 SSO_GUI_URL=https://192.168.60.10 test/e2e/run-all.sh       # ~175 checks, either IdP
 ```

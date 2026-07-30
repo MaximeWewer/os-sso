@@ -17,8 +17,12 @@ Covers what an end-to-end run never reaches, because every case is a *refusal*: 
 local account an asserted identity may bind to, which group a directory may fill, what
 counts as a same-site return URL, how the client authenticates to a token endpoint.
 
-Two groups need `/var/db/os-sso` (where the config lock lives) and report `skip` rather
-than fail without it, so the suite still runs unprivileged. For the full set, either:
+Several groups need `/var/db/os-sso` (where the config lock and the session registry
+live) and report `skip` rather than fail without it, so the suite still runs
+unprivileged. One case inside them additionally wants root and a `nobody` account, to
+make that directory unusable the way `StateDir` itself judges it -- which is what proves
+a captive-portal grant nothing can record is given back rather than kept. For the full
+set, either:
 
 ```sh
 docker run --rm -v "$PWD/..:/w" -w /w php:8.3-cli php test/unit/run.php
