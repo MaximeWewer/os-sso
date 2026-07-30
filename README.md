@@ -93,7 +93,7 @@ own help in the form; below is only what is easy to get wrong, and shared by all
 | **Strict account binding** | On for a newly added server. Turn it off only when two servers front the *same* directory - see [Account binding](#security). |
 | **Group mapping** | An explicit mapping may target `admins`; the 1:1 name fallback refuses privileged groups. |
 | **Strict group sync** | Off = additive. On, revokes only what os-sso granted, never the last privileged member. |
-| **Deprovision on refused login** | Disables the account behind a refused login. Does nothing without *Required groups*. |
+| **Deprovision on refused login** | Disables the account behind a refused login, and re-enables it when the IdP allows that account again. Does nothing without *Required groups*. |
 | **Maximum session lifetime** | The WebGUI timeout is *idle*-only. Enforced by the **os-sso: expire SSO sessions** cron job, which the plugin schedules for itself every 10 minutes. |
 | **SCIM provisioning** | Token **and** source addresses, both required - see [SCIM](#scim-provisioning). |
 
@@ -463,6 +463,13 @@ the token to whatever goes through it, complete one - from an `<img>` tag.
 page all act on the same record of what os-sso granted - so they end the WebGUI session,
 disconnect the captive-portal client from the network, and drop the OpenVPN tunnels of
 that common name, rather than only the first of the three.
+
+A deprovisioning is also **undone** by the login that disproves it: put the account back
+in the required group at the IdP and the next login re-enables it, on all three doors,
+rather than leaving somebody to tick the box back by hand. Only a refusal os-sso itself
+issued is undone - it stamps the accounts it disables, and drops that stamp the moment it
+sees one enabled again, so the operator's own *disabled* checkbox and `expires` date are
+never overruled.
 
 **SCIM** needs a bearer token **and** a source-address allowlist, and refuses on the same
 principles as the login path - see [SCIM provisioning](#scim-provisioning).

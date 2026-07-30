@@ -118,6 +118,13 @@ final class CaptivePortalAuthorizer
      *
      * Matched the way the login path matches: the durable subject binding first, then
      * the username. An account that does not exist is not an error.
+     *
+     * An account os-sso itself deprovisioned is re-enabled here as well. The portal is
+     * otherwise the one door where that could not happen -- it needs no local account and
+     * so never writes config.xml -- which would have left someone the IdP has put back in
+     * the right group able to reach the WebGUI and the VPN but not the wifi. The write is
+     * taken under the config lock and only when the stamp is actually there, so an
+     * ordinary guest login still touches nothing.
      */
     private static function assertLocalAccountUsable(
         string $providerName,
@@ -125,11 +132,27 @@ final class CaptivePortalAuthorizer
         string $username
     ): void {
         $accounts = new LocalAccountWriter();
-        $node = $identity->subject !== ''
-            ? $accounts->findBySubject($providerName . '|' . $identity->subject)
-            : null;
+        $find = function () use ($accounts, $providerName, $identity, $username) {
+            $node = $identity->subject !== ''
+                ? $accounts->findBySubject($providerName . '|' . $identity->subject)
+                : null;
+            return $node ?? $accounts->findByName($username);
+        };
+
+        $node = $find();
         if ($node === null) {
-            $node = $accounts->findByName($username);
+            return;
+        }
+        if (Deprovisioner::isDeprovisioned($node)) {
+            ConfigLock::with(function () use ($find, $accounts) {
+                // Re-find: the lock reloads config.xml, so the node found above is stale.
+                $fresh = $find();
+                if ($fresh !== null && Deprovisioner::reviveNode($fresh, $accounts)) {
+                    $accounts->persist((string)$fresh->name);
+                }
+                return null;
+            });
+            $node = $find();
         }
         if ($node !== null) {
             LocalAccount::assertUsable($node);

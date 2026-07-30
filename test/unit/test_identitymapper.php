@@ -314,6 +314,61 @@ throws(
 );
 eq(0, \OPNsense\Core\Config::$saves, 'and config.xml was never saved');
 
+T::group('IdentityMapper: undoing a deprovisioning');
+
+// The account os-sso disabled on an earlier refused login. Getting here at all means the
+// provider's required-groups gate has just passed, so the revocation is over -- and
+// without this the login that proves it is the one refused by the flag it set.
+$root = Tree::build([
+    ['name' => 'alice', 'uid' => '2100', 'scrambled_password' => '1', 'sso_owned' => '1',
+     'sso_subject' => 'kc|sub-alice', 'disabled' => '1', 'sso_deprovisioned' => '1'],
+]);
+eq(
+    'alice',
+    mapper()->resolve(identity(['subject' => 'sub-alice', 'username' => 'alice']), false, []),
+    'an account os-sso deprovisioned is re-enabled and logs in'
+);
+eq('0', (string)Tree::user($root, 'alice')->disabled, 'the disabled flag is cleared');
+eq('', (string)Tree::user($root, 'alice')->sso_deprovisioned, 'and so is the stamp');
+
+// The operator's own lever is NOT ours to undo: no stamp, no revival.
+$root = Tree::build([
+    ['name' => 'bob', 'uid' => '2101', 'scrambled_password' => '1', 'sso_owned' => '1',
+     'sso_subject' => 'kc|sub-bob', 'disabled' => '1'],
+]);
+throws(
+    fn() => mapper()->resolve(identity(['subject' => 'sub-bob', 'username' => 'bob']), false, []),
+    'disabled or expired',
+    'an account the operator disabled stays disabled'
+);
+eq('1', (string)Tree::user($root, 'bob')->disabled, 'and its flag is untouched');
+
+// A stamp left on an ENABLED account is dropped rather than trusted: somebody re-enabled
+// the account by hand, so a later disable of theirs must not read as one of ours.
+$root = Tree::build([
+    ['name' => 'carol', 'uid' => '2102', 'scrambled_password' => '1', 'sso_owned' => '1',
+     'sso_subject' => 'kc|sub-carol', 'sso_deprovisioned' => '1'],
+]);
+eq(
+    'carol',
+    mapper()->resolve(identity(['subject' => 'sub-carol', 'username' => 'carol']), false, []),
+    'an enabled account with a stale stamp logs in'
+);
+eq('', (string)Tree::user($root, 'carol')->sso_deprovisioned, 'and the stale stamp is dropped');
+
+// <expires> is a date the operator set, not a refusal os-sso issued -- reviving the
+// disabled flag must not smuggle an expired account back in.
+$root = Tree::build([
+    ['name' => 'dave', 'uid' => '2103', 'scrambled_password' => '1', 'sso_owned' => '1',
+     'sso_subject' => 'kc|sub-dave', 'disabled' => '1', 'sso_deprovisioned' => '1',
+     'expires' => '01/01/2020'],
+]);
+throws(
+    fn() => mapper()->resolve(identity(['subject' => 'sub-dave', 'username' => 'dave']), false, []),
+    'disabled or expired',
+    'an expired account is still refused after the revival'
+);
+
 T::group('IdentityMapper: provisioning');
 
 $root = Tree::build();

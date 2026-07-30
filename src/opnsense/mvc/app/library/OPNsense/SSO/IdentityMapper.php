@@ -100,6 +100,12 @@ final class IdentityMapper
         }
 
         if ($node !== null) {
+            // The caller's required-groups gate has already passed, so if os-sso disabled
+            // this account on an earlier refusal, the IdP has just said otherwise. Undo it
+            // before the usability check below, which would otherwise refuse the very
+            // login that proves the revocation is over. Only a deprovisioning of ours is
+            // undone -- the operator's own disable, and <expires>, still refuse.
+            $revived = Deprovisioner::reviveNode($node, $this->accounts);
             // Ask before writing anything. A disabled or expired account is refused
             // downstream anyway, but until now it was refused AFTER group sync had
             // already saved config.xml -- and on the VPN path, where no WebGUI session
@@ -109,7 +115,7 @@ final class IdentityMapper
             $stamped = $this->accounts->addBinding($node, $subjectKey);
             $refreshed = $this->refreshAttributes($node, $identity);
             $changed = $this->groupMapper->sync($node, $identity, $defaultGroups);
-            if ($stamped || $refreshed || $changed) {
+            if ($revived || $stamped || $refreshed || $changed) {
                 $this->accounts->persist((string)$node->name);
             }
             return (string)$node->name;

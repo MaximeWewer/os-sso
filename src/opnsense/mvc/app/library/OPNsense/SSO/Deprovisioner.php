@@ -28,6 +28,24 @@ use OPNsense\Core\Config;
 final class Deprovisioner
 {
     /**
+     * Stamp recording that os-sso is what disabled this account -- and therefore that
+     * os-sso may enable it again.
+     *
+     * Without it, deprovisioning is a one-way door: the account is disabled by a refused
+     * login, and the login that should undo it (the person put back in the right IdP
+     * group) is refused by the disabled flag before anything re-evaluates it. Somebody
+     * has to go and tick the box back by hand, which is the opposite of what pushing
+     * lifecycle to the directory is for.
+     *
+     * It cannot simply be "enable any disabled account whose login now passes", because
+     * <disabled> is also the operator's own lever and SSO must not route around it. The
+     * stamp is the difference: it is written only here, and dropped the moment the
+     * account is seen enabled, so an operator who re-enables an account and later
+     * disables it again is never overruled.
+     */
+    private const DEPROVISIONED_FIELD = 'sso_deprovisioned';
+
+    /**
      * Deactivate the local account behind a refused identity, if os-sso owns it.
      *
      * @return bool whether an account was disabled
@@ -62,6 +80,9 @@ final class Deprovisioner
                 }
                 unset($node->disabled);
                 $node->addChild('disabled', '1');
+                // Ours, so a later successful login may undo it (see reviveNode()).
+                unset($node->{self::DEPROVISIONED_FIELD});
+                $node->addChild(self::DEPROVISIONED_FIELD, '1');
                 Config::getInstance()->save();
                 (new Backend())->configdpRun('auth user changed', [$username]);
 
@@ -82,6 +103,48 @@ final class Deprovisioner
             syslog(LOG_ERR, 'os-sso: deprovisioning failed: ' . $e->getMessage());
             return false;
         }
+    }
+
+    /** Does this account carry the "os-sso disabled it" stamp? */
+    public static function isDeprovisioned(\SimpleXMLElement $node): bool
+    {
+        return (string)($node->{self::DEPROVISIONED_FIELD} ?? '') === '1';
+    }
+
+    /**
+     * Undo a deprovisioning, on an account os-sso owns and itself disabled.
+     *
+     * Called once the provider's required-groups gate has already passed, so the IdP has
+     * just said this person is allowed again -- which is exactly the event deprovisioning
+     * was waiting for and could not hear.
+     *
+     * Mutates the node only; the caller persists, because every caller is already in the
+     * middle of a config.xml write it can fold this into. <expires> is deliberately left
+     * alone: it is a date the operator set, not a refusal os-sso issued, and the usability
+     * check the caller runs next still enforces it.
+     *
+     * @return bool whether anything changed
+     */
+    public static function reviveNode(\SimpleXMLElement $node, LocalAccountWriter $accounts): bool
+    {
+        if (!self::isDeprovisioned($node)) {
+            return false;
+        }
+        // Stamped but enabled: somebody put it back by hand. Drop the stamp, so that if
+        // they disable the account again later we do not read their decision as ours.
+        if (empty((string)($node->disabled ?? ''))) {
+            return $accounts->setField($node, self::DEPROVISIONED_FIELD, '');
+        }
+        if (!$accounts->isSsoManaged($node)) {
+            return false; // not ours to enable, whatever the stamp says
+        }
+        $accounts->setDisabled($node, false);
+        $accounts->setField($node, self::DEPROVISIONED_FIELD, '');
+        syslog(LOG_NOTICE, sprintf(
+            "os-sso: re-enabled local account '%s' (deprovisioned earlier, the IdP allows it again)",
+            (string)$node->name
+        ));
+        return true;
     }
 
     /** The SSO-managed account carrying this subject stamp, or null. */
