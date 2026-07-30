@@ -162,11 +162,21 @@ usually live: `realm_access.roles` for Keycloak realm roles,
 `resource_access.<client-id>.roles` for its client roles. A claim whose own name
 contains dots (`urn:oid:…`) is matched whole first, so both styles work.
 
-> Entra ID tenants where a user is in more than ~200 groups send a *group overage*
-> claim (`_claim_names` / `_claim_sources`) instead of the groups themselves. os-sso
-> does not follow it to Microsoft Graph, so those users arrive with no groups - and
-> are refused if you set required groups. Use application roles, or a group filter on
-> the token configuration, to keep the claim under the limit.
+**Entra ID group overage.** Past roughly 200 groups, Entra stops sending `groups` and
+substitutes a pointer (`_claim_names` / `_claim_sources`) to Microsoft Graph. Nothing in
+the token says "no groups" - the claim is just absent - so the most heavily grouped users
+in a tenant, usually the administrators, otherwise arrive with nothing and are refused by
+the required-groups gate for a reason no log explains.
+
+Tick **Follow Entra ID group overage** to have os-sso resolve it. The firewall asks Graph
+*on its own behalf* (the user's access token is scoped to another resource and cannot be
+exchanged), so the app registration needs the **application** permission
+`GroupMember.Read.All` - or `Directory.Read.All` - with **admin consent**. Graph answers
+with group object ids, the same values the ordinary claim carries, so the group map is
+written against ids either side of the threshold. Only Microsoft's own Graph hosts are
+ever called, whatever endpoint the claim names. If you would rather not grant the
+permission, keep the claim under the limit instead: use application roles, or a group
+filter on the token configuration.
 
 ### SAML 2.0
 

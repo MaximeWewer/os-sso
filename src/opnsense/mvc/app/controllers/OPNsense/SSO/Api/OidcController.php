@@ -370,6 +370,7 @@ class OidcController extends ApiControllerBase
             'form_post' => $auth->ssoFormPost,
             'required_acr' => $auth->ssoRequiredAcr,
             'extra_params' => $auth->ssoExtraParams,
+            'graph_overage' => $auth->ssoGraphOverage,
             'token_auth_method' => $auth->ssoTokenAuthMethod,
             'assertion_alg' => $auth->ssoAssertionAlg,
             'private_key' => $auth->ssoPrivateKey,

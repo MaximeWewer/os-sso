@@ -35,6 +35,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoPrivateKeyId = null;
     public $ssoMtlsCert = null;
     public $ssoMtlsKey = null;
+    public $ssoGraphOverage = false;
     public $ssoExtraParams = null;
     public $ssoSessionLifetime = 0;
     public $ssoScimEnabled = false;
@@ -88,6 +89,7 @@ class SsoOidc extends Local implements IAuthConnector
         }
         $this->ssoUsePkce = !empty($config['sso_use_pkce']);
         $this->ssoFormPost = !empty($config['sso_form_post']);
+        $this->ssoGraphOverage = !empty($config['sso_graph_overage']);
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
             $this->ssoMaxAge = (int)$config['sso_max_age'];
         }
@@ -230,6 +232,18 @@ class SsoOidc extends Local implements IAuthConnector
                 'name' => gettext('Mutual-TLS private key (PEM)'),
                 'help' => gettext('Private key of the certificate above.'),
                 'type' => 'text',
+            ],
+            'sso_graph_overage' => [
+                'name' => gettext('Follow Entra ID group overage'),
+                'help' => gettext('Entra ID stops sending the groups claim once a user is in more than '
+                    . 'about 200 groups, replacing it with a pointer to Microsoft Graph. Enable this to '
+                    . 'follow that pointer, otherwise the most heavily grouped users - usually the '
+                    . 'administrators - arrive with no groups at all. The firewall asks Graph on its own '
+                    . 'behalf, so the app registration needs the APPLICATION permission '
+                    . 'GroupMember.Read.All (or Directory.Read.All) with admin consent. Graph answers '
+                    . 'with group object ids, the same values the ordinary claim carries, so write the '
+                    . 'group map against ids either way. Only Microsoft Graph hosts are ever called.'),
+                'type' => 'checkbox',
             ],
             'sso_username_claim' => [
                 'name' => gettext('Username claim'),

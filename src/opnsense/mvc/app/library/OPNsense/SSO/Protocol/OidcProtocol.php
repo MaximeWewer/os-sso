@@ -57,6 +57,8 @@ final class OidcProtocol implements ProtocolInterface
     private string $sessionPrefix;
     /** how this firewall proves it is the client when calling the token endpoint */
     private ClientAuth $clientAuth;
+    /** follow an Entra ID group-overage claim to Microsoft Graph */
+    private bool $graphOverage;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -91,6 +93,7 @@ final class OidcProtocol implements ProtocolInterface
             (array)($cfg['required_acr'] ?? [])
         )));
         $this->extraParams = self::parseExtraParams((string)($cfg['extra_params'] ?? ''));
+        $this->graphOverage = (bool)($cfg['graph_overage'] ?? false);
         $this->clientAuth = new ClientAuth([
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
@@ -253,7 +256,162 @@ final class OidcProtocol implements ProtocolInterface
             }
         }
 
+        // Entra ID replaces the groups with a pointer past ~200 of them; follow it.
+        $merged = $this->resolveGroupOverage($disco, $merged);
+
         return $this->toIdentity($merged);
+    }
+
+    /* ---- Entra ID group overage ---------------------------------------- */
+
+    /** Microsoft's own Graph hosts, per national cloud. Nothing else is called. */
+    private const GRAPH_HOSTS = [
+        'graph.microsoft.com',
+        'graph.microsoft.us',
+        'dod-graph.microsoft.us',
+        'graph.microsoft.de',
+        'microsoftgraph.chinacloudapi.cn',
+    ];
+
+    /** Pages of getMemberObjects to follow (999 ids each). */
+    private const MAX_OVERAGE_PAGES = 10;
+
+    /**
+     * Fill in the groups claim when the IdP sent a pointer instead of the groups.
+     *
+     * Entra ID stops emitting `groups` once a user is in more than roughly 200 of them
+     * and substitutes `_claim_names` / `_claim_sources`, naming a Microsoft Graph
+     * endpoint to ask instead. Nothing in the token says "this user has no groups" -- the
+     * claim is simply absent -- so without following it the most heavily grouped users in
+     * a tenant, typically the administrators, arrive with nothing and are refused by the
+     * required-groups gate for a reason no log explains.
+     *
+     * Best-effort on purpose: a failure here leaves the claim absent, which means fewer
+     * privileges and not more, and says so at WARNING level. Off unless the operator
+     * enabled it, since it needs an application permission and admin consent at the
+     * tenant.
+     */
+    private function resolveGroupOverage(array $disco, array $claims): array
+    {
+        if (!$this->graphOverage) {
+            return $claims;
+        }
+        $endpoint = self::overageEndpoint($claims, $this->groupsClaim);
+        if ($endpoint === '') {
+            return $claims; // the ordinary case: the groups were in the token
+        }
+        try {
+            $groups = $this->fetchOverageGroups($disco, $endpoint);
+        } catch (\Throwable $e) {
+            syslog(LOG_WARNING, 'os-sso oidc: cannot resolve the group overage claim: ' . $e->getMessage());
+            return $claims;
+        }
+        syslog(LOG_NOTICE, sprintf(
+            'os-sso oidc: resolved %d group(s) from the Entra overage claim',
+            count($groups)
+        ));
+        $claims[$this->groupsClaim] = $groups;
+        return $claims;
+    }
+
+    /**
+     * The Graph endpoint an overage claim points at, '' when there is none.
+     *
+     * Pinned to Microsoft's own Graph hosts. The claim is carried by a token whose
+     * signature we verified, so it is the IdP's word -- but this is where an app-only
+     * access token with directory-read permission is about to be sent, and a
+     * multi-tenant service is not the right thing to let choose that destination.
+     */
+    private static function overageEndpoint(array $claims, string $groupsClaim): string
+    {
+        $names = (array)($claims['_claim_names'] ?? []);
+        $sources = (array)($claims['_claim_sources'] ?? []);
+        if (empty($names) || empty($sources)) {
+            return '';
+        }
+        // The configured claim name first, then Entra's own spelling.
+        $key = '';
+        foreach ([$groupsClaim, 'groups'] as $candidate) {
+            if ($candidate !== '' && isset($names[$candidate]) && is_scalar($names[$candidate])) {
+                $key = (string)$names[$candidate];
+                break;
+            }
+        }
+        if ($key === '' || !isset($sources[$key])) {
+            return '';
+        }
+        $endpoint = (string)(((array)$sources[$key])['endpoint'] ?? '');
+        $host = strtolower((string)(parse_url($endpoint, PHP_URL_HOST) ?? ''));
+        if (stripos($endpoint, 'https://') !== 0 || !in_array($host, self::GRAPH_HOSTS, true)) {
+            if ($endpoint !== '') {
+                syslog(LOG_WARNING, sprintf(
+                    'os-sso oidc: refusing an overage endpoint outside Microsoft Graph (%s)',
+                    preg_replace('/[^\x20-\x7e]/', '', $endpoint)
+                ));
+            }
+            return '';
+        }
+        return $endpoint;
+    }
+
+    /**
+     * Ask Graph for the user's group memberships, as object ids.
+     *
+     * An app-only token, not the user's: the access token from the code exchange is
+     * scoped to whatever resource the login asked for, which is not Graph, and cannot be
+     * exchanged for one. So the client authenticates itself again -- with the same
+     * method, secret, assertion or certificate as everything else -- and asks on its own
+     * behalf. That needs the application permission GroupMember.Read.All (or
+     * Directory.Read.All) with admin consent at the tenant.
+     *
+     * getMemberObjects returns ids, which is also what the non-overage `groups` claim
+     * holds on Entra, so the group map stays written the same way either side of the
+     * threshold.
+     *
+     * @return string[]
+     */
+    private function fetchOverageGroups(array $disco, string $endpoint): array
+    {
+        $host = strtolower((string)parse_url($endpoint, PHP_URL_HOST));
+        $token = $this->tokenRequest($disco, [
+            'grant_type' => 'client_credentials',
+            'scope' => 'https://' . $host . '/.default',
+        ]);
+        $accessToken = (string)($token['access_token'] ?? '');
+        if ($accessToken === '') {
+            throw new \RuntimeException('the client-credentials grant returned no access token');
+        }
+
+        $headers = [
+            'Authorization: Bearer ' . $accessToken,
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ];
+        $groups = [];
+        $url = $endpoint;
+        for ($page = 0; $page < self::MAX_OVERAGE_PAGES && $url !== ''; $page++) {
+            $json = json_decode($this->curl($url, '{"securityEnabledOnly":false}', $headers), true);
+            if (!is_array($json)) {
+                throw new \RuntimeException('Graph returned a response that is not JSON');
+            }
+            foreach ((array)($json['value'] ?? []) as $id) {
+                if (is_scalar($id) && (string)$id !== '') {
+                    $groups[] = (string)$id;
+                }
+            }
+            $next = (string)($json['@odata.nextLink'] ?? '');
+            // Paging must not walk off the host we pinned.
+            $url = ($next !== '' && strcasecmp((string)(parse_url($next, PHP_URL_HOST) ?? ''), $host) === 0)
+                ? $next
+                : '';
+        }
+        if ($url !== '') {
+            syslog(LOG_WARNING, sprintf(
+                'os-sso oidc: stopped following the group overage after %d pages',
+                self::MAX_OVERAGE_PAGES
+            ));
+        }
+        return array_values(array_unique($groups));
     }
 
     public function consumeReturnUrl(): string
