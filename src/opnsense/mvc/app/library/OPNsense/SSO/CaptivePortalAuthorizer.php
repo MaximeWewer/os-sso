@@ -84,6 +84,8 @@ final class CaptivePortalAuthorizer
             throw new \RuntimeException('invalid characters in the SSO username');
         }
 
+        self::assertLocalAccountUsable($providerName, $identity, $username);
+
         $ip = preg_replace('/[^0-9a-fA-F.:]/', '', $clientIp);
         if ($ip === '') {
             throw new \RuntimeException('no client IP to authorize');
@@ -101,6 +103,37 @@ final class CaptivePortalAuthorizer
 
         syslog(LOG_NOTICE, sprintf("os-sso cp: authorized '%s' in zone %s from %s", $username, $zoneId, $ip));
         return ['username' => $username, 'zone' => $zoneId, 'session' => (array)$session];
+    }
+
+    /**
+     * Refuse a client whose local account is disabled or expired.
+     *
+     * This path deliberately needs no local account -- it grants network access, not a
+     * WebGUI session -- so it never went near config.xml. But when an account IS there,
+     * skipping it made the portal the one door a revocation does not close: SCIM
+     * `active: false`, "Deprovision on refused login" and the operator's own disable
+     * checkbox all end in a disabled local account, and the WebGUI and VPN paths refuse
+     * it (LocalAccount::assertUsable, via IdentityMapper) while the portal kept letting
+     * the same person onto the network.
+     *
+     * Matched the way the login path matches: the durable subject binding first, then
+     * the username. An account that does not exist is not an error.
+     */
+    private static function assertLocalAccountUsable(
+        string $providerName,
+        NormalizedIdentity $identity,
+        string $username
+    ): void {
+        $accounts = new LocalAccountWriter();
+        $node = $identity->subject !== ''
+            ? $accounts->findBySubject($providerName . '|' . $identity->subject)
+            : null;
+        if ($node === null) {
+            $node = $accounts->findByName($username);
+        }
+        if ($node !== null) {
+            LocalAccount::assertUsable($node);
+        }
     }
 
     /**

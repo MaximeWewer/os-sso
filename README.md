@@ -371,7 +371,8 @@ waiting out a TTL. Access is gated by its own ACL privilege,
 **Sessions.** Privileges are never stored in the session - the OPNsense ACL resolves them
 from group membership on every request. A new session regenerates its ID (anti
 session-fixation). A **disabled or expired** account is refused before group sync writes
-anything, on the VPN path as well as the WebGUI.
+anything - on the WebGUI, on the VPN, and on the captive portal, which needs no local
+account but will not let a revoked one onto the network either.
 
 **Account binding.** An asserted identity binds only to an account os-sso owns or one with
 no usable local password - never to one with a real password, and never to a privileged

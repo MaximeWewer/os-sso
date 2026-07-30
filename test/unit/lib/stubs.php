@@ -69,14 +69,48 @@ class Backend
     public function configdpRun($action, $params = [], $detach = false)
     {
         self::$calls[] = [(string)$action, (array)$params];
-        // vpn_verdict is the only action whose output the caller inspects.
-        return str_contains((string)$action, 'vpn_verdict') ? 'ok' : 'OK';
+        // The two actions whose output the caller inspects.
+        if (str_contains((string)$action, 'vpn_verdict')) {
+            return 'ok';
+        }
+        if (str_contains((string)$action, 'captiveportal allow')) {
+            return '{"sessionId":"cp-session-1","clientState":"AUTHORIZED"}';
+        }
+        return 'OK';
     }
 
     public function configdRun($command, $detach = false)
     {
         self::$calls[] = [(string)$command, []];
         return 'OK';
+    }
+}
+
+namespace OPNsense\CaptivePortal;
+
+/**
+ * The slice of the core Captive Portal model CaptivePortalAuthorizer uses: a zone
+ * lookup by id, where a zone carries the authentication servers it accepts and an
+ * optional group to enforce.
+ */
+class CaptivePortal
+{
+    /** @var array<string,\SimpleXMLElement> zone id => zone node */
+    public static array $zones = [];
+
+    /** Test seam: install one zone. */
+    public static function useZone(string $zoneId, string $authservers, string $enforceGid = ''): void
+    {
+        $zone = new \SimpleXMLElement('<zone/>');
+        $zone->addChild('zoneid', $zoneId);
+        $zone->addChild('authservers', htmlspecialchars($authservers, ENT_XML1));
+        $zone->addChild('authEnforceGroup', $enforceGid);
+        self::$zones[$zoneId] = $zone;
+    }
+
+    public function getByZoneID($zoneId)
+    {
+        return self::$zones[(string)$zoneId] ?? null;
     }
 }
 

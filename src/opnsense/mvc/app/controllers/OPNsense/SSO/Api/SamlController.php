@@ -121,8 +121,8 @@ class SamlController extends ApiControllerBase
             AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity, (bool)$auth->ssoDeprovision);
 
             // Captive Portal path: authorize the captive client's IP in its zone
-            // straight from the verified assertion (no local account, no WebGUI
-            // session), before any identity mapping.
+            // straight from the verified assertion (no WebGUI session, no local account
+            // required -- but a disabled one is still refused), before any mapping.
             $cp = (string)($state['cp'] ?? '');
             if ($cp !== '') {
                 $cpRes = CaptivePortalAuthorizer::authorize(

@@ -5,7 +5,11 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+use OPNsense\CaptivePortal\CaptivePortal;
+use OPNsense\Core\Backend;
 use OPNsense\SSO\CaptivePortalAuthorizer as CP;
+use OPNsense\SSO\NormalizedIdentity;
+use OPNsense\SSO\Test\Tree;
 
 /**
  * The captive portal's post-login redirect goes off-site by design -- it is wherever the
@@ -92,3 +96,69 @@ truthy(str_contains($xss, "content='no-referrer'"), 'but the referrer is still s
 $bad = CP::donePage('alice', 'javascript:alert(1)');
 falsy(str_contains($bad, 'javascript:'), 'a refused destination never reaches the markup');
 falsy(str_contains($bad, 'http-equiv=\'refresh\''), 'and no bounce is emitted for it');
+
+T::group('CaptivePortalAuthorizer: who gets onto the network');
+
+/** An identity as the OIDC/SAML protocol hands it to the portal path. */
+function cpIdentity(string $username, array $groups = [], string $subject = 'sub-1'): NormalizedIdentity
+{
+    $id = new NormalizedIdentity('kc');
+    $id->subject = $subject;
+    $id->username = $username;
+    $id->groups = $groups;
+    return $id;
+}
+
+CaptivePortal::useZone('1', 'kc,Local Database');
+CaptivePortal::useZone('2', 'other');
+CaptivePortal::useZone('3', 'kc', '2000');   // enforces the group with gid 2000
+Tree::build([], [['name' => 'wifi', 'gid' => '2000']]);
+
+throws(fn() => CP::authorize('9', 'kc', cpIdentity('alice'), '10.0.0.1'), 'unknown captive portal zone', 'an unknown zone');
+throws(fn() => CP::authorize('x', 'kc', cpIdentity('alice'), '10.0.0.1'), 'invalid captive portal zone', 'a non-numeric zone');
+throws(
+    fn() => CP::authorize('2', 'kc', cpIdentity('alice'), '10.0.0.1'),
+    'not enabled for this captive portal zone',
+    'a provider the zone does not list -- self-authorizing into any zone'
+);
+throws(
+    fn() => CP::authorize('3', 'kc', cpIdentity('alice', ['staff']), '10.0.0.1'),
+    'not in the group required by this zone',
+    'an identity without the zone enforce-group'
+);
+throws(
+    fn() => CP::authorize('1', 'kc', cpIdentity("ali\nce"), '10.0.0.1'),
+    'invalid characters in the SSO username',
+    'a username that would forge a log line'
+);
+
+$ok = CP::authorize('1', 'kc', cpIdentity('alice'), '10.0.0.1');
+eq('alice', $ok['username'], 'a listed provider authorizes the client');
+eq(
+    ['captiveportal allow', ['1', 'alice', '10.0.0.1', 'kc']],
+    Backend::$calls[count(Backend::$calls) - 1],
+    'and configd is asked to allow that IP in that zone'
+);
+nothrow(fn() => CP::authorize('3', 'kc', cpIdentity('alice', ['WIFI']), '10.0.0.1'), 'the enforce-group matches case-insensitively');
+
+// The revocation gap: SCIM active:false, deprovisioning and the operator's own checkbox
+// all end in a disabled local account. The WebGUI and VPN paths refuse it; the portal
+// used to hand out network access anyway.
+Tree::build([
+    ['name' => 'alice', 'uid' => '2100', 'scrambled_password' => '1', 'sso_subject' => 'kc|sub-1', 'disabled' => '1'],
+    ['name' => 'bob', 'uid' => '2101', 'scrambled_password' => '1', 'expires' => date('m/d/Y', strtotime('-10 days'))],
+    ['name' => 'carol', 'uid' => '2102', 'scrambled_password' => '1'],
+], [['name' => 'wifi', 'gid' => '2000']]);
+
+throws(
+    fn() => CP::authorize('1', 'kc', cpIdentity('alice'), '10.0.0.1'),
+    'disabled or expired',
+    'a disabled account is refused, found by its subject binding'
+);
+throws(
+    fn() => CP::authorize('1', 'kc', cpIdentity('bob', [], 'sub-bob'), '10.0.0.1'),
+    'disabled or expired',
+    'an expired account is refused, found by username'
+);
+nothrow(fn() => CP::authorize('1', 'kc', cpIdentity('carol', [], 'sub-carol'), '10.0.0.1'), 'an enabled account still gets in');
+nothrow(fn() => CP::authorize('1', 'kc', cpIdentity('dave', [], 'sub-dave'), '10.0.0.1'), 'and so does an identity with no local account at all');

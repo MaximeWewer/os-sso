@@ -131,8 +131,9 @@ class OidcController extends ApiControllerBase
             AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity, (bool)$auth->ssoDeprovision);
 
             // Captive Portal path: authorize the captive client's IP in its zone. No
-            // local account and no WebGUI session -- evaluated straight from the
-            // verified identity (and the zone's group policy) before any mapping.
+            // WebGUI session, and no local account required -- evaluated from the
+            // verified identity and the zone's group policy before any mapping, though
+            // an account that IS there must not be disabled.
             $cp = is_array($flow) ? (string)($flow['cp'] ?? '') : '';
             $cpurl = is_array($flow) ? (string)($flow['cpurl'] ?? '') : '';
             if ($cp !== '') {
