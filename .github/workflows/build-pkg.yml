@@ -121,7 +121,10 @@ jobs:
           cd "plugins/${PLUGIN_CATEGORY}/${PLUGIN_NAME}/src/opnsense/mvc/app/library/OPNsense/SSO"
           test -f composer.lock
           composer audit --locked --no-interaction
-          composer install --no-dev --no-interaction --classmap-authoritative --ignore-platform-reqs
+          # --no-scripts/--no-plugins: nothing here defines either, so running them is
+          # only ever somebody else's code executing on the release runner.
+          composer install --no-dev --no-interaction --classmap-authoritative \
+            --ignore-platform-reqs --no-scripts --no-plugins
           test -f vendor/autoload.php
 
       - name: Build the .pkg in a FreeBSD VM

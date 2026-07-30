@@ -17,5 +17,6 @@ post-extract:
 		echo ">>> os-sso: vendor/ already present, skipping composer"; \
 	elif [ -f ${COMPOSER_DIR}/composer.json ]; then \
 		echo ">>> vendoring composer deps for os-sso"; \
-		cd ${COMPOSER_DIR} && composer install --no-dev --no-interaction --classmap-authoritative; \
+		cd ${COMPOSER_DIR} && composer install --no-dev --no-interaction \
+			--classmap-authoritative --no-scripts --no-plugins; \
 	fi
