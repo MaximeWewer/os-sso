@@ -309,8 +309,38 @@ final class LocalAccountWriter
         return $next;
     }
 
+    /**
+     * A value safe to hand to SimpleXML::addChild().
+     *
+     * Escaping the markup characters is only half of it. SimpleXML writes what it is
+     * given byte for byte, and config.xml is re-parsed on every load -- so a value
+     * carrying a control character or a broken UTF-8 sequence produces a document
+     * nothing can read afterwards, and OPNsense falls back to a backup config. Every
+     * string that lands here comes from outside: a display name or an email out of an
+     * ID token, a SCIM payload, an IdP subject. Display names in particular are
+     * self-service at most directories, so this is reachable by any account the IdP
+     * will authenticate.
+     *
+     * So: drop invalid UTF-8 first (a lone continuation byte is not "a character" the
+     * regex below can even see), then everything XML 1.0 does not admit as a character
+     * -- the C0 controls other than tab/LF/CR, the surrogate range, and the two
+     * non-characters -- and only then escape.
+     */
     private function xml(string $value): string
     {
-        return htmlspecialchars($value, ENT_XML1);
+        if (!mb_check_encoding($value, 'UTF-8')) {
+            // Drop the offending bytes rather than let mbstring substitute its "?" --
+            // a stamp we match on later must not gain characters it never had.
+            $substitute = mb_substitute_character();
+            mb_substitute_character('none');
+            $value = (string)mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+            mb_substitute_character($substitute);
+        }
+        $clean = preg_replace(
+            '/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u',
+            '',
+            $value
+        );
+        return htmlspecialchars($clean ?? '', ENT_XML1);
     }
 }

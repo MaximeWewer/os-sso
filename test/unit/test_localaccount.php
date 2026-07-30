@@ -123,6 +123,30 @@ truthy($writer->setDisabled($alice, false), 'enabling reports a change');
 $writer->setField($alice, 'descr', 'Smith & Sons <ops> "x"');
 eq('Smith & Sons <ops> "x"', (string)$alice->descr, 'XML metacharacters round-trip intact');
 
+T::group('LocalAccountWriter: what may reach config.xml');
+
+// A display name is self-service at most directories, and config.xml is re-parsed on
+// every load: a control character or a broken UTF-8 sequence written verbatim makes the
+// whole file unreadable, which is a good deal worse than a mangled description.
+$root = Tree::build([]);
+$node = $writer->create([
+    'name' => 'alice',
+    'descr' => "Ali\x0Bce\x01 \xC3\x28 Smith",
+    'email' => "a\x00b@example.com",
+    'sso_subject' => "kc|sub\x07-1",
+]);
+$descr = (string)$node->descr;
+falsy(preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', $descr), 'no control character survives in the display name');
+truthy(mb_check_encoding($descr, 'UTF-8'), 'and what is left is valid UTF-8');
+eq('ab@example.com', (string)$node->email, 'control characters are dropped from the email');
+eq('kc|sub-1', (string)$node->sso_subject, 'and from the subject stamp');
+
+truthy($writer->setField($node, 'descr', "line\tone\nline two"), 'a change is still reported');
+eq("line\tone\nline two", (string)$node->descr, 'tab and newline are valid XML characters and survive');
+
+$reparsed = @simplexml_load_string((string)$root->asXML());
+truthy($reparsed !== false, 'the document still parses after all of it');
+
 T::group('LocalAccount: disabled and expired accounts are refused');
 
 $root = Tree::build([
