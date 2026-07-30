@@ -1,4 +1,4 @@
-# os-sso VPN — validate the deferred web-auth flow
+# os-sso VPN - validate the deferred web-auth flow
 
 A lab OpenVPN server runs in the VM (udp `127.0.0.1:1194`), wired to the os-sso
 `auth-user-pass-verify` hook. Authentication happens in the browser via the same
@@ -7,10 +7,10 @@ OIDC/SAML flow as the WebGUI.
 ## You need a web-auth-capable client
 
 The plain `openvpn` CLI does **not** support the browser web-auth flow (it does not
-advertise `IV_SSO=webauth`, so the server denies it — by design). Use one of:
+advertise `IV_SSO=webauth`, so the server denies it - by design). Use one of:
 
-- **OpenVPN Connect** (Windows/macOS/Linux GUI) — https://openvpn.net/client/
-- **OpenVPN 3 Linux** (`openvpn3`) — https://github.com/OpenVPN/openvpn3-linux
+- **OpenVPN Connect** (Windows/macOS/Linux GUI) - https://openvpn.net/client/
+- **OpenVPN 3 Linux** (`openvpn3`) - https://github.com/OpenVPN/openvpn3-linux
 
 ## Connect
 
@@ -52,7 +52,7 @@ TIMEOUT=180
 ## Browser cert warnings
 
 The lab uses self-signed/lab-CA certs, so the browser will warn for
-`localhost:8443` and the IdP host — click through (Advanced → Proceed).
+`localhost:8443` and the IdP host - click through (Advanced → Proceed).
 
 ## Restart the server
 

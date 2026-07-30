@@ -2,8 +2,8 @@
 
 Two independent layers:
 
-- **`unit/`** — the security-deciding logic, called directly. No dependency but PHP.
-- **`e2e/`** — the real thing: a Vagrant OPNsense VM plus Authentik and Keycloak in
+- **`unit/`** - the security-deciding logic, called directly. No dependency but PHP.
+- **`e2e/`** - the real thing: a Vagrant OPNsense VM plus Authentik and Keycloak in
   Docker, driven through actual browser ceremonies.
 
 ## Unit tests
@@ -71,7 +71,7 @@ e2e/oidc.sh                                    # or one suite on its own
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
 | `oidc.sh` | host | 28 | the browser ceremony, Host-header hardening, diagnostics + UI pages, logout CSRF, rate limiting, required groups, deprovisioning, session expiry, back-channel logout |
-| `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off — Keycloak only), POST binding, metadata import, SLO |
+| `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only), POST binding, metadata import, SLO |
 | `portal.sh` | host | 7 | a captive client signing in and being authorized in its zone |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
 | `scim.sh` | host | 46 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and Authentik's real SCIM client |
@@ -81,7 +81,7 @@ e2e/oidc.sh                                    # or one suite on its own
 
 Host-side suites drive the whole ceremony through `e2e/lib/idp_login.py`, which speaks
 both dialects: Keycloak renders a login form, Authentik drives a flow-executor API. They
-run from any directory — each resolves its own location first, symlinks included — and say
+run from any directory - each resolves its own location first, symlinks included - and say
 so rather than failing blank if started from an incomplete copy.
 
 `vpn-client.sh` needs `openvpn` on the host and the lab VPN server started with
@@ -95,11 +95,11 @@ Three failure modes that look like plugin bugs and are not:
 
 - **Clock drift.** A suspended VirtualBox guest drifts, and its NTP has no route out here
   (the WAN interface is disabled). Past the 60s signing leeway every login fails on the
-  *token* — `Cannot handle token with iat prior to ...` — which reads like anything but a
+  *token* - `Cannot handle token with iat prior to ...` - which reads like anything but a
   clock problem. `run-all.sh` resynchronises from the host before it starts; tune with
   `SSO_CLOCK_TOLERANCE` (default 5s), disable with `SSO_SKIP_CLOCK_SYNC=1`.
 - **An enabled captive portal zone** installs pf `rdr` rules that intercept http/https on
-  the LAN interface — the very origin the host-side suites use — so a leftover zone breaks
+  the LAN interface - the very origin the host-side suites use - so a leftover zone breaks
   the *next* run with a TLS handshake error. `cp.sh` and `portal.sh` disable their zones on
   the way out; `vagrant/disable_cp_zones.php` does it by hand.
 - **Leftover account state.** `scim.sh` and the deprovisioning cases deliberately disable

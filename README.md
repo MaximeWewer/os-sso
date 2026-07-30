@@ -100,15 +100,15 @@ the exact redirect/ACS URL to copy into the IdP.
    fetched automatically from `<issuer>/.well-known/openid-configuration`.
 3. Keep **PKCE** on; scopes `openid email profile`, plus a groups scope if you map
    groups.
-4. Optional hardening — **Maximum authentication age** (`max_age`, checked against the
+4. Optional hardening - **Maximum authentication age** (`max_age`, checked against the
    returned `auth_time`), **Required authentication context** (`acr_values`, checked
-   against the returned `acr` — the only way to actually require the IdP's MFA context,
+   against the returned `acr` - the only way to actually require the IdP's MFA context,
    since honouring the request is voluntary per the spec), **form_post response mode** to
    keep the authorization code out of the URL, and **Extra authorization parameters** for
    things like `prompt=login`.
 
 **Client authentication.** `auto` picks `client_secret_basic` or `client_secret_post` from
-the discovery document. The others must be chosen explicitly — they need key material
+the discovery document. The others must be chosen explicitly - they need key material
 registered at the IdP first, so auto-selecting one the moment an IdP advertises it would
 break every login:
 
@@ -122,7 +122,7 @@ break every login:
 For `private_key_jwt`, point the IdP's *JWKS URL* at
 `https://<opnsense>/api/sso/oidc/jwks?provider=<name>` (listed on the diagnostics page):
 it serves the public key derived from the private one and nothing else, so a rollover needs
-no copy-paste. Mutual TLS follows RFC 8705 — an `mtls_endpoint_aliases` token endpoint is
+no copy-paste. Mutual TLS follows RFC 8705 - an `mtls_endpoint_aliases` token endpoint is
 used automatically.
 
 | Provider | Issuer URL | Groups |
@@ -344,7 +344,7 @@ another.
 carrying the `userName`, **409** on a repeated `externalId`.
 
 **Not supported:** bulk, sort, ETags, `meta.created`/`meta.lastModified` (config.xml keeps
-no per-account timestamps), and filters beyond `eq` — an unsupported filter is refused
+no per-account timestamps), and filters beyond `eq` - an unsupported filter is refused
 rather than silently answered with the wrong set.
 
 This is a write API into a firewall's account database, so four refusals are absolute: a
@@ -352,7 +352,7 @@ This is a write API into a firewall's account database, so four refusals are abs
 **real local password** is never taken over; **DELETE deactivates** rather than removes,
 because a user can own rules, certificates and API keys; and a **group carrying
 administrative privileges** takes no membership from a directory. Groups themselves are
-never created or deleted either — the client fills the ones that exist.
+never created or deleted either - the client fills the ones that exist.
 
 ## Diagnostics
 
@@ -368,19 +368,19 @@ waiting out a TTL. Access is gated by its own ACL privilege,
 
 ## Security
 
-**Sessions.** Privileges are never stored in the session — the OPNsense ACL resolves them
+**Sessions.** Privileges are never stored in the session - the OPNsense ACL resolves them
 from group membership on every request. A new session regenerates its ID (anti
 session-fixation). A **disabled or expired** account is refused before group sync writes
 anything, on the VPN path as well as the WebGUI.
 
 **Account binding.** An asserted identity binds only to an account os-sso owns or one with
-no usable local password — never to one with a real password, and never to a privileged
+no usable local password - never to one with a real password, and never to a privileged
 account (`root`/system, `admins`) it did not create. A scrambled password is *not*
 ownership: that is the WebGUI's own "no local login" checkbox, which LDAP-backed
 administrators wear. Email matching additionally requires a verified address.
 
 Each account is bound to **one subject per provider**, recorded on first login. A second
-subject of the same provider presenting that account's username is refused — the takeover
+subject of the same provider presenting that account's username is refused - the takeover
 a mutable username claim would otherwise allow. A second *provider* binds alongside, so
 one directory fronted by both OIDC and SAML maps onto a single local account.
 
@@ -392,14 +392,14 @@ hand-assigned group, never the last privileged member.
 **Protocols.** OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp`/`iat`, binds `at_hash` to the
 access token and requires an asymmetric signature; SAML verifies the assertion signature
 and is replay-protected (single-use request id plus a consumed-assertion cache). What the
-IdP is *asked* for is also *checked* on return — `max_age` against `auth_time` (SAML:
-`AuthnInstant`), the required `acr` against the returned one — because requesting an MFA
+IdP is *asked* for is also *checked* on return - `max_age` against `auth_time` (SAML:
+`AuthnInstant`), the required `acr` against the returned one - because requesting an MFA
 context is voluntary per the spec, so only the answer proves anything. The client can
 authenticate to the token endpoint with no shared secret at all (`private_key_jwt`, mutual
 TLS), and the pre-auth endpoints are rate limited per source.
 
 **SCIM** needs a bearer token **and** a source-address allowlist, and refuses on the same
-principles as the login path — see [SCIM provisioning](#scim-provisioning).
+principles as the login path - see [SCIM provisioning](#scim-provisioning).
 
 The local password (+ native TOTP) always stays active as a **break-glass** path: keep at
 least one local admin.
@@ -411,7 +411,7 @@ least one local admin.
 
 Two layers, both under [`test/`](test/) with their own
 [README](test/README.md): a dependency-free **unit suite** over the logic that decides
-security (every case is a refusal — the part an end-to-end run never reaches), and **eight
+security (every case is a refusal - the part an end-to-end run never reaches), and **eight
 end-to-end suites** against a Vagrant OPNsense VM with Authentik and Keycloak in Docker,
 driving real browser ceremonies and a real OpenVPN client.
 
