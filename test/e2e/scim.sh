@@ -11,7 +11,21 @@
 #
 # Usage: SSO_GUI_URL=https://192.168.60.10 ./scim.sh
 set -uo pipefail
-cd "$(dirname "$0")"
+# Work from this script's own directory whatever the caller's: every path below is
+# relative to it (lib/, ../idp/), and the suites are started both from here and from
+# run-all.sh. CDPATH= so a CDPATH in the environment cannot land us somewhere else, and
+# -- so a path beginning with "-" is not read as an option. A symlink is followed where
+# readlink can (GNU and FreeBSD both do), otherwise the guard below says so plainly.
+self=$0
+[ -L "$self" ] && self=$(readlink -f -- "$self" 2>/dev/null || printf '%s' "$self")
+cd "$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)" || exit 1
+
+# Fail loudly if the ceremony driver is missing. Every login below reports only the HTTP
+# status it got, so an absent driver used to surface as an empty status with no clue.
+[ -r lib/idp_login.py ] || {
+    echo "FATAL: lib/idp_login.py not found next to $self" >&2
+    exit 1
+}
 
 PORT="${SSO_GUI_PORT:-8443}"
 GUI="${SSO_GUI_URL:-https://localhost:$PORT}"
@@ -153,7 +167,7 @@ set_provider "sso_default_groups= sso_required_groups= sso_deprovision=0"
 vm "php /home/vagrant/os-sso/test/vagrant/reset_sso_users.php" >/dev/null
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
 LOGIN=$(python3 lib/idp_login.py --gui "$GUI" --provider "$PROVIDER" --protocol oidc \
-    --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$W/jar" 2>/dev/null | tail -1)
+    --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$W/jar" | tail -1)
 check "the user logs in over SSO" 302 "$LOGIN"
 LIVE=$(curl -sk -b "$W/jar" -o /dev/null -w '%{http_code}' "$GUI/api/core/menu/search")
 [ "$LIVE" = "200" ] && ok "the session is live" || ko "the session is not live ($LIVE)"
@@ -166,7 +180,7 @@ LIVE=$(curl -sk -b "$W/jar" -o /dev/null -w '%{http_code}' "$GUI/api/core/menu/s
     || ko "the session survived the deactivation"
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
 AGAIN=$(python3 lib/idp_login.py --gui "$GUI" --provider "$PROVIDER" --protocol oidc \
-    --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$W/jar2" 2>/dev/null | tail -1)
+    --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$W/jar2" | tail -1)
 check "and the user can no longer log back in" 400 "$AGAIN"
 
 # --- 9. the real client ----------------------------------------------------------

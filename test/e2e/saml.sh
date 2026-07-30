@@ -6,7 +6,21 @@
 #
 # Usage: SSO_GUI_PORT=8444 ./saml.sh            (or through ./run-all.sh)
 set -uo pipefail
-cd "$(dirname "$0")"
+# Work from this script's own directory whatever the caller's: every path below is
+# relative to it (lib/, ../idp/), and the suites are started both from here and from
+# run-all.sh. CDPATH= so a CDPATH in the environment cannot land us somewhere else, and
+# -- so a path beginning with "-" is not read as an option. A symlink is followed where
+# readlink can (GNU and FreeBSD both do), otherwise the guard below says so plainly.
+self=$0
+[ -L "$self" ] && self=$(readlink -f -- "$self" 2>/dev/null || printf '%s' "$self")
+cd "$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)" || exit 1
+
+# Fail loudly if the ceremony driver is missing. Every login below reports only the HTTP
+# status it got, so an absent driver used to surface as an empty status with no clue.
+[ -r lib/idp_login.py ] || {
+    echo "FATAL: lib/idp_login.py not found next to $self" >&2
+    exit 1
+}
 
 PORT="${SSO_GUI_PORT:-8443}"
 # The lab can be reached two ways: the NAT-forwarded port, or the host-only address
@@ -34,13 +48,13 @@ is_live(){ authed "$1" && ok "$2" || ko "$2 (session is not authenticated)"; }
 # The browser ceremony, IdP dialect included, lives in lib/idp_login.py.
 ceremony() { # $1 = cookie jar; echoes the ACS status
     python3 lib/idp_login.py --gui "$GUI" --provider "$PROVIDER" --protocol saml \
-        --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$1" 2>/dev/null | tail -1
+        --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$1" | tail -1
 }
 
 capture() { # $1 = file for the raw SAMLResponse; stops just before the ACS
     python3 lib/idp_login.py --gui "$GUI" --provider "$PROVIDER" --protocol saml \
         --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$W/cap.jar" \
-        --capture "$1" 2>/dev/null | tail -1
+        --capture "$1" | tail -1
 }
 
 echo "=== os-sso SAML end-to-end ($GUI, idp=$IDP, provider=$PROVIDER) ==="

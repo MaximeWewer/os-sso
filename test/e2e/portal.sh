@@ -10,7 +10,21 @@
 #
 # Usage: SSO_GUI_PORT=8444 ./portal.sh
 set -uo pipefail
-cd "$(dirname "$0")"
+# Work from this script's own directory whatever the caller's: every path below is
+# relative to it (lib/, ../idp/), and the suites are started both from here and from
+# run-all.sh. CDPATH= so a CDPATH in the environment cannot land us somewhere else, and
+# -- so a path beginning with "-" is not read as an option. A symlink is followed where
+# readlink can (GNU and FreeBSD both do), otherwise the guard below says so plainly.
+self=$0
+[ -L "$self" ] && self=$(readlink -f -- "$self" 2>/dev/null || printf '%s' "$self")
+cd "$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)" || exit 1
+
+# Fail loudly if the ceremony driver is missing. Every login below reports only the HTTP
+# status it got, so an absent driver used to surface as an empty status with no clue.
+[ -r lib/idp_login.py ] || {
+    echo "FATAL: lib/idp_login.py not found next to $self" >&2
+    exit 1
+}
 
 PORT="${SSO_GUI_PORT:-8443}"
 # The lab can be reached two ways: the NAT-forwarded port, or the host-only address
@@ -37,7 +51,7 @@ portal_login() { # $1 = zone, $2 = original destination, $3 = body file
     python3 lib/idp_login.py --gui "$GUI" --provider "$PROVIDER" --protocol oidc \
         --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" --jar "$W/jar" \
         --start-url "$GUI/api/sso/oidc/login?provider=$PROVIDER&cp=$1&cpurl=$2" \
-        --body "$3" 2>/dev/null | tail -1
+        --body "$3" | tail -1
 }
 
 echo "=== os-sso Captive Portal from a client browser ($GUI, idp=$IDP) ==="

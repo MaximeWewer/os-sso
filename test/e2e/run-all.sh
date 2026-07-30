@@ -12,7 +12,14 @@
 #   SSO_GUI_PORT=8444 ./run-all.sh oidc saml       # a subset
 #   SSO_GUI_PORT=8444 IDP=authentik ./run-all.sh   # against the other IdP
 set -uo pipefail
-cd "$(dirname "$0")"
+# Work from this script's own directory whatever the caller's: every path below is
+# relative to it (lib/, ../idp/), and the suites are started both from here and from
+# run-all.sh. CDPATH= so a CDPATH in the environment cannot land us somewhere else, and
+# -- so a path beginning with "-" is not read as an option. A symlink is followed where
+# readlink can (GNU and FreeBSD both do), otherwise the guard below says so plainly.
+self=$0
+[ -L "$self" ] && self=$(readlink -f -- "$self" 2>/dev/null || printf '%s' "$self")
+cd "$(CDPATH= cd -- "$(dirname -- "$self")" && pwd)" || exit 1
 
 PORT="${SSO_GUI_PORT:-8443}"
 GUI_URL="${SSO_GUI_URL:-https://localhost:$PORT}"

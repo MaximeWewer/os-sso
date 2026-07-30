@@ -514,11 +514,16 @@ otherwise.
 Eight end-to-end suites under `test/e2e/`, run against either IdP:
 
 ```sh
-cd test/e2e
-SSO_GUI_URL=https://192.168.60.10 ./run-all.sh                # everything, Keycloak
-SSO_GUI_URL=https://192.168.60.10 IDP=authentik ./run-all.sh  # same, Authentik
-SSO_GUI_URL=https://192.168.60.10 ./run-all.sh oidc saml      # a subset
+export SSO_GUI_URL=https://192.168.60.10       # must match the provider Base URL
+test/e2e/run-all.sh                            # everything, Keycloak
+IDP=authentik test/e2e/run-all.sh              # same, Authentik
+test/e2e/run-all.sh oidc saml                  # a subset
+test/e2e/oidc.sh                               # or one suite on its own
 ```
+
+Each suite works from any directory - it resolves its own location first, symlinks
+included - and says so plainly rather than failing blank if it is run from an incomplete
+copy. The host-side suites still need `vagrant` to find `test/Vagrantfile` from there.
 
 | Suite | Where | Checks | Covers |
 |---|---|---|---|
