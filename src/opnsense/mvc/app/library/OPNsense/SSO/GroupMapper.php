@@ -231,15 +231,6 @@ final class GroupMapper
         return $targets;
     }
 
-    /**
-     * A group is privileged if it grants full GUI access, shell access, or the
-     * ability to edit users/groups (self-escalation) -- or is the built-in admins
-     * group. Checked against the group's actual ACL privileges, not just its name,
-     * so a custom admin-equivalent group is covered too.
-     */
-
-    /** ACL privileges that make a group admin-equivalent for 1:1-fallback gating. */
-
     private function addMember(\SimpleXMLElement $group, string $uid): bool
     {
         $members = [];

@@ -28,7 +28,6 @@ use OPNsense\SSO\Privilege;
  */
 final class ScimGroups
 {
-    /** Privileges that make a group admin-equivalent; mirrors GroupMapper. */
     private LocalAccountWriter $accounts;
     private string $base;
 

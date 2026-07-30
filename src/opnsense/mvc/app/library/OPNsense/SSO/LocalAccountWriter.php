@@ -69,7 +69,6 @@ final class LocalAccountWriter
         return null;
     }
 
-    /** Account carrying this exact value in $field (a namespaced external id). */
     /**
      * Every IdP binding recorded on an account, as "provider|subject" strings.
      *

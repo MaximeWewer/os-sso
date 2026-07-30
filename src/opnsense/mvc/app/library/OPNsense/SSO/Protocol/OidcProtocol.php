@@ -924,11 +924,6 @@ final class OidcProtocol implements ProtocolInterface
         return $this->curl($url, null, $headers);
     }
 
-    private function httpPost(string $url, string $body, array $headers = []): string
-    {
-        return $this->curl($url, $body, $headers);
-    }
-
     /**
      * @param array $extraOptions curl options from the client authentication (the mTLS
      *                            certificate pair), applied after ours

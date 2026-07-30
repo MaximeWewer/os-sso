@@ -122,17 +122,6 @@ final class IdentityMapper
     }
 
     /**
-     * Refuse binding SSO to a PRIVILEGED local account (the built-in system/root
-     * accounts, or any member of the admins group) that was not provisioned by SSO
-     * -- the classic "set my username/email to root and become admin" takeover.
-     * SSO-managed accounts (scrambled password, IdP-only) are fine to re-bind, so
-     * the same person logging in via a second IdP/protocol still works.
-     *
-     * Username-claim collisions on NON-privileged accounts remain the operator's
-     * trust decision: the username claim MUST be an immutable, IdP-administered
-     * attribute (documented).
-     */
-    /**
      * A weak match -- username claim or verified email -- may not land on an account this
      * provider has already bound to a DIFFERENT subject.
      *
@@ -178,6 +167,18 @@ final class IdentityMapper
         );
     }
 
+    /**
+     * Refuse binding SSO to a PRIVILEGED local account -- the built-in system/root
+     * accounts, a member of the admins group, or one carrying an escalation privilege of
+     * its own -- that was not provisioned by SSO. The classic "set my username or email
+     * to root and become admin" takeover. SSO-managed accounts (scrambled password,
+     * IdP-only) are fine to re-bind, so the same person logging in through a second
+     * IdP or protocol still works.
+     *
+     * Username-claim collisions on NON-privileged accounts remain the operator's trust
+     * decision: the username claim MUST be an immutable, IdP-administered attribute
+     * (documented).
+     */
     private function guardBinding(\SimpleXMLElement $node): void
     {
         if ($this->accounts->isPrivileged($node) && !$this->accounts->isSsoManaged($node)) {
