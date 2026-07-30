@@ -134,16 +134,29 @@ check "same-origin logout proceeds" 302 \
 # redirect: client_id and an opaque reference, nothing else. The login has to still
 # work, which is the half a URL check cannot tell you.
 echo ">>> case 5b: pushed authorization requests (PAR)"
+# Not every IdP offers it (Authentik does not publish the endpoint), and asking for it
+# must not break those: the flow falls back to the ordinary redirect, which is the other
+# half of what this case checks.
+ISSUER=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_authserver.php $PROVIDER sso_issuer")
+HAS_PAR=$(vm "fetch -qo - --no-verify-peer '$ISSUER/.well-known/openid-configuration'" \
+    | grep -c pushed_authorization_request_endpoint)
 vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_use_par=1" >/dev/null
 PARURL=$(curl -sk -o /dev/null -w '%{redirect_url}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")
-case "$PARURL" in
-    *request_uri=urn*) ok "the redirect carries a request_uri reference" ;;
-    *) ko "no request_uri in the redirect ($PARURL)" ;;
-esac
-case "$PARURL" in
-    *state=*|*code_challenge=*|*redirect_uri=*) ko "the request parameters still travel in the URL" ;;
-    *) ok "no state, PKCE challenge or redirect_uri left in the URL" ;;
-esac
+if [ "${HAS_PAR:-0}" -gt 0 ] 2>/dev/null; then
+    case "$PARURL" in
+        *request_uri=urn*) ok "the redirect carries a request_uri reference" ;;
+        *) ko "no request_uri in the redirect ($PARURL)" ;;
+    esac
+    case "$PARURL" in
+        *state=*|*code_challenge=*|*redirect_uri=*) ko "the request parameters still travel in the URL" ;;
+        *) ok "no state, PKCE challenge or redirect_uri left in the URL" ;;
+    esac
+else
+    case "$PARURL" in
+        *code_challenge=*) ok "an IdP without a PAR endpoint keeps the ordinary redirect" ;;
+        *) ko "the redirect lost its parameters against an IdP that has no PAR ($PARURL)" ;;
+    esac
+fi
 rm -f "$W/parjar"
 check "a PAR login completes" 302 "$(login "$W/parjar")"
 is_live "$W/parjar" "and the session it opened is authenticated"
