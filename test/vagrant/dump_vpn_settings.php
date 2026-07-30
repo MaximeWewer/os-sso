@@ -18,4 +18,9 @@ if ($field === '') {
     exit(1);
 }
 $model = new Settings();
-echo isset($model->vpn->$field) ? (string)$model->vpn->$field : '', "\n";
+/* The first profile, which is the one the lab drives (see set_vpn_settings.php). */
+foreach ($model->vpn->profiles->profile->iterateItems() as $profile) {
+    echo isset($profile->$field) ? (string)$profile->$field : '', "\n";
+    exit(0);
+}
+echo "\n";

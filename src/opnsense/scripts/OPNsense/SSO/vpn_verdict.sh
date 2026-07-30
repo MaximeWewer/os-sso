@@ -14,10 +14,10 @@ BROWSER_IP=$(printf '%s' "${3:-}" | tr -cd '0-9a-fA-F.:')
 AUTH_USER=$(printf '%s' "${4:-}" | tr -d '\r\n' | tr -cd '\40-\176')
 [ -n "$VERDICT" ] || VERDICT=0
 
-# Same file the hook reads, for ENFORCE_USERNAME.
+# Same file the hook reads, for ENFORCE_USERNAME. Which profile's, though, is only
+# known once the session mapping below has been read -- so the lookup happens there.
 CONF=/usr/local/etc/sso/vpn.conf
 [ -r "$CONF" ] && . "$CONF"
-ENFORCE_USERNAME="${ENFORCE_USERNAME:-0}"
 
 # Root-owned tree (/var/db is 0755 root:wheel), not the world-writable /var/tmp:
 # the session map decides which control file we write a positive verdict into.
@@ -41,7 +41,15 @@ fi
 CONTROL=$(sed -n 1p "$WORK")
 CLIENT_IP=$(sed -n 2p "$WORK")
 CLAIMED_USER=$(sed -n 3p "$WORK")   # empty for a session started before the upgrade
+PROFILE=$(sed -n 4p "$WORK")        # likewise
 rm -f "$WORK"   # single use
+
+# The username rule belongs to the profile that deferred this attempt. A session file
+# written before profiles existed names none, and then there is nothing to look up.
+case "$PROFILE" in
+    ''|*[!A-Za-z0-9_]*) ENFORCE_USERNAME=0 ;;
+    *) eval "ENFORCE_USERNAME=\"\${PROFILE_${PROFILE}_ENFORCE_USERNAME:-0}\"" ;;
+esac
 
 case "$CONTROL" in
     /*) ;;

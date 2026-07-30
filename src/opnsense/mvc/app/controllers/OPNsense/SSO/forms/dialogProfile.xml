@@ -1,42 +1,51 @@
 <form>
     <field>
-        <id>settings.vpn.enabled</id>
-        <label>Enable OpenVPN web-auth</label>
+        <id>profile.enabled</id>
+        <label>Enabled</label>
         <type>checkbox</type>
         <help>
-            Write /usr/local/etc/sso/vpn.conf so the deferred-auth script can send VPN
-            clients to the browser SSO login. You still have to point the OpenVPN
-            server at the script: auth-user-pass-verify
-            /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh via-file
+            A disabled profile is left out of vpn.conf, so an OpenVPN server pointing at
+            it refuses the connection rather than deferring it.
         </help>
     </field>
     <field>
-        <id>settings.vpn.protocol</id>
+        <id>profile.name</id>
+        <label>Profile name</label>
+        <type>text</type>
+        <help>
+            The name the OpenVPN server passes to the script, e.g.
+            auth-user-pass-verify "/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh staff" via-file.
+            A server that passes no name uses the first enabled profile. Letters, digits
+            and underscores only.
+        </help>
+    </field>
+    <field>
+        <id>profile.protocol</id>
         <label>Protocol</label>
         <type>dropdown</type>
         <help>Which SSO flow the VPN client's browser is sent through.</help>
     </field>
     <field>
-        <id>settings.vpn.provider</id>
+        <id>profile.provider</id>
         <label>Authentication server</label>
         <type>dropdown</type>
         <help>
-            Which SSO authentication server drives the VPN login. The list holds the
+            Which SSO authentication server drives this VPN login. The list holds the
             OIDC and SAML servers configured under System - Access - Servers.
         </help>
     </field>
     <field>
-        <id>settings.vpn.host</id>
+        <id>profile.host</id>
         <label>Firewall host[:port]</label>
         <type>text</type>
         <help>
             Public host the VPN client's browser opens, e.g. vpn.example.com. It must
-            resolve and be reachable from the client BEFORE the tunnel is up, and
-            match the certificate the WebGUI presents.
+            resolve and be reachable from the client BEFORE the tunnel is up, and match
+            the certificate the WebGUI presents.
         </help>
     </field>
     <field>
-        <id>settings.vpn.enforce_username</id>
+        <id>profile.enforce_username</id>
         <label>Require the username to match</label>
         <type>checkbox</type>
         <help>
@@ -51,7 +60,7 @@
         </help>
     </field>
     <field>
-        <id>settings.vpn.timeout</id>
+        <id>profile.timeout</id>
         <label>Web-auth timeout (s)</label>
         <type>text</type>
         <help>

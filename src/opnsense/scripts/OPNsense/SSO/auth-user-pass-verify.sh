@@ -19,12 +19,35 @@ umask 077
 
 CONF=/usr/local/etc/sso/vpn.conf
 [ -r "$CONF" ] && . "$CONF"
+
+# Which profile this OpenVPN server uses. It is our first argument -- OpenVPN appends
+# the credentials file after whatever the auth-user-pass-verify line carries, so an
+# argument that looks like a path is that file and not a profile name. A server that
+# names none gets the first enabled profile, which keeps every configuration written
+# before profiles existed working untouched.
+PROFILE="${1:-}"
+case "$PROFILE" in
+    /*|'') PROFILE="${DEFAULT_PROFILE:-}" ;;
+    *[!A-Za-z0-9_]*)
+        echo "os-sso vpn: invalid profile name '$PROFILE'" >&2
+        exit 1
+        ;;
+esac
+if [ -z "$PROFILE" ]; then
+    echo "os-sso vpn: no enabled web-auth profile in $CONF" >&2
+    exit 1
+fi
+
+# Resolve PROFILE_<name>_* into the plain names the rest of the script uses. eval
+# rather than ${!var}: this is /bin/sh, and the name has already been reduced to
+# letters, digits and underscores above.
+for field in PROTOCOL PROVIDER PROVIDER_ENC HOST TIMEOUT; do
+    eval "$field=\"\${PROFILE_${PROFILE}_${field}:-}\""
+done
 PROTOCOL="${PROTOCOL:-oidc}"   # oidc | saml
-PROVIDER="${PROVIDER:-}"
 # Percent-encoded form for the query string. Falls back to the raw name so a
 # vpn.conf written by an older build still works (rewritten on the next save).
 PROVIDER_ENC="${PROVIDER_ENC:-$PROVIDER}"
-HOST="${HOST:-}"
 TIMEOUT="${TIMEOUT:-180}"
 # Root-owned tree, not the world-writable /var/tmp: the per-session file holds the
 # auth-control path a positive verdict gets written to.
@@ -42,7 +65,7 @@ case "$TIMEOUT" in
 esac
 
 if [ -z "$PROVIDER" ] || [ -z "$HOST" ]; then
-    echo "os-sso vpn: PROVIDER/HOST not set in $CONF" >&2
+    echo "os-sso vpn: profile '$PROFILE' has no provider/host in $CONF" >&2
     exit 1
 fi
 
@@ -89,6 +112,9 @@ CLAIMED_USER=$(printf '%s' "${username:-}" | tr -d '\r\n' | tr -cd '\40-\176')
     printf '%s\n' "$auth_control_file"
     printf '%s\n' "$CLIENT_IP"
     printf '%s\n' "$CLAIMED_USER"
+    # Which profile deferred this attempt: the verdict script needs it to read the
+    # right ENFORCE_USERNAME back out of vpn.conf.
+    printf '%s\n' "$PROFILE"
 } > "$STATE_DIR/$SID"
 chmod 600 "$STATE_DIR/$SID" || { rm -f "$STATE_DIR/$SID"; echo "os-sso vpn: cannot secure session file" >&2; exit 1; }
 

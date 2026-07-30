@@ -87,8 +87,11 @@ SID3=$(defer 'claimed.bob' "$W/pending4" "$W/control4")
 # to test it. The generated file is restored from the model at the end of the suite.
 CONF=/usr/local/etc/sso/vpn.conf
 set_enforce() {
-    sed -i '' '/^ENFORCE_USERNAME=/d' "$CONF" 2>/dev/null
-    printf "ENFORCE_USERNAME='%s'\n" "$1" >> "$CONF"
+    # Per profile now: the verdict script resolves the flag of the profile that
+    # deferred the attempt, which is the one the hook recorded in the session file.
+    P=$(sed -n "s/^DEFAULT_PROFILE='\(.*\)'$/\1/p" "$CONF")
+    sed -i '' "/^PROFILE_${P}_ENFORCE_USERNAME=/d" "$CONF" 2>/dev/null
+    printf "PROFILE_%s_ENFORCE_USERNAME='%s'\n" "$P" "$1" >> "$CONF"
 }
 
 echo ">>> case 9: a mismatch is allowed but logged while enforcement is off"

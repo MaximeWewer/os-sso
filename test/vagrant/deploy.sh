@@ -75,7 +75,10 @@ cp -R "$SVC_SRC/service/templates/OPNsense/SSO/." /usr/local/opnsense/service/te
 # saved settings still has a usable file.
 mkdir -p /usr/local/etc/sso
 if [ ! -f /usr/local/etc/sso/vpn.conf ]; then
-    printf 'PROTOCOL=oidc\nPROVIDER=keycloak\nHOST=localhost:8443\nTIMEOUT=180\n' > /usr/local/etc/sso/vpn.conf
+    printf "PROFILE_default_PROTOCOL='oidc'\nPROFILE_default_PROVIDER='keycloak'\n"\
+        "PROFILE_default_PROVIDER_ENC='keycloak'\nPROFILE_default_HOST='localhost:8443'\n"\
+        "PROFILE_default_TIMEOUT='180'\nPROFILE_default_ENFORCE_USERNAME='0'\nDEFAULT_PROFILE='default'\n" \
+        > /usr/local/etc/sso/vpn.conf
 fi
 # Privileged helpers + configd actions (verdict writer, session expiry, cp template).
 mkdir -p /usr/local/opnsense/scripts/OPNsense/SSO

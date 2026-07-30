@@ -22,7 +22,7 @@ class SettingsController extends IndexController
     public function indexAction()
     {
         $this->view->title = gettext('OpenVPN web-auth');
-        $this->view->formSettings = $this->getForm('settings');
+        $this->view->formDialogProfile = $this->getForm('dialogProfile');
         $this->view->pick('OPNsense/SSO/settings');
     }
 }
