@@ -131,12 +131,15 @@ check "same-origin logout proceeds" 302 \
 
 # --- 6. rate limiting ----------------------------------------------------------
 echo ">>> case 6: pre-auth rate limit"
+# The ceiling is 60 a minute per source: one source is regularly a whole NATed office
+# arriving at nine, so it has to sit well above a working burst -- which means the probe
+# has to go past it rather than past 20.
 limited=0
-for _ in $(seq 1 26); do
+for _ in $(seq 1 66); do
     c=$(curl -sk -o /dev/null -w '%{http_code}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")
     [ "$c" = "400" ] && limited=$((limited+1))
 done
-[ "$limited" -gt 0 ] && ok "login throttled after the window filled ($limited refused of 26)" \
+[ "$limited" -gt 0 ] && ok "login throttled after the window filled ($limited refused of 66)" \
     || ko "no throttling observed"
 # Drop the buckets: the cases below each need to log in, and the window is 60s.
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null

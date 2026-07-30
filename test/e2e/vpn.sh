@@ -130,6 +130,7 @@ case "$(cat "$W/v8")" in ok*) ok "an empty claimed username is not refused" ;; \
     *) ko "verdict said '$(cat "$W/v8")'" ;; esac
 
 echo ">>> case 12b: the verdict names the tunnel's common name"
+set_enforce 0   # case 10 left enforcement on, and this case is about the echo
 SID7=$(defer 'claimed.carol' "$W/pending9" "$W/control9")
 : > "$W/control9"
 "$VERDICT" "$SID7" 1 203.0.113.7 'real.alice' >"$W/v9" 2>&1
