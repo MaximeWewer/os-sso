@@ -285,31 +285,40 @@ final class ScimUsers
     }
 
     /**
-     * Refuse an account another provider already claimed.
+     * Refuse an account that belongs to another provider and not to us.
      *
-     * Both bindings are namespaced by provider name, so both answer the question: a
-     * scim_ref from a directory that is not ours, or an sso_subject from someone else's
-     * login flow. stampOnce never overwrites, so without this an account claimed by one
-     * provider takes writes from a second while its own external id is never recorded,
-     * and nothing ever matches it back.
-     *
-     * It is also the authorization boundary between directories. Enabling SCIM on one
-     * authentication server must not hand it the accounts of another: the bearer token
+     * This is the authorization boundary between directories: enabling SCIM on one
+     * authentication server must not hand it the accounts of another. The bearer token
      * says which provider a request belongs to, and this is what makes that mean
      * something on writes as well as on reads.
+     *
+     * Both kinds of binding answer the question -- a scim_ref from a directory, an
+     * sso_subject from a login flow -- and an account may legitimately carry several,
+     * since one directory is often fronted by more than one protocol. So the test is not
+     * "is any binding foreign" but "is every binding foreign": if this provider is among
+     * them, the account is ours to manage too.
      */
     private function assertNotClaimedElsewhere(\SimpleXMLElement $node): void
     {
         $prefix = $this->provider . '|';
+        $foreign = [];
         foreach (['scim_ref', 'sso_subject'] as $field) {
-            $ref = (string)($node->{$field} ?? '');
-            if ($ref === '' || str_starts_with($ref, $prefix)) {
-                continue;
+            foreach ($node->{$field} as $binding) {
+                $ref = trim((string)$binding);
+                if ($ref === '') {
+                    continue;
+                }
+                if (str_starts_with($ref, $prefix)) {
+                    return; // one of them is ours
+                }
+                $foreign[explode('|', $ref)[0]] = true;
             }
+        }
+        if ($foreign !== []) {
             throw ScimError::conflict(sprintf(
                 "'%s' belongs to another provider (%s)",
                 (string)$node->name,
-                explode('|', $ref)[0]
+                implode(', ', array_keys($foreign))
             ));
         }
     }

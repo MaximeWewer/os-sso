@@ -57,7 +57,7 @@ final class IdentityMapper
 
         // 1. Durable match: an account already linked to this exact IdP subject.
         //    Immune to later username/email changes and to collisions.
-        $node = $this->accounts->findByStamp('sso_subject', $subjectKey);
+        $node = $this->accounts->findBySubject($subjectKey);
 
         // 2. First-time linking: by the configured username claim -- which may land on
         //    any account with no usable local password of its own -- then by a
@@ -99,7 +99,7 @@ final class IdentityMapper
             // is opened, it was not refused at all.
             LocalAccount::assertUsable($node);
             $this->guardBinding($node);
-            $stamped = $this->accounts->stampOnce($node, 'sso_subject', $subjectKey);
+            $stamped = $this->accounts->addBinding($node, $subjectKey);
             $changed = $this->groupMapper->sync($node, $identity, $defaultGroups);
             if ($stamped || $changed) {
                 $this->accounts->persist((string)$node->name);
@@ -133,31 +133,48 @@ final class IdentityMapper
      * attribute (documented).
      */
     /**
-     * A weak match -- username claim or verified email -- may not land on an account
-     * that is ALREADY bound to a different IdP subject.
+     * A weak match -- username claim or verified email -- may not land on an account this
+     * provider has already bound to a DIFFERENT subject.
      *
-     * The stamp is the only durable link between an account and a person; the username
+     * The binding is the only durable link between an account and a person; the username
      * claim is not. Without this check, a second subject that manages to present the
-     * first one's username inherits the account, its groups and its history: a rename
-     * at the IdP, a directory account deleted and recreated there with a fresh `sub`,
-     * or simply a mutable claim such as `email`. The stamped account is SSO-managed by
-     * definition, so neither the password-collision guard above nor guardBinding()
-     * below sees anything wrong with it.
+     * first one's username inherits the account, its groups and its history: a rename at
+     * the IdP, a directory account deleted and recreated there with a fresh `sub`, or
+     * simply a mutable claim such as `email`. A bound account is os-sso-owned by
+     * definition, so neither the password-collision guard above nor guardBinding() below
+     * sees anything wrong with it.
      *
-     * An empty $subjectKey (no `sub` asserted at all) is refused for the same reason:
-     * we cannot show it is the same person, so we do not guess.
+     * Scoped to THIS provider. Another provider's binding is not a conflict: the operator
+     * registered each authentication server separately and each vouches for its own
+     * users, which is what makes one account reachable through a directory's OIDC and
+     * SAML front doors at once. What must never happen is two subjects of the SAME
+     * provider sharing an account -- there, the claim is the only thing distinguishing
+     * them, and it is exactly the thing that can be made to collide.
+     *
+     * An identity asserting no subject at all cannot be pinned, so it may not take over
+     * an account that anyone is bound to.
      */
     private function assertNotBoundElsewhere(\SimpleXMLElement $node, string $subjectKey): void
     {
-        $stamp = (string)($node->sso_subject ?? '');
-        if ($stamp === '' || hash_equals($stamp, $subjectKey)) {
+        if ($subjectKey === '') {
+            if ($this->accounts->subjectBindings($node) !== []) {
+                throw new \RuntimeException(
+                    "SSO: local account '" . (string)$node->name . "' is bound to an IdP subject " .
+                    "and this identity asserts none; refusing to bind"
+                );
+            }
+            return;
+        }
+        $provider = explode('|', $subjectKey, 2)[0];
+        $existing = $this->accounts->bindingFor($node, $provider);
+        if ($existing === '' || hash_equals($existing, $subjectKey)) {
             return;
         }
         throw new \RuntimeException(
             "SSO: local account '" . (string)$node->name . "' is already bound to another " .
-            "IdP subject; refusing to bind (one local account belongs to one IdP subject -- " .
-            "provision a separate account, or clear its binding in config.xml if the account " .
-            "really did change hands)"
+            "subject of provider '" . $provider . "'; refusing to bind (one account belongs to " .
+            "one subject per provider -- provision a separate account, or clear its binding in " .
+            "config.xml if the account really did change hands)"
         );
     }
 

@@ -70,6 +70,73 @@ final class LocalAccountWriter
     }
 
     /** Account carrying this exact value in $field (a namespaced external id). */
+    /**
+     * Every IdP binding recorded on an account, as "provider|subject" strings.
+     *
+     * Repeated <sso_subject> children rather than one: a single local account is
+     * routinely reachable through more than one provider -- the same directory fronted
+     * by OIDC for the WebGUI and by SAML for something else is an ordinary setup, and
+     * each protocol calls the same person by a different subject. One binding PER
+     * PROVIDER is the invariant that matters; one binding in total is not.
+     *
+     * @return string[]
+     */
+    public function subjectBindings(\SimpleXMLElement $node): array
+    {
+        $out = [];
+        foreach ($node->sso_subject as $binding) {
+            $value = trim((string)$binding);
+            if ($value !== '') {
+                $out[] = $value;
+            }
+        }
+        return $out;
+    }
+
+    /** The account carrying this exact binding, or null. */
+    public function findBySubject(string $subjectKey): ?\SimpleXMLElement
+    {
+        if ($subjectKey === '') {
+            return null;
+        }
+        foreach ($this->users() as $user) {
+            foreach ($this->subjectBindings($user) as $binding) {
+                if (hash_equals($binding, $subjectKey)) {
+                    return $user;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The binding this account carries for one provider, '' when it has none.
+     *
+     * Split on the FIRST separator only: the provider name is what precedes it, and a
+     * subject is free to contain one.
+     */
+    public function bindingFor(\SimpleXMLElement $node, string $provider): string
+    {
+        $prefix = $provider . '|';
+        foreach ($this->subjectBindings($node) as $binding) {
+            if (str_starts_with($binding, $prefix)) {
+                return $binding;
+            }
+        }
+        return '';
+    }
+
+    /** Record a binding, unless one is already present for that provider. */
+    public function addBinding(\SimpleXMLElement $node, string $subjectKey): bool
+    {
+        $provider = explode('|', $subjectKey, 2)[0];
+        if ($subjectKey === '' || $provider === '' || $this->bindingFor($node, $provider) !== '') {
+            return false;
+        }
+        $node->addChild('sso_subject', $this->xml($subjectKey));
+        return true;
+    }
+
     public function findByStamp(string $field, string $value): ?\SimpleXMLElement
     {
         if ($value === '') {

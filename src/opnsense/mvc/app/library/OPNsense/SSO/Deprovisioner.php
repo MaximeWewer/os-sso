@@ -92,9 +92,10 @@ final class Deprovisioner
             return null;
         }
         foreach ($cnf->system->user as $user) {
-            $stamp = (string)($user->sso_subject ?? '');
-            if ($stamp !== '' && hash_equals($stamp, $subjectKey)) {
-                return $user;
+            foreach ($user->sso_subject as $binding) {
+                if (hash_equals(trim((string)$binding), $subjectKey)) {
+                    return $user;
+                }
             }
         }
         return null;
