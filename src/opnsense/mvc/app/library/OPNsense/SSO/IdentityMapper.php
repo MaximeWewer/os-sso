@@ -25,10 +25,17 @@ final class IdentityMapper
     private GroupMapper $groupMapper;
     private LocalAccountWriter $accounts;
 
-    public function __construct(?GroupMapper $groupMapper = null, ?LocalAccountWriter $accounts = null)
-    {
+    /** refuse a weak match onto an account only other providers have claimed */
+    private bool $strictBinding;
+
+    public function __construct(
+        ?GroupMapper $groupMapper = null,
+        ?LocalAccountWriter $accounts = null,
+        bool $strictBinding = false
+    ) {
         $this->groupMapper = $groupMapper ?? new GroupMapper();
         $this->accounts = $accounts ?? new LocalAccountWriter();
+        $this->strictBinding = $strictBinding;
     }
 
     /**
@@ -176,6 +183,14 @@ final class IdentityMapper
      *
      * An identity asserting no subject at all cannot be pinned, so it may not take over
      * an account that anyone is bound to.
+     *
+     * Whether a SECOND provider may bind alongside at all is the operator's call, because
+     * nothing in the configuration distinguishes the two shapes: one directory behind two
+     * authentication servers (the same person, and binding alongside is the point), and
+     * two unrelated directories where a user of one presenting a username from the other
+     * inherits their account. Strict binding, per provider, answers it -- and it reads
+     * both kinds of stamp, so an account a directory pre-provisioned over SCIM and nobody
+     * has logged into yet is claimed just as much as one somebody has.
      */
     private function assertNotBoundElsewhere(\SimpleXMLElement $node, string $subjectKey): void
     {
@@ -186,18 +201,48 @@ final class IdentityMapper
                     "and this identity asserts none; refusing to bind"
                 );
             }
+            $this->assertNotClaimedElsewhere($node, '');
             return;
         }
         $provider = explode('|', $subjectKey, 2)[0];
         $existing = $this->accounts->bindingFor($node, $provider);
-        if ($existing === '' || hash_equals($existing, $subjectKey)) {
+        if ($existing !== '' && !hash_equals($existing, $subjectKey)) {
+            throw new \RuntimeException(
+                "SSO: local account '" . (string)$node->name . "' is already bound to another " .
+                "subject of provider '" . $provider . "'; refusing to bind (one account belongs to " .
+                "one subject per provider -- provision a separate account, or clear its binding in " .
+                "config.xml if the account really did change hands)"
+            );
+        }
+        if ($existing === '') {
+            $this->assertNotClaimedElsewhere($node, $provider);
+        }
+    }
+
+    /**
+     * With strict binding on, refuse an account every existing claim on which belongs to
+     * a different provider.
+     *
+     * Only reached on a weak match -- the username claim or a verified email -- so the
+     * durable subject stamp still binds whatever this says. An account nobody has claimed
+     * is free to take, which is what makes strict binding safe to turn on: it narrows who
+     * may join an account that is already somebody's, not who may have one.
+     */
+    private function assertNotClaimedElsewhere(\SimpleXMLElement $node, string $provider): void
+    {
+        if (!$this->strictBinding) {
+            return;
+        }
+        $claimed = $this->accounts->claimingProviders($node);
+        if ($claimed === [] || ($provider !== '' && in_array($provider, $claimed, true))) {
             return;
         }
         throw new \RuntimeException(
-            "SSO: local account '" . (string)$node->name . "' is already bound to another " .
-            "subject of provider '" . $provider . "'; refusing to bind (one account belongs to " .
-            "one subject per provider -- provision a separate account, or clear its binding in " .
-            "config.xml if the account really did change hands)"
+            "SSO: local account '" . (string)$node->name . "' is claimed by provider '" .
+            implode("', '", $claimed) . "' and strict account binding is on for " .
+            ($provider !== '' ? "'" . $provider . "'" : 'this provider') .
+            "; refusing to bind (turn strict binding off if both servers front the same " .
+            "directory, or provision a separate account)"
         );
     }
 

@@ -38,6 +38,12 @@ function mapper(array $map = [], bool $reconcile = false): IdentityMapper
     return new IdentityMapper(new GroupMapper($map, $reconcile));
 }
 
+/** The same mapper with strict account binding on (the per-provider checkbox). */
+function strictMapper(): IdentityMapper
+{
+    return new IdentityMapper(new GroupMapper(), strictBinding: true);
+}
+
 T::group('IdentityMapper: the durable stamp wins');
 
 $root = Tree::build([
@@ -128,6 +134,71 @@ throws(
     ),
     "another subject of provider 'kc-saml'",
     'a second subject of the second provider is still refused'
+);
+
+T::group('IdentityMapper: strict account binding');
+
+// Binding alongside is right for one directory behind two servers, and wrong for two
+// unrelated directories -- nothing in the configuration tells them apart, so the operator
+// does, per provider. On, a provider may only join an account nobody else has claimed.
+$root = Tree::build([
+    ['name' => 'kctest', 'uid' => '2100', 'scrambled_password' => '1', 'sso_subject' => 'kc|sub-oidc'],
+]);
+throws(
+    fn() => strictMapper()->resolve(
+        identity(['authServer' => 'guest-idp', 'subject' => 'sub-mallory', 'username' => 'kctest']),
+        false,
+        []
+    ),
+    "claimed by provider 'kc'",
+    'a second provider cannot join an account another one holds'
+);
+$bindings = [];
+foreach (Tree::user($root, 'kctest')->sso_subject as $b) {
+    $bindings[] = (string)$b;
+}
+eq(['kc|sub-oidc'], $bindings, 'and nothing was stamped on the way to the refusal');
+
+// The hole this closes: an account a directory pre-provisioned over SCIM and nobody has
+// logged into carries a scim_ref and no sso_subject at all, so reading <sso_subject>
+// alone reported it as claimed by nobody and any provider could take it by username.
+$root = Tree::build([
+    ['name' => 'bob', 'uid' => '2101', 'scrambled_password' => '1', 'sso_owned' => '1', 'scim_ref' => 'kc|ext-bob'],
+]);
+throws(
+    fn() => strictMapper()->resolve(
+        identity(['authServer' => 'guest-idp', 'subject' => 'sub-bob', 'username' => 'bob']),
+        false,
+        []
+    ),
+    "claimed by provider 'kc'",
+    'a SCIM-provisioned account is claimed even before its first login'
+);
+
+// ... and the provider that owns it still gets in.
+eq(
+    'bob',
+    strictMapper()->resolve(identity(['subject' => 'sub-bob', 'username' => 'bob']), false, []),
+    'the claiming provider binds to its own SCIM-provisioned account'
+);
+
+// An unclaimed account is free to take: strict binding narrows who may JOIN an account,
+// not who may have one.
+$root = Tree::build([['name' => 'carol', 'uid' => '2102', 'scrambled_password' => '1']]);
+eq(
+    'carol',
+    strictMapper()->resolve(identity(['subject' => 'sub-carol', 'username' => 'carol']), false, []),
+    'an account nobody has claimed still binds'
+);
+
+// The durable stamp is not weakened by it either -- strict binding only gates weak matches.
+$root = Tree::build([
+    ['name' => 'renamed.dave', 'uid' => '2103', 'scrambled_password' => '1', 'sso_subject' => 'kc|sub-dave'],
+]);
+eq(
+    'renamed.dave',
+    strictMapper()->resolve(identity(['subject' => 'sub-dave', 'username' => 'dave.new']), false, []),
+    'a match on the subject stamp is unaffected'
 );
 
 T::group('IdentityMapper: human-owned and privileged accounts');

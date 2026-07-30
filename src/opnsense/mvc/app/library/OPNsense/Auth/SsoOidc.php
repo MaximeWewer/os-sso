@@ -44,6 +44,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoScimTrusted = [];
     public $ssoServices = [];
     public $ssoCreateUsers = false;
+    public $ssoStrictBinding = false;
     public $ssoRequiredGroups = [];
     public $ssoDeprovision = false;
     public $ssoDefaultGroups = [];
@@ -98,6 +99,7 @@ class SsoOidc extends Local implements IAuthConnector
         }
         $this->ssoServices = \OPNsense\SSO\ServiceScope::parse($config['sso_services'] ?? '');
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
+        $this->ssoStrictBinding = !empty($config['sso_strict_binding']);
         $this->ssoScimEnabled = !empty($config['sso_scim_enabled']);
         $this->ssoScimTrusted = array_filter(array_map('trim', explode(',', $config['sso_scim_trusted'] ?? '')));
         $this->ssoDeprovision = !empty($config['sso_deprovision']);
@@ -302,6 +304,18 @@ class SsoOidc extends Local implements IAuthConnector
                 'name' => gettext('Automatic user creation'),
                 'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local password.'),
                 'type' => 'checkbox',
+            ],
+            'sso_strict_binding' => [
+                'name' => gettext('Strict account binding'),
+                'help' => gettext('Only let this provider bind to a local account that no OTHER provider has '
+                    . 'already claimed - by a previous login, or by a SCIM push. Leave it on unless two '
+                    . 'authentication servers front the SAME directory (one organisation behind both OIDC and '
+                    . 'SAML, say), which is the case it exists to allow. Off, an account provisioned for one '
+                    . 'directory is inherited by whoever presents its username at another, since a username '
+                    . 'claim is not proof of being the same person. The durable subject stamp is unaffected: '
+                    . 'this only governs a first-time match by username or verified email.'),
+                'type' => 'checkbox',
+                'default' => '1',
             ],
             'sso_required_groups' => [
                 'name' => gettext('Required groups'),

@@ -90,6 +90,7 @@ own help in the form; below is only what is easy to get wrong, and shared by all
 | **Username claim/attribute** | Must be immutable and IdP-administered: `preferred_username`, not `email`. |
 | **Required groups** | Empty lets in *every* account the IdP authenticates - WebGUI, portal and VPN alike. |
 | **Automatic user creation** | Off by default; on, it writes users into `config.xml` with no local password. |
+| **Strict account binding** | On for a newly added server. Turn it off only when two servers front the *same* directory - see [Account binding](#security). |
 | **Group mapping** | An explicit mapping may target `admins`; the 1:1 name fallback refuses privileged groups. |
 | **Strict group sync** | Off = additive. On, revokes only what os-sso granted, never the last privileged member. |
 | **Deprovision on refused login** | Disables the account behind a refused login. Does nothing without *Required groups*. |
@@ -427,8 +428,18 @@ directory's to set.
 
 Each account is bound to **one subject per provider**, recorded on first login. A second
 subject of the same provider presenting that account's username is refused - the takeover
-a mutable username claim would otherwise allow. A second *provider* binds alongside, so
-one directory fronted by both OIDC and SAML maps onto a single local account.
+a mutable username claim would otherwise allow.
+
+Whether a second *provider* may bind alongside is **Strict account binding**, per server,
+because nothing in the configuration distinguishes the two shapes it decides between: one
+directory behind two authentication servers (the same person arriving over OIDC and over
+SAML, where binding alongside is the whole point), and two unrelated directories, where a
+user of one presenting a username from the other would inherit their account and its
+groups. On - the default for a newly added server - a provider only binds to an account no
+other one has claimed, by a previous login *or* by a SCIM push, so an account a directory
+pre-provisioned and nobody has logged into yet is already spoken for. It governs only a
+first-time match by username or verified email; the durable subject stamp resolves either
+way.
 
 **Groups.** A **privileged** group (`admins`, or any carrying full-GUI / shell /
 user-manager rights) only ever gains members through an explicit operator mapping; the 1:1

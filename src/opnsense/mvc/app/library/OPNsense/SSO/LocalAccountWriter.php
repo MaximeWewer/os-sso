@@ -92,6 +92,35 @@ final class LocalAccountWriter
         return $out;
     }
 
+    /**
+     * Every provider that claims this account, from either kind of binding.
+     *
+     * A login records an <sso_subject>, a directory push records a <scim_ref>, and both
+     * are namespaced "provider|…". Asking which providers hold an account therefore has
+     * to read both: an account SCIM-provisioned by one directory and never logged into
+     * carries only the second, so a question answered from <sso_subject> alone reads it
+     * as claimed by nobody.
+     *
+     * @return string[] provider names, in the order they appear
+     */
+    public function claimingProviders(\SimpleXMLElement $node): array
+    {
+        $out = [];
+        foreach (['sso_subject', 'scim_ref'] as $field) {
+            foreach ($node->{$field} as $binding) {
+                $ref = trim((string)$binding);
+                if ($ref === '') {
+                    continue;
+                }
+                $provider = explode('|', $ref, 2)[0];
+                if ($provider !== '' && !in_array($provider, $out, true)) {
+                    $out[] = $provider;
+                }
+            }
+        }
+        return $out;
+    }
+
     /** The account carrying this exact binding, or null. */
     public function findBySubject(string $subjectKey): ?\SimpleXMLElement
     {
