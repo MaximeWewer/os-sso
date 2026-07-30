@@ -18,9 +18,10 @@ namespace OPNsense\SSO;
  * stranger can make the firewall do.
  *
  * Deliberately blunt and dependency-free: a bucket per (action, IP) holding recent
- * timestamps in a small JSON file. The read-modify-write is not atomic, so a burst of
- * simultaneous requests can slip a couple over the limit -- which is fine for a
- * throttle and much cheaper than serialising every login on a lock.
+ * timestamps in a small JSON file, counted under a per-bucket exclusive lock so a burst
+ * of simultaneous requests cannot each read the same count and each conclude it is
+ * under the limit. The lock is per (action, IP), so it never serialises unrelated
+ * logins -- only the requests actually competing for one bucket.
  */
 final class RateLimiter
 {
@@ -48,27 +49,47 @@ final class RateLimiter
         }
         self::sweep();
 
-        $now = time();
-        $hits = json_decode((string)@file_get_contents($file), true);
-        $hits = is_array($hits) ? array_values(array_filter(
-            array_map('intval', $hits),
-            fn($ts) => $ts > $now - $window
-        )) : [];
-
-        if (count($hits) >= $limit) {
-            syslog(LOG_WARNING, sprintf(
-                'os-sso: rate limit reached for %s from %s (%d requests in %ds)',
-                $action,
-                preg_replace('/[^0-9a-fA-F.:]/', '', $clientIp),
-                count($hits),
-                $window
-            ));
-            throw new \RuntimeException('too many requests, try again shortly');
+        // Count under one exclusive lock held across BOTH the read and the write. With
+        // the lock on the write alone, the read sat outside it: parallel requests all
+        // loaded the same bucket, all found room, and all proceeded -- the burst a
+        // throttle exists to stop was the one case it did not catch.
+        $fp = @fopen($file, 'c+');
+        if ($fp === false) {
+            return; // cannot account for this hit; not a reason to break the login
         }
+        try {
+            if (!flock($fp, LOCK_EX)) {
+                return;
+            }
+            @chmod($file, 0600);
 
-        $hits[] = $now;
-        @file_put_contents($file, json_encode($hits), LOCK_EX);
-        @chmod($file, 0600);
+            $now = time();
+            $hits = json_decode((string)stream_get_contents($fp), true);
+            $hits = is_array($hits) ? array_values(array_filter(
+                array_map('intval', $hits),
+                fn($ts) => $ts > $now - $window
+            )) : [];
+
+            if (count($hits) >= $limit) {
+                syslog(LOG_WARNING, sprintf(
+                    'os-sso: rate limit reached for %s from %s (%d requests in %ds)',
+                    $action,
+                    preg_replace('/[^0-9a-fA-F.:]/', '', $clientIp),
+                    count($hits),
+                    $window
+                ));
+                throw new \RuntimeException('too many requests, try again shortly');
+            }
+
+            $hits[] = $now;
+            rewind($fp);
+            ftruncate($fp, 0);
+            fwrite($fp, (string)json_encode($hits));
+            fflush($fp);
+        } finally {
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
     }
 
     /** Drop buckets nobody has touched in a while. */
