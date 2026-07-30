@@ -23,9 +23,12 @@ final class VpnAuthorizer
      * @param string $username verified local username (for audit)
      * @param string $browserIp source IP of the browser completing the SSO login;
      *               must match the VPN client's IP (enforced by vpn_verdict.sh)
+     * @return string the common name OpenVPN knows this tunnel by -- the username the
+     *         client sent, which is the only handle a later revocation can kill it with
+     *         ('' when the client sent none)
      * @throws \RuntimeException on an unknown session, ip mismatch, or failed write
      */
-    public static function authorize(string $vpn, string $username, string $browserIp): void
+    public static function authorize(string $vpn, string $username, string $browserIp): string
     {
         $sid = preg_replace('/[^a-f0-9]/', '', $vpn);
         if ($sid === '') {
@@ -38,10 +41,14 @@ final class VpnAuthorizer
         // configd into a positional shell argument.
         $user = preg_replace('/[^A-Za-z0-9._\- ]/', '', $username);
         $out = trim((string)(new Backend())->configdpRun('sso vpn_verdict', [$sid, '1', $ip, $user]));
-        if ($out !== 'ok') {
+        // "ok", or "ok <common name>" when the client sent a username -- which is what
+        // OpenVPN goes on using, and therefore what a revocation has to kill.
+        $parts = explode(' ', $out, 2);
+        if (($parts[0] ?? '') !== 'ok') {
             throw new \RuntimeException('VPN authorization failed: ' . $out);
         }
         syslog(LOG_NOTICE, sprintf("os-sso vpn: authorized tunnel for '%s' from %s", $username, $ip));
+        return trim($parts[1] ?? '');
     }
 
     /** Minimal "close this window" page shown to the VPN client's browser. */

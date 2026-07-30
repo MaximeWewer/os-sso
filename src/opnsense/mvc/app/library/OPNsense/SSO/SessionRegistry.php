@@ -7,23 +7,43 @@
 
 namespace OPNsense\SSO;
 
+use OPNsense\Core\Backend;
+
 /**
- * A record of the WebGUI sessions os-sso opened, so they can be ended from outside
- * the browser that owns them.
+ * A record of everything os-sso granted -- a WebGUI session, a captive-portal client on
+ * the network, an OpenVPN tunnel -- so it can be taken away from outside the browser,
+ * the device or the tunnel that holds it.
  *
- * Everything else in this plugin happens during a login. Once the session exists the
- * IdP is out of the loop: disable the account there, revoke its groups, and the
- * already-open firewall session carries on until it idles out. That is the gap this
- * closes -- it is what a back-channel logout needs to find (which PHP session belongs
- * to that IdP subject), and what an absolute session lifetime needs to enforce.
+ * Everything else in this plugin happens during a login. Afterwards the IdP is out of
+ * the loop: disable the account there, revoke its groups, and what was already granted
+ * carries on until it times out on its own. That is the gap this closes -- it is what a
+ * back-channel logout needs to find (which access belongs to that IdP subject), what an
+ * absolute session lifetime needs to enforce, and what makes a SCIM deactivation reach
+ * the wifi and the VPN rather than only the WebGUI.
  *
- * Killing a session means deleting its PHP session file: the next request from that
- * browser finds no session and lands on the login page. The file path is recorded at
- * login rather than recomputed later, because the sweeper runs as root from configd
- * and its own session.save_path is not necessarily php-fpm's.
+ * Killing a WebGUI session means deleting its PHP session file: the next request from
+ * that browser finds no session and lands on the login page. The file path is recorded
+ * at login rather than recomputed later, because the sweeper runs as root from configd
+ * and its own session.save_path is not necessarily php-fpm's. The other two are handed
+ * to configd, which owns the portal database and the OpenVPN management sockets.
  */
 final class SessionRegistry
 {
+    /** What a record grants, and therefore how it is taken away. */
+    public const WEBGUI = 'webgui';
+    public const PORTAL = 'portal';
+    public const VPN = 'vpn';
+
+    /**
+     * How long a portal or VPN grant stays on the books when nothing revokes it.
+     *
+     * Neither is a PHP session we can look at to see whether it is still there: the
+     * portal ends its own on an idle timeout, and a tunnel ends when the client leaves.
+     * The record is only useful for revoking, so it outlives a working day and no more,
+     * rather than accumulating one row per login for good.
+     */
+    private const GRANT_TTL = 86400;
+
     /**
      * Remember the session just established. Call with the native session active.
      *
@@ -36,7 +56,8 @@ final class SessionRegistry
             return;
         }
         $lifetime = max(0, (int)($meta['lifetime'] ?? 0));
-        $entry = [
+        self::write(hash('sha256', $sessionId), [
+            'kind' => self::WEBGUI,
             'file' => self::sessionFile($sessionId),
             'username' => (string)($meta['username'] ?? ''),
             'provider' => (string)($meta['provider'] ?? ''),
@@ -45,10 +66,49 @@ final class SessionRegistry
             'sid' => (string)($meta['sid'] ?? ''),
             'started' => time(),
             'expires_at' => $lifetime > 0 ? time() + $lifetime : 0,
-        ];
+        ]);
+    }
+
+    /**
+     * Remember an access that is not a WebGUI session: a captive-portal client that was
+     * let onto the network, or an OpenVPN tunnel that was allowed up.
+     *
+     * Without these, a revocation only reached the WebGUI. The IdP would end a session,
+     * SCIM would deactivate the account, and the person stayed on the wifi and inside
+     * the tunnel until those timed out on their own -- which is the half of "revoked"
+     * that matters on a firewall.
+     *
+     * @param array $meta kind (portal|vpn), username, provider, issuer, sub, sid, plus
+     *        what it takes to take it away: cp_session + zone, or vpn_cn
+     */
+    public static function recordGrant(array $meta): void
+    {
+        $kind = (string)($meta['kind'] ?? '');
+        if (!in_array($kind, [self::PORTAL, self::VPN], true)) {
+            return;
+        }
+        self::write(hash('sha256', $kind . '|' . bin2hex(random_bytes(16))), [
+            'kind' => $kind,
+            'username' => (string)($meta['username'] ?? ''),
+            'provider' => (string)($meta['provider'] ?? ''),
+            'issuer' => (string)($meta['issuer'] ?? ''),
+            'sub' => (string)($meta['sub'] ?? ''),
+            'sid' => (string)($meta['sid'] ?? ''),
+            'cp_session' => (string)($meta['cp_session'] ?? ''),
+            'zone' => (string)($meta['zone'] ?? ''),
+            'vpn_cn' => (string)($meta['vpn_cn'] ?? ''),
+            'started' => time(),
+            'expires_at' => time() + self::GRANT_TTL,
+        ]);
+    }
+
+    /** Persist one record, 0600, named by the handle the diagnostics page hands back. */
+    private static function write(string $handle, array $entry): void
+    {
         try {
-            @file_put_contents(self::recordFile($sessionId), json_encode($entry), LOCK_EX);
-            @chmod(self::recordFile($sessionId), 0600);
+            $file = StateDir::path('sessions') . '/' . $handle . '.json';
+            @file_put_contents($file, json_encode($entry), LOCK_EX);
+            @chmod($file, 0600);
         } catch (\RuntimeException $e) {
             syslog(LOG_WARNING, 'os-sso: cannot record the session: ' . $e->getMessage());
         }
@@ -77,15 +137,43 @@ final class SessionRegistry
             if (!$matches($entry)) {
                 continue;
             }
-            $target = (string)($entry['file'] ?? '');
-            // Only ever unlink inside the session directory we recorded from.
-            if ($target !== '' && str_contains(basename($target), 'sess_') && is_file($target)) {
-                @unlink($target);
-            }
+            self::revoke($entry);
             @unlink($file);
             $killed++;
         }
         return $killed;
+    }
+
+    /**
+     * Take away whatever a record granted.
+     *
+     * Three different things, one intent: delete the PHP session file so the next
+     * request lands on the login page, ask configd to drop the captive-portal session
+     * (which also removes the client's address from the zone's pf table), or ask it to
+     * kill the tunnels of that common name.
+     */
+    private static function revoke(array $entry): void
+    {
+        switch ((string)($entry['kind'] ?? self::WEBGUI)) {
+            case self::PORTAL:
+                $session = (string)($entry['cp_session'] ?? '');
+                if ($session !== '') {
+                    (new Backend())->configdpRun('captiveportal disconnect', [$session, 'os-sso revocation']);
+                }
+                break;
+            case self::VPN:
+                $commonName = (string)($entry['vpn_cn'] ?? '');
+                if ($commonName !== '') {
+                    (new Backend())->configdpRun('sso vpn_kill', [$commonName]);
+                }
+                break;
+            default:
+                $target = (string)($entry['file'] ?? '');
+                // Only ever unlink inside the session directory we recorded from.
+                if ($target !== '' && str_contains(basename($target), 'sess_') && is_file($target)) {
+                    @unlink($target);
+                }
+        }
     }
 
     /**
@@ -102,7 +190,10 @@ final class SessionRegistry
             if ($expires > 0 && $expires <= $now) {
                 return true;
             }
-            return !is_file((string)($entry['file'] ?? ''));
+            // A portal or VPN grant has no PHP session behind it; its own deadline is
+            // the only thing that retires it (see GRANT_TTL).
+            return (string)($entry['kind'] ?? self::WEBGUI) === self::WEBGUI
+                && !is_file((string)($entry['file'] ?? ''));
         });
     }
 
@@ -137,10 +228,12 @@ final class SessionRegistry
     {
         $out = [];
         foreach (self::entries() as $entry) {
-            if (!is_file((string)($entry['file'] ?? ''))) {
+            $isWebgui = (string)($entry['kind'] ?? self::WEBGUI) === self::WEBGUI;
+            if ($isWebgui && !is_file((string)($entry['file'] ?? ''))) {
                 continue;
             }
             unset($entry['file']); // a filesystem path is not diagnostics material
+            $entry['kind'] = (string)($entry['kind'] ?? self::WEBGUI);
             $out[] = $entry;
         }
         usort($out, fn($a, $b) => (int)($b['started'] ?? 0) <=> (int)($a['started'] ?? 0));

@@ -419,6 +419,12 @@ endpoint only answers a request the browser reports as a top-level navigation, s
 third-party page cannot start one - or, on the forward-auth path where the proxy adds
 the token to whatever goes through it, complete one - from an `<img>` tag.
 
+**Revocation reaches all three.** A back-channel logout, a SAML Single Logout, a SCIM
+`active: false`, "deprovision on refused login" and the *End* button on the diagnostics
+page all act on the same record of what os-sso granted - so they end the WebGUI session,
+disconnect the captive-portal client from the network, and drop the OpenVPN tunnels of
+that common name, rather than only the first of the three.
+
 **SCIM** needs a bearer token **and** a source-address allowlist, and refuses on the same
 principles as the login path - see [SCIM provisioning](#scim-provisioning).
 

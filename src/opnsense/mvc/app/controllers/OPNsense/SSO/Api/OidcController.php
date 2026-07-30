@@ -163,6 +163,18 @@ class OidcController extends ApiControllerBase
                     $identity,
                     (string)($_SERVER['REMOTE_ADDR'] ?? '')
                 );
+                // Record what was granted, so a back-channel logout, a SCIM
+                // deactivation or an administrator can take it back.
+                SessionRegistry::recordGrant([
+                    'kind' => SessionRegistry::PORTAL,
+                    'username' => $cpRes['username'],
+                    'provider' => (string)$provider,
+                    'issuer' => $protocol->getIssuer(),
+                    'sub' => $identity->subject,
+                    'sid' => $protocol->getLastSessionId(),
+                    'cp_session' => (string)($cpRes['session']['sessionId'] ?? ''),
+                    'zone' => $cpRes['zone'],
+                ]);
                 session_write_close();
                 // This page bounces off-site; our own URL holds the code and state.
                 $this->html("'self'", false, ['Referrer-Policy' => 'no-referrer']);
@@ -182,7 +194,16 @@ class OidcController extends ApiControllerBase
             // OpenVPN deferred web-auth path: authorize the tunnel, do NOT open a
             // WebGUI admin session (different security context).
             if ($vpn !== '') {
-                VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
+                $commonName = VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
+                SessionRegistry::recordGrant([
+                    'kind' => SessionRegistry::VPN,
+                    'username' => $username,
+                    'provider' => (string)$provider,
+                    'issuer' => $protocol->getIssuer(),
+                    'sub' => $identity->subject,
+                    'sid' => $protocol->getLastSessionId(),
+                    'vpn_cn' => $commonName,
+                ]);
                 session_write_close();
                 $this->html();
                 return VpnAuthorizer::donePage($username);

@@ -151,6 +151,18 @@ class SamlController extends ApiControllerBase
                     $identity,
                     (string)($_SERVER['REMOTE_ADDR'] ?? '')
                 );
+                // Record what was granted, so a Single Logout, a SCIM deactivation or an
+                // administrator can take it back.
+                SessionRegistry::recordGrant([
+                    'kind' => SessionRegistry::PORTAL,
+                    'username' => $cpRes['username'],
+                    'provider' => (string)$provider,
+                    'issuer' => $protocol->getIdpEntityId(),
+                    'sub' => $identity->subject,
+                    'sid' => $protocol->getLastSessionIndex(),
+                    'cp_session' => (string)($cpRes['session']['sessionId'] ?? ''),
+                    'zone' => $cpRes['zone'],
+                ]);
                 // This page bounces off-site; keep our own URL out of the Referer.
                 $this->html("'self'", false, ['Referrer-Policy' => 'no-referrer']);
                 return CaptivePortalAuthorizer::donePage($cpRes['username'], (string)($state['cpurl'] ?? ''));
@@ -168,7 +180,16 @@ class SamlController extends ApiControllerBase
             // OpenVPN deferred web-auth path: authorize the tunnel, no WebGUI session.
             $vpn = (string)($state['vpn'] ?? '');
             if ($vpn !== '') {
-                VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
+                $commonName = VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
+                SessionRegistry::recordGrant([
+                    'kind' => SessionRegistry::VPN,
+                    'username' => $username,
+                    'provider' => (string)$provider,
+                    'issuer' => $protocol->getIdpEntityId(),
+                    'sub' => $identity->subject,
+                    'sid' => $protocol->getLastSessionIndex(),
+                    'vpn_cn' => $commonName,
+                ]);
                 $this->html();
                 return VpnAuthorizer::donePage($username);
             }

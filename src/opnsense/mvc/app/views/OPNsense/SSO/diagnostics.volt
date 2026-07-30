@@ -90,13 +90,14 @@
         function renderSessions(data) {
             var $body = $('#sessions-body').empty();
             if (!data.sessions || data.sessions.length === 0) {
-                $body.append('<tr><td colspan="6"><em>{{ lang._("No SSO session is open.") }}</em></td></tr>');
+                $body.append('<tr><td colspan="7"><em>{{ lang._("Nothing is open.") }}</em></td></tr>');
                 return;
             }
             data.sessions.forEach(function (session) {
                 $body.append(
                     '<tr>'
                     + '<td>' + escapeHtml(session.username) + '</td>'
+                    + '<td>' + escapeHtml(session.kind || 'webgui') + '</td>'
                     + '<td>' + escapeHtml(session.provider) + '</td>'
                     + '<td class="small">' + escapeHtml(session.subject) + '</td>'
                     + '<td>' + escapeHtml(stamp(session.started)) + '</td>'
@@ -201,7 +202,7 @@
         </div>
 
         <h2 style="padding-left: 0.6em;">
-            {{ lang._('Open SSO sessions') }}
+            {{ lang._('Open SSO access') }}
             <button class="btn btn-default btn-xs" id="end-all-sessions" style="margin-left: 0.8em;"
                     title="{{ lang._('End every session os-sso opened.') }}">
                 <i class="fa fa-sign-out"></i> {{ lang._('End all') }}
@@ -213,6 +214,7 @@
             <thead>
                 <tr>
                     <th>{{ lang._('User') }}</th>
+                    <th>{{ lang._('Access') }}</th>
                     <th>{{ lang._('Provider') }}</th>
                     <th>{{ lang._('IdP subject') }}</th>
                     <th>{{ lang._('Signed in') }}</th>

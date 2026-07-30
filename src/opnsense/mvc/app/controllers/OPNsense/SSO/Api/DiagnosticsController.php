@@ -94,6 +94,8 @@ class DiagnosticsController extends ApiControllerBase
             $rows[] = [
                 // A handle, not the session id: enough to name a row, useless as a cookie.
                 'id' => (string)($entry['id'] ?? ''),
+                // webgui, portal or vpn: what ending this row would take away.
+                'kind' => (string)($entry['kind'] ?? 'webgui'),
                 'username' => (string)($entry['username'] ?? ''),
                 'provider' => (string)($entry['provider'] ?? ''),
                 'subject' => (string)($entry['sub'] ?? ''),

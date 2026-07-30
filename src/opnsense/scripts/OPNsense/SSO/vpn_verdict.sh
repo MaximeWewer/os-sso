@@ -83,4 +83,10 @@ if [ -n "$CLAIMED_USER" ] && [ "$CLAIMED_USER" != "$AUTH_USER" ]; then
 fi
 
 printf '%s' "$VERDICT" > "$CONTROL"
-echo "ok"
+# Echo the common name the tunnel will carry back to the caller: OpenVPN keeps using the
+# name the client sent, so it is the only handle a later revocation can kill it with.
+if [ -n "$CLAIMED_USER" ]; then
+    echo "ok $CLAIMED_USER"
+else
+    echo "ok"
+fi

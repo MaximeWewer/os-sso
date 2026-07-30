@@ -86,11 +86,13 @@ cp "$SVC_SRC/scripts/OPNsense/SSO/vpn_verdict.sh" /usr/local/opnsense/scripts/OP
 cp "$SVC_SRC/scripts/OPNsense/SSO/auth-user-pass-verify.sh" /usr/local/opnsense/scripts/OPNsense/SSO/
 cp "$SVC_SRC/scripts/OPNsense/SSO/build_cp_template.sh" /usr/local/opnsense/scripts/OPNsense/SSO/
 cp "$SVC_SRC/scripts/OPNsense/SSO/expire_sessions.php" /usr/local/opnsense/scripts/OPNsense/SSO/
+cp "$SVC_SRC/scripts/OPNsense/SSO/vpn_kill.py" /usr/local/opnsense/scripts/OPNsense/SSO/
 cp -R "$SVC_SRC/scripts/OPNsense/SSO/cp-portal" /usr/local/opnsense/scripts/OPNsense/SSO/
 chmod 0755 /usr/local/opnsense/scripts/OPNsense/SSO/vpn_verdict.sh \
            /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh \
            /usr/local/opnsense/scripts/OPNsense/SSO/build_cp_template.sh \
-           /usr/local/opnsense/scripts/OPNsense/SSO/expire_sessions.php
+           /usr/local/opnsense/scripts/OPNsense/SSO/expire_sessions.php \
+           /usr/local/opnsense/scripts/OPNsense/SSO/vpn_kill.py
 cp "$SVC_SRC/service/conf/actions.d/actions_sso.conf" /usr/local/opnsense/service/conf/actions.d/
 service configd restart >/dev/null 2>&1 || true
 
