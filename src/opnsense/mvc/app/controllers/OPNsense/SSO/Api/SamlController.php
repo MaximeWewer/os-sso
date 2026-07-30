@@ -155,7 +155,9 @@ class SamlController extends ApiControllerBase
 
             $this->startSession();
             (new SessionEstablisher())->establish($username, (string)$provider, [
-                'issuer' => (string)$auth->ssoIdpEntityId,
+                // The RESOLVED EntityID: with a metadata-only provider the form field is
+                // empty, and an empty issuer makes the registry unmatchable at logout.
+                'issuer' => $protocol->getIdpEntityId(),
                 'sub' => $identity->subject,
                 'sid' => $protocol->getLastSessionIndex(),
                 'lifetime' => (int)$auth->ssoSessionLifetime,
@@ -247,7 +249,13 @@ class SamlController extends ApiControllerBase
                 // was matched against must not still be sitting there for the next try.
                 $reqId = (string)($_SESSION['sso_saml_logout_reqid'] ?? '');
                 unset($_SESSION['sso_saml_logout_reqid']);
-                $redirect = $protocol->processSlo($reqId) ?: '/';
+                $slo = $protocol->processSlo($reqId);
+                $redirect = $slo['redirect'] ?: '/';
+                // Front-channel SLO only logs out the browser that followed the
+                // redirect. End the subject's other sessions on this firewall too --
+                // otherwise "logged out at the IdP" leaves the second tab, or the
+                // session opened from another machine, working until it idles out.
+                $this->endSessionsFor($protocol, $slo['subject']);
             } catch (\Throwable $e) {
                 return $this->fail($e);
             }
@@ -297,6 +305,33 @@ class SamlController extends ApiControllerBase
     }
 
     /* ------------------------------------------------------------------ */
+
+    /**
+     * End every recorded session belonging to the subject an SLO message named.
+     *
+     * Scoped to the issuer that vouched for them, so one IdP can never log users out of
+     * another's sessions. With SessionIndexes we end exactly those; with none, the
+     * LogoutRequest is asking for the whole subject, which is what an administrator
+     * disabling an account expects.
+     *
+     * @param array{name_id:string,session_indexes:string[]} $subject
+     */
+    private function endSessionsFor(SamlProtocol $protocol, array $subject): void
+    {
+        $nameId = (string)($subject['name_id'] ?? '');
+        if ($nameId === '') {
+            return;
+        }
+        $issuer = $protocol->getIdpEntityId();
+        $indexes = $subject['session_indexes'] ?: [''];
+        $ended = 0;
+        foreach ($indexes as $index) {
+            $ended += SessionRegistry::destroyForSubject($issuer, $nameId, (string)$index);
+        }
+        if ($ended > 0) {
+            syslog(LOG_NOTICE, sprintf('os-sso saml: single logout ended %d session(s)', $ended));
+        }
+    }
 
     /** Local WebGUI logout: wipe + destroy the session (mirrors the core logout). */
     private function clearSession(): void

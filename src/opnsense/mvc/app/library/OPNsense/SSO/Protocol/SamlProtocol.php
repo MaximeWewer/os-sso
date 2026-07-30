@@ -300,7 +300,7 @@ final class SamlProtocol implements ProtocolInterface
      * validated against $requestId) or a LogoutRequest (IdP-initiated -- returns
      * the LogoutResponse redirect to send back). Throws on validation failure.
      */
-    public function processSlo(string $requestId): string
+    public function processSlo(string $requestId): array
     {
         $auth = new Saml2Auth($this->settings(true));
         $url = $auth->processSLO(false, $requestId !== '' ? $requestId : null, false, null, true);
@@ -310,7 +310,57 @@ final class SamlProtocol implements ProtocolInterface
                 'SAML SLO failed: ' . implode(', ', $errors) . ' (' . $auth->getLastErrorReason() . ')'
             );
         }
-        return (string) $url;
+        return [
+            'redirect' => (string) $url,
+            // Who the logout is for. Only an IdP-initiated LogoutRequest names anyone: a
+            // LogoutResponse is the answer to a request we made, so the caller already
+            // knows. Read after the error check, so off the validated message.
+            'subject' => isset($_GET['SAMLRequest'])
+                ? $this->logoutSubject((string) $auth->getLastRequestXML())
+                : ['name_id' => '', 'session_indexes' => []],
+        ];
+    }
+
+    /**
+     * NameID and SessionIndexes of a (validated) LogoutRequest.
+     *
+     * An SLO message ends a session at the IdP for a named subject, but front-channel is
+     * the only binding here: whatever browser happens to follow the redirect gets logged
+     * out, and every OTHER session that subject holds on this firewall survives -- which
+     * is the opposite of what a logout is for. Naming the subject lets the caller reach
+     * those through SessionRegistry, the same way OIDC back-channel logout does.
+     *
+     * @return array{name_id:string,session_indexes:string[]}
+     */
+    private function logoutSubject(string $xml): array
+    {
+        $empty = ['name_id' => '', 'session_indexes' => []];
+        if ($xml === '') {
+            return $empty;
+        }
+        try {
+            // The SP key is needed only when the IdP encrypted the NameID.
+            $nameId = (string) \OneLogin\Saml2\LogoutRequest::getNameId(
+                $xml,
+                (string) ($this->cfg['sp_key'] ?? '') ?: null
+            );
+            $indexes = \OneLogin\Saml2\LogoutRequest::getSessionIndexes($xml);
+        } catch (\Throwable $e) {
+            // An encrypted NameID with no key, or a shape we cannot read: the local
+            // logout below still happens, we just cannot widen it.
+            syslog(LOG_NOTICE, 'os-sso saml: cannot read the logout subject: ' . $e->getMessage());
+            return $empty;
+        }
+        return [
+            'name_id' => $nameId,
+            'session_indexes' => array_values(array_filter(array_map('strval', (array) $indexes))),
+        ];
+    }
+
+    /** The IdP EntityID this provider trusts, resolved from metadata when not typed. */
+    public function getIdpEntityId(): string
+    {
+        return (string) ($this->cfg['idp_entity_id'] ?? '');
     }
 
     /**
