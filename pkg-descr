@@ -3,7 +3,7 @@ Interactive Single Sign-On (SSO) and SCIM provisioning for OPNsense.
 Adds OpenID Connect (OIDC), SAML 2.0 and JWT forward-auth as authentication
 types under System > Access > Servers. OPNsense acts as a pure Relying Party /
 Service Provider: MFA and passkeys live at the Identity Provider
-(Authentik, Keycloak, Entra ID, ZItadel, ...).
+(Authentik, Keycloak, Entra ID, Zitadel, ...).
 
 Features:
   * WebGUI login via an SSO button on the login page (OIDC, SAML and JWT).
@@ -11,10 +11,15 @@ Features:
   * OpenVPN login via the deferred web flow (WEB_AUTH / pending auth).
   * JWT forward-auth: trust a signed JWT from a trusted upstream proxy,
     gated to the proxy's source IP (verified signature, iss/aud/exp).
-  * IdP group -> OPNsense group mapping (privileges resolved by the ACL).
+  * OIDC client authentication without a shared secret if you need it:
+    client_secret_jwt, private_key_jwt (we serve the public JWKS) or mutual TLS.
+    The IdP's MFA context (acr) and re-authentication age (max_age) are checked
+    on the way back, not merely requested.
+  * IdP group -> OPNsense group mapping (privileges resolved by the ACL),
+    nested claims and Entra ID group-overage included.
   * SCIM 2.0 provisioning: the IdP pushes account creations, updates and
-    deactivations, so a revoked user is disabled -- and their open sessions
-    ended -- when the directory says so, rather than at their next login
+    deactivations, so a revoked user is disabled - and their open sessions
+    ended - when the directory says so, rather than at their next login
     attempt. Bearer token plus source-address gated. It never touches a
     privileged account or one owning a local password, and a SCIM delete
     deactivates instead of removing.
