@@ -178,6 +178,9 @@ class ScimController extends ApiControllerBase
         return json_encode($document, JSON_UNESCAPED_SLASHES);
     }
 
+    /** The auth connector whose token authenticated this request. */
+    private $authenticated = null;
+
     /**
      * Source address, then bearer token, then rate limit.
      *
@@ -224,6 +227,7 @@ class ScimController extends ApiControllerBase
                 break;
             }
             RateLimiter::hit('scim', $peer, 600);
+            $this->authenticated = $auth;
             return $name;
         }
 
@@ -259,13 +263,19 @@ class ScimController extends ApiControllerBase
         return stripos($header, 'Bearer ') === 0 ? trim(substr($header, 7)) : '';
     }
 
+    /**
+     * Base URL for the "location" of every resource we hand back.
+     *
+     * Built from the Base URL of the provider that authenticated, not of whichever SCIM
+     * provider happens to be first in config.xml: with two directories registered on
+     * different Base URLs, the location pointed at the other one, so a client following
+     * it called an endpoint its token is not valid for.
+     */
     private function baseUrl(): string
     {
-        // Built from the same Base URL as everything else the IdP is handed, so the
-        // "location" we return is a URL the client can actually call back.
-        $providers = $this->scimProviders();
-        $auth = reset($providers);
-        return ($auth ? SiteUrl::forProvider($auth) : SiteUrl::detect()) . '/api/sso/scim';
+        return ($this->authenticated !== null
+            ? SiteUrl::forProvider($this->authenticated)
+            : SiteUrl::detect()) . '/api/sso/scim';
     }
 
     private function method(): string
