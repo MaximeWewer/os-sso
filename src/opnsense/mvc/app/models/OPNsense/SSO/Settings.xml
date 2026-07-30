@@ -40,6 +40,15 @@
                 <Mask>/^([a-zA-Z0-9.\-]+(:[0-9]{1,5})?)$/u</Mask>
                 <ValidationMessage>Enter the firewall host[:port] the VPN client's browser reaches.</ValidationMessage>
             </host>
+            <!-- OpenVPN takes the username straight from the client and never checks it
+                 again on a deferred-auth path: the browser login decides IF the tunnel
+                 comes up, not WHO it belongs to. That matters as soon as the server uses
+                 username-as-common-name, a client-config-dir or per-user rules, because
+                 those all key off the name the client asked for. -->
+            <enforce_username type="BooleanField">
+                <default>0</default>
+                <Required>Y</Required>
+            </enforce_username>
             <timeout type="IntegerField">
                 <default>180</default>
                 <Required>Y</Required>

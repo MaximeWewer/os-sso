@@ -36,6 +36,21 @@
         </help>
     </field>
     <field>
+        <id>settings.vpn.enforce_username</id>
+        <label>Require the username to match</label>
+        <type>checkbox</type>
+        <help>
+            Refuse the tunnel when the username the OpenVPN client sent is not the
+            account that just signed in through the IdP. OpenVPN keeps using the name
+            the client asked for - it drives username-as-common-name, client-config-dir
+            and per-user rules - and the browser login otherwise only decides whether
+            the tunnel comes up, not whose it is. Leave off if your clients send a
+            throwaway username (the usual web-auth setup, where anything is typed at the
+            prompt); turn it on if the username is load-bearing on the server side. A
+            client that sends no username at all is never refused by this.
+        </help>
+    </field>
+    <field>
         <id>settings.vpn.timeout</id>
         <label>Web-auth timeout (s)</label>
         <type>text</type>

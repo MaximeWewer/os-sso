@@ -32,7 +32,12 @@ final class VpnAuthorizer
             throw new \RuntimeException('invalid VPN session');
         }
         $ip = preg_replace('/[^0-9a-fA-F.:]/', '', $browserIp);
-        $out = trim((string)(new Backend())->configdpRun('sso vpn_verdict', [$sid, '1', $ip]));
+        // The account that actually signed in, so the verdict script can log it next to
+        // the username the client asked for -- and refuse the two differing when the
+        // operator enabled that. Reduced to the local-account charset: this crosses
+        // configd into a positional shell argument.
+        $user = preg_replace('/[^A-Za-z0-9._\- ]/', '', $username);
+        $out = trim((string)(new Backend())->configdpRun('sso vpn_verdict', [$sid, '1', $ip, $user]));
         if ($out !== 'ok') {
             throw new \RuntimeException('VPN authorization failed: ' . $out);
         }

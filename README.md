@@ -242,6 +242,13 @@ server at the script:
 auth-user-pass-verify /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh via-file
 ```
 
+> **Mind the username.** OpenVPN takes it from the client and never revisits it on a
+> deferred-auth path: the browser login decides *whether* the tunnel comes up, not
+> *whose* it is. Both names are logged on the firewall, so a mismatch is visible.
+> Turn on **Require the username to match** if the name is load-bearing on the server
+> side (`username-as-common-name`, a `client-config-dir`, per-user rules); leave it off
+> for the usual setup where the client sends a throwaway username.
+
 Use a web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux) - see
 `test/vpn-client/README.md`. With web-auth disabled the script denies the connection
 rather than deferring it. What the client sees:

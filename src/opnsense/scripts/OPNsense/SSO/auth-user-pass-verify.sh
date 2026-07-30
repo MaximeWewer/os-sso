@@ -57,15 +57,22 @@ mkdir -p "$STATE_DIR"
 [ ! -h "$STATE_DIR" ] || { echo "os-sso vpn: $STATE_DIR is a symlink" >&2; exit 1; }
 chmod 700 "$STATE_DIR" || { echo "os-sso vpn: cannot secure $STATE_DIR" >&2; exit 1; }
 
-# One-time, unguessable session id mapped to this attempt's control file + the
-# client's source IP. The web callback resolves + consumes it (single use); the
-# verdict is only written if the browser completing the SSO login comes from the
-# same IP as the VPN client (binds the deferred approval to the connecting peer).
+# One-time, unguessable session id mapped to this attempt's control file, the
+# client's source IP and the username it asked for. The web callback resolves +
+# consumes it (single use); the verdict is only written if the browser completing
+# the SSO login comes from the same IP as the VPN client (binds the deferred
+# approval to the connecting peer).
 SID=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 CLIENT_IP="${untrusted_ip:-${trusted_ip:-}}"
+# Whatever the client typed at the prompt -- untrusted, and OpenVPN never revisits
+# it on a deferred path, so vpn_verdict.sh logs it next to the account that really
+# authenticated and can refuse a mismatch when the operator asked it to. Reduced to
+# printable ASCII on one line: it is about to become a line in a state file.
+CLAIMED_USER=$(printf '%s' "${username:-}" | tr -d '\r\n' | tr -cd '\40-\176')
 {
     printf '%s\n' "$auth_control_file"
     printf '%s\n' "$CLIENT_IP"
+    printf '%s\n' "$CLAIMED_USER"
 } > "$STATE_DIR/$SID"
 chmod 600 "$STATE_DIR/$SID" || { rm -f "$STATE_DIR/$SID"; echo "os-sso vpn: cannot secure session file" >&2; exit 1; }
 
