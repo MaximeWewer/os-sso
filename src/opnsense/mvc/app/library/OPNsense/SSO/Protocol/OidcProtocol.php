@@ -791,12 +791,54 @@ final class OidcProtocol implements ProtocolInterface
                 throw new \RuntimeException('OIDC: discovered issuer is not https');
             }
             $this->assertIssuerMatches($doc);
+            $this->assertHttpsEndpoints($doc);
             $this->cacheSet('disco_' . $this->issuer, $doc);
         }
         // Re-check on the cached path too: everything downstream (the iss claim
         // comparison) trusts this value, so it must never come back unverified.
         $this->assertIssuerMatches($doc);
+        $this->assertHttpsEndpoints($doc);
         return $this->discovery = $doc;
+    }
+
+    /** Endpoints out of the discovery document that os-sso will actually use. */
+    private const USED_ENDPOINTS = [
+        'authorization_endpoint',
+        'token_endpoint',
+        'userinfo_endpoint',
+        'jwks_uri',
+        'end_session_endpoint',
+        'pushed_authorization_request_endpoint',
+    ];
+
+    /**
+     * Refuse a discovery document naming an endpoint we would not talk to over TLS.
+     *
+     * curl() already refuses a plaintext URL on the endpoints the firewall calls itself,
+     * so the two that had nothing checking them are the ones the BROWSER is sent to --
+     * authorization_endpoint and end_session_endpoint go straight into a redirect. Doing
+     * it here instead covers all of them at once, and does it before a ceremony starts
+     * rather than halfway through one, which is the difference between an error naming
+     * the endpoint and a login that fails somewhere the operator has to go looking.
+     */
+    private function assertHttpsEndpoints(array $doc): void
+    {
+        $endpoints = [];
+        foreach (self::USED_ENDPOINTS as $key) {
+            $endpoints[$key] = $doc[$key] ?? '';
+        }
+        // RFC 8705 publishes a second token endpoint for the mTLS methods.
+        $endpoints['mtls_endpoint_aliases.token_endpoint']
+            = $doc['mtls_endpoint_aliases']['token_endpoint'] ?? '';
+
+        foreach ($endpoints as $key => $url) {
+            if (is_string($url) && $url !== '' && stripos($url, 'https://') !== 0) {
+                throw new \RuntimeException(sprintf(
+                    'OIDC: the discovery document publishes a non-https %s',
+                    $key
+                ));
+            }
+        }
     }
 
     /**
