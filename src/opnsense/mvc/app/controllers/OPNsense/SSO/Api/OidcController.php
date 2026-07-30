@@ -190,6 +190,10 @@ class OidcController extends ApiControllerBase
     public function iconAction()
     {
         try {
+            // Pre-auth, and on a cache miss it reaches out to the IdP (DNS plus up to
+            // two HTTPS fetches). Generous, because one login page pulls one icon per
+            // configured provider; a failed hit just renders as a missing icon.
+            RateLimiter::hit('sso-icon', $this->clientIp(), 60);
             $auth = $this->authServer($this->request->get('provider'));
             $icon = FaviconProxy::fetch((string)$auth->ssoIssuer);
         } catch (\Throwable $e) {

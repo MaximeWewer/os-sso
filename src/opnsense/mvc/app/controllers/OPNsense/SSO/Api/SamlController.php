@@ -179,6 +179,10 @@ class SamlController extends ApiControllerBase
     public function iconAction()
     {
         try {
+            // Pre-auth, and on a cache miss it reaches out to the IdP (DNS plus up to
+            // two HTTPS fetches). Generous, because one login page pulls one icon per
+            // configured provider; a failed hit just renders as a missing icon.
+            RateLimiter::hit('sso-icon', $this->clientIp(), 60);
             $auth = $this->authServer($this->request->get('provider'));
             // Via idpSettings so a metadata-only provider (nothing typed in the form)
             // still has a host to take the icon from; both lookups are cached.
@@ -198,6 +202,9 @@ class SamlController extends ApiControllerBase
     public function metadataAction()
     {
         try {
+            // Pre-auth, and building the document may pull the IdP metadata document to
+            // fill in whatever the operator left empty. An IdP reads this rarely.
+            RateLimiter::hit('saml-metadata', $this->clientIp(), 20);
             $protocol = $this->protocolFor($this->request->get('provider'));
             $this->response->setHeader('Content-Type', 'application/samlmetadata+xml');
             return $protocol->metadata();

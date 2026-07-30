@@ -13,6 +13,7 @@ use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
+use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\SourceGate;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\Protocol\JwtProtocol;
@@ -109,6 +110,10 @@ class JwtController extends ApiControllerBase
     public function iconAction()
     {
         try {
+            // Pre-auth, and on a cache miss it reaches out to the IdP (DNS plus up to
+            // two HTTPS fetches). Generous, because one login page pulls one icon per
+            // configured provider; a failed hit just renders as a missing icon.
+            RateLimiter::hit('sso-icon', $this->clientIp(), 60);
             $auth = $this->authServer($this->request->get('provider'));
             $icon = FaviconProxy::fetch((string)$auth->ssoJwtIssuer);
         } catch (\Throwable $e) {
@@ -136,6 +141,12 @@ class JwtController extends ApiControllerBase
     }
 
     /** Read the JWT from $_SERVER, stripping an optional "Bearer " prefix. */
+    /** Direct TCP peer -- never a forwardable header. */
+    private function clientIp(): string
+    {
+        return (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    }
+
     private function readToken(string $headerName): string
     {
         $key = 'HTTP_' . strtoupper(str_replace('-', '_', $headerName));
