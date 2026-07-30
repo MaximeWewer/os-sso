@@ -65,6 +65,19 @@ final class SiteUrl
     }
 
     /** Is $name one of the names this firewall answers to? */
+    /**
+     * True when $host is a name this firewall answers to: its hostname (bare or
+     * qualified), a WebGUI alternate hostname, or its own address.
+     */
+    public static function isOwnHost(string $host): bool
+    {
+        $host = trim($host, '[]'); // IPv6 literal
+        if ($host === '') {
+            return false;
+        }
+        return self::isOwnName(Config::getInstance()->object()->system ?? null, $host);
+    }
+
     private static function isOwnName($system, string $name): bool
     {
         foreach (self::ownNames($system) as $known) {
