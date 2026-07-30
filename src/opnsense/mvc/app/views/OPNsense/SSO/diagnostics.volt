@@ -15,8 +15,25 @@
      */
     $(document).ready(function () {
 
+        // Every value below is interpolated into markup, and several of them land inside
+        // a double-quoted attribute (data-provider, data-id). .text().html() escapes the
+        // markup characters but NOT quotes, which is enough for a text node and not for
+        // an attribute -- so add them here rather than leaving the difference to whoever
+        // adds the next field. Provider and account names reach this from config.xml,
+        // subjects reach it from the IdP.
         function escapeHtml(value) {
-            return $('<div/>').text(value === null || value === undefined ? '' : value).html();
+            return $('<div/>').text(value === null || value === undefined ? '' : value).html()
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // The element id a provider's test result is written into. Derived from the raw
+        // name in both places that need it -- the row that creates the element and the
+        // click handler that looks it up -- because escaping first and stripping after
+        // gives two different answers for the same name, and the result would then be
+        // written to an element nobody reads. \W leaves nothing an attribute can carry.
+        function slug(name) {
+            return String(name).replace(/\W/g, '_');
         }
 
         function stamp(seconds) {
@@ -69,7 +86,7 @@
                     + '<td>'
                     + '<button class="btn btn-xs btn-default check-btn" data-provider="'
                     + escapeHtml(provider.name) + '">{{ lang._("Test") }}</button>'
-                    + '<div class="check-result small" id="check-' + escapeHtml(provider.name).replace(/\W/g, '_') + '"></div>'
+                    + '<div class="check-result small" id="check-' + slug(provider.name) + '"></div>'
                     + '</td>'
                     + '</tr>'
                 );
@@ -120,7 +137,7 @@
 
         $(document).on('click', '.check-btn', function () {
             var provider = $(this).data('provider');
-            var $target = $('#check-' + String(provider).replace(/\W/g, '_'));
+            var $target = $('#check-' + slug(provider));
             $target.html('<i class="fa fa-spinner fa-spin"></i>');
             ajaxGet('/api/sso/diagnostics/check/' + encodeURIComponent(provider), {}, function (data) {
                 renderCheck($target, data || {});
