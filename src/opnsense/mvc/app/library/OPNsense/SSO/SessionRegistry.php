@@ -147,7 +147,30 @@ final class SessionRegistry
         return $out;
     }
 
-    /** @return array<string,array> record path => entry */
+    /**
+     * End one recorded session, named by the handle listActive() reports.
+     *
+     * The handle is the digest of the session id, never the id itself: it is enough to
+     * say which row an administrator clicked, and it cannot be turned back into a
+     * cookie by anyone who reads it off the diagnostics page.
+     *
+     * @return int 1 when a session was ended, 0 when the handle matched nothing
+     */
+    public static function destroyById(string $id): int
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/', $id)) {
+            return 0;
+        }
+        return self::destroyWhere(fn(array $entry) => hash_equals((string)($entry['id'] ?? ''), $id));
+    }
+
+    /** End every session os-sso opened, whoever they belong to. */
+    public static function destroyAll(): int
+    {
+        return self::destroyWhere(fn(array $entry) => true);
+    }
+
+    /** @return array<string,array> record path => entry (each carrying its handle) */
     private static function entries(): array
     {
         try {
@@ -162,6 +185,9 @@ final class SessionRegistry
         foreach (glob($dir . '/*.json') ?: [] as $file) {
             $entry = json_decode((string)@file_get_contents($file), true);
             if (is_array($entry)) {
+                // The record's own name is the digest of the session id, which is what
+                // the diagnostics page hands back to end one.
+                $entry['id'] = basename($file, '.json');
                 $out[$file] = $entry;
             } else {
                 @unlink($file); // unreadable leftover

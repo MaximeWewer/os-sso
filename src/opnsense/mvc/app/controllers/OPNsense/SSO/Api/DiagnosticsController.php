@@ -92,6 +92,8 @@ class DiagnosticsController extends ApiControllerBase
         $rows = [];
         foreach (SessionRegistry::listActive() as $entry) {
             $rows[] = [
+                // A handle, not the session id: enough to name a row, useless as a cookie.
+                'id' => (string)($entry['id'] ?? ''),
                 'username' => (string)($entry['username'] ?? ''),
                 'provider' => (string)($entry['provider'] ?? ''),
                 'subject' => (string)($entry['sub'] ?? ''),
@@ -100,6 +102,42 @@ class DiagnosticsController extends ApiControllerBase
             ];
         }
         return ['sessions' => $rows, 'total' => count($rows)];
+    }
+
+    /**
+     * POST /api/sso/diagnostics/endSession/$id -- end one open SSO session.
+     *
+     * The page could already say who is signed in and until when; ending one of them
+     * meant disabling the account or waiting out a timeout. $id is the handle
+     * sessionsAction reports, which is a digest of the session id and not the id.
+     */
+    public function endSessionAction($id = null)
+    {
+        return $this->ending(fn() => SessionRegistry::destroyById((string)$id));
+    }
+
+    /** POST /api/sso/diagnostics/endAllSessions -- end every open SSO session. */
+    public function endAllSessionsAction()
+    {
+        return $this->ending(fn() => SessionRegistry::destroyAll());
+    }
+
+    /** Shared POST-only wrapper for the two session-ending actions. */
+    private function ending(callable $end): array
+    {
+        if (!$this->request->isPost()) {
+            $this->response->setStatusCode(405, 'Method Not Allowed');
+            return ['status' => 'failed', 'message' => 'POST required'];
+        }
+        $ended = (int)$end();
+        if ($ended > 0) {
+            syslog(LOG_NOTICE, sprintf(
+                'os-sso: %d SSO session(s) ended from the diagnostics page by %s',
+                $ended,
+                (string)($this->session->get('Username') ?? 'an administrator')
+            ));
+        }
+        return ['status' => 'ok', 'ended' => $ended];
     }
 
     /**

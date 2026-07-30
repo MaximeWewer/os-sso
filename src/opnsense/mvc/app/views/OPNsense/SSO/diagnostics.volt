@@ -7,9 +7,11 @@
     'use strict';
 
     /**
-     * Everything on this page is read-only except "Flush caches". The point is to
-     * answer, without reading syslog: does the IdP actually respond, is it the one
-     * I configured, which URLs do I have to register there, and who is signed in.
+     * Mostly read-only: the point is to answer, without reading syslog, does the IdP
+     * actually respond, is it the one I configured, which URLs do I have to register
+     * there, and who is signed in. The three buttons that do change something -- flush
+     * the caches, end a session, end all of them -- are the ones an operator otherwise
+     * has to do by disabling an account or waiting out a timeout.
      */
     $(document).ready(function () {
 
@@ -88,7 +90,7 @@
         function renderSessions(data) {
             var $body = $('#sessions-body').empty();
             if (!data.sessions || data.sessions.length === 0) {
-                $body.append('<tr><td colspan="5"><em>{{ lang._("No SSO session is open.") }}</em></td></tr>');
+                $body.append('<tr><td colspan="6"><em>{{ lang._("No SSO session is open.") }}</em></td></tr>');
                 return;
             }
             data.sessions.forEach(function (session) {
@@ -100,6 +102,9 @@
                     + '<td>' + escapeHtml(stamp(session.started)) + '</td>'
                     + '<td>' + (session.expires_at ? escapeHtml(stamp(session.expires_at))
                         : '<span class="text-muted">{{ lang._("idle timeout only") }}</span>') + '</td>'
+                    + '<td><button class="btn btn-xs btn-default end-session" data-id="'
+                    + escapeHtml(session.id) + '" title="{{ lang._("End this session now.") }}">'
+                    + '<i class="fa fa-sign-out"></i> {{ lang._("End") }}</button></td>'
                     + '</tr>'
                 );
             });
@@ -116,6 +121,32 @@
             $target.html('<i class="fa fa-spinner fa-spin"></i>');
             ajaxGet('/api/sso/diagnostics/check/' + encodeURIComponent(provider), {}, function (data) {
                 renderCheck($target, data || {});
+            });
+        });
+
+        // Ending a session is the one destructive thing on this page, so it asks first
+        // and then reloads the list rather than leaving a row that no longer exists.
+        $(document).on('click', '.end-session', function () {
+            var id = $(this).data('id');
+            if (!id || !confirm('{{ lang._("End this SSO session? The user will have to sign in again.") }}')) {
+                return;
+            }
+            ajaxCall('/api/sso/diagnostics/endSession/' + encodeURIComponent(id), {}, function () {
+                reload();
+            });
+        });
+
+        $('#end-all-sessions').click(function () {
+            if (!confirm('{{ lang._("End every open SSO session, including your own if you signed in through SSO?") }}')) {
+                return;
+            }
+            var $button = $(this).prop('disabled', true);
+            ajaxCall('/api/sso/diagnostics/endAllSessions', {}, function (data) {
+                $button.prop('disabled', false);
+                $('#sessions-result').text(data && data.status === 'ok'
+                    ? '{{ lang._("Ended") }} ' + data.ended + ' {{ lang._("session(s).") }}'
+                    : '{{ lang._("Failed.") }}');
+                reload();
             });
         });
 
@@ -169,7 +200,14 @@
         </table>
         </div>
 
-        <h2 style="padding-left: 0.6em;">{{ lang._('Open SSO sessions') }}</h2>
+        <h2 style="padding-left: 0.6em;">
+            {{ lang._('Open SSO sessions') }}
+            <button class="btn btn-default btn-xs" id="end-all-sessions" style="margin-left: 0.8em;"
+                    title="{{ lang._('End every session os-sso opened.') }}">
+                <i class="fa fa-sign-out"></i> {{ lang._('End all') }}
+            </button>
+            <span id="sessions-result" class="text-muted small" style="margin-left: 0.6em;"></span>
+        </h2>
         <div class="table-responsive">
         <table class="table table-striped table-condensed">
             <thead>
@@ -179,6 +217,7 @@
                     <th>{{ lang._('IdP subject') }}</th>
                     <th>{{ lang._('Signed in') }}</th>
                     <th>{{ lang._('Expires') }}</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="sessions-body"></tbody>
