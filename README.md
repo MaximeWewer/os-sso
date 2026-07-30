@@ -419,9 +419,16 @@ waiting out a TTL. Access is gated by its own ACL privilege,
   from group membership on every request.
 - New sessions regenerate their ID (anti session-fixation).
 - SSO will not bind the username claim to an existing local account that has its
-  own password (only to SSO-managed or passwordless accounts), and never to a
+  own password (only to os-sso-owned or passwordless accounts), and never to a
   privileged account (`root`/system or `admins`) it didn't create; email matching
-  requires a verified email and an already-SSO-managed account.
+  requires a verified email and an account os-sso already owns. A scrambled password is
+  *not* ownership - that is the WebGUI's own "no local login" checkbox, and LDAP-backed
+  administrators wear it.
+- An account is bound to **one subject per provider**, recorded on first login. A second
+  subject of the same provider presenting that account's username is refused - that is the
+  takeover a mutable username claim would otherwise allow. A second *provider* binds
+  alongside the first, so one directory fronted by both OIDC and SAML maps onto a single
+  local account, as it should.
 - The 1:1 group fallback won't grant a privileged group (`admins`, or any group
   with full-GUI / shell / user-manager rights) without an explicit mapping.
 - Group membership is additive by default; **Strict group sync** additionally
