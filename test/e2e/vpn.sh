@@ -56,7 +56,7 @@ env IV_SSO=webauth auth_pending_file="$W/pending3" auth_control_file="$W/control
     untrusted_ip=203.0.113.7 sh "$HOOK" >/dev/null 2>&1
 SID2=$(sed -n 's/.*&vpn=//p' "$W/pending3")
 "$VERDICT" "$SID2" 1 203.0.113.7 >"$W/v3" 2>&1
-[ "$(cat "$W/v3")" = "ok" ] && ok "verdict accepted" || ko "verdict said '$(cat "$W/v3")'"
+case "$(cat "$W/v3")" in ok*) ok "verdict accepted" ;; *) ko "verdict said '$(cat "$W/v3")'" ;; esac
 [ "$(cat "$W/control3")" = "1" ] && ok "the tunnel was authorized (control file = 1)" \
     || ko "control file holds '$(cat "$W/control3")'"
 
@@ -98,8 +98,8 @@ echo ">>> case 9: a mismatch is allowed but logged while enforcement is off"
 set_enforce 0
 : > "$W/control4"
 "$VERDICT" "$SID3" 1 203.0.113.7 'real.alice' >"$W/v5" 2>&1
-[ "$(cat "$W/v5")" = "ok" ] && ok "a differing username is accepted when not enforced" \
-    || ko "verdict said '$(cat "$W/v5")'"
+case "$(cat "$W/v5")" in ok*) ok "a differing username is accepted when not enforced" ;; \
+    *) ko "verdict said '$(cat "$W/v5")'" ;; esac
 [ "$(cat "$W/control4")" = "1" ] && ok "and the tunnel was authorized" \
     || ko "control file holds '$(cat "$W/control4")'"
 
@@ -117,8 +117,8 @@ echo ">>> case 11: with enforcement on, a matching username passes"
 SID5=$(defer 'real.alice' "$W/pending6" "$W/control6")
 : > "$W/control6"
 "$VERDICT" "$SID5" 1 203.0.113.7 'real.alice' >"$W/v7" 2>&1
-[ "$(cat "$W/v7")" = "ok" ] && ok "a matching username is accepted" \
-    || ko "verdict said '$(cat "$W/v7")'"
+case "$(cat "$W/v7")" in ok*) ok "a matching username is accepted" ;; \
+    *) ko "verdict said '$(cat "$W/v7")'" ;; esac
 [ "$(cat "$W/control6")" = "1" ] && ok "and the tunnel was authorized" \
     || ko "control file holds '$(cat "$W/control6")'"
 
@@ -126,8 +126,17 @@ echo ">>> case 12: a client that sent no username has nothing to spoof"
 SID6=$(defer '' "$W/pending7" "$W/control7")
 : > "$W/control7"
 "$VERDICT" "$SID6" 1 203.0.113.7 'real.alice' >"$W/v8" 2>&1
-[ "$(cat "$W/v8")" = "ok" ] && ok "an empty claimed username is not refused" \
-    || ko "verdict said '$(cat "$W/v8")'"
+case "$(cat "$W/v8")" in ok*) ok "an empty claimed username is not refused" ;; \
+    *) ko "verdict said '$(cat "$W/v8")'" ;; esac
+
+echo ">>> case 12b: the verdict names the tunnel's common name"
+SID7=$(defer 'claimed.carol' "$W/pending9" "$W/control9")
+: > "$W/control9"
+"$VERDICT" "$SID7" 1 203.0.113.7 'real.alice' >"$W/v9" 2>&1
+# It is what SessionRegistry records so a later revocation can kill the tunnel: OpenVPN
+# knows the client by the name it sent, not by the account that signed in.
+[ "$(cat "$W/v9")" = "ok claimed.carol" ] && ok "the common name comes back with the verdict" \
+    || ko "verdict said '$(cat "$W/v9")'"
 
 echo ">>> case 13: abandoned session files are swept"
 STALE="$STATE/staleaaaabbbbccccddddeeeeffff0000"
