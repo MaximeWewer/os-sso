@@ -79,12 +79,14 @@ final class IdentityMapper
                         "IdP username claim, or rename/remove the local account)"
                     );
                 }
+                $this->assertNotBoundElsewhere($byName, $subjectKey);
                 $node = $byName;
             }
         }
         if ($node === null && $identity->emailVerified && $identity->email !== '') {
             $byEmail = $this->accounts->findByEmail($identity->email);
             if ($byEmail !== null && $this->accounts->isSsoManaged($byEmail)) {
+                $this->assertNotBoundElsewhere($byEmail, $subjectKey);
                 $node = $byEmail;
             }
         }
@@ -129,6 +131,35 @@ final class IdentityMapper
      * trust decision: the username claim MUST be an immutable, IdP-administered
      * attribute (documented).
      */
+    /**
+     * A weak match -- username claim or verified email -- may not land on an account
+     * that is ALREADY bound to a different IdP subject.
+     *
+     * The stamp is the only durable link between an account and a person; the username
+     * claim is not. Without this check, a second subject that manages to present the
+     * first one's username inherits the account, its groups and its history: a rename
+     * at the IdP, a directory account deleted and recreated there with a fresh `sub`,
+     * or simply a mutable claim such as `email`. The stamped account is SSO-managed by
+     * definition, so neither the password-collision guard above nor guardBinding()
+     * below sees anything wrong with it.
+     *
+     * An empty $subjectKey (no `sub` asserted at all) is refused for the same reason:
+     * we cannot show it is the same person, so we do not guess.
+     */
+    private function assertNotBoundElsewhere(\SimpleXMLElement $node, string $subjectKey): void
+    {
+        $stamp = (string)($node->sso_subject ?? '');
+        if ($stamp === '' || hash_equals($stamp, $subjectKey)) {
+            return;
+        }
+        throw new \RuntimeException(
+            "SSO: local account '" . (string)$node->name . "' is already bound to another " .
+            "IdP subject; refusing to bind (one local account belongs to one IdP subject -- " .
+            "provision a separate account, or clear its binding in config.xml if the account " .
+            "really did change hands)"
+        );
+    }
+
     private function guardBinding(\SimpleXMLElement $node): void
     {
         if ($this->accounts->isPrivileged($node) && !$this->accounts->isSsoManaged($node)) {
