@@ -401,6 +401,11 @@ account (`root`/system, `admins`) it did not create. A scrambled password is *no
 ownership: that is the WebGUI's own "no local login" checkbox, which LDAP-backed
 administrators wear. Email matching additionally requires a verified address.
 
+Display name and (verified) address are refreshed from the assertion on every login, on
+the accounts os-sso owns. Nothing else is: a shell is how an account gets SSH, `expires`
+is the operator's own lever, and API keys are separate credentials - none of them is a
+directory's to set.
+
 Each account is bound to **one subject per provider**, recorded on first login. A second
 subject of the same provider presenting that account's username is refused - the takeover
 a mutable username claim would otherwise allow. A second *provider* binds alongside, so

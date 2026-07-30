@@ -281,3 +281,43 @@ throws(
     'without a username claim',
     'an identity with no username cannot be provisioned'
 );
+
+T::group('IdentityMapper: the account follows the directory');
+
+// Written once at creation and never again meant a display name or an address that
+// changed at the IdP stayed wrong on the firewall for the life of the account.
+$root = Tree::build([
+    ['name' => 'alice', 'uid' => '2100', 'scrambled_password' => '1', 'sso_subject' => 'kc|sub-alice',
+     'descr' => 'Alice Old', 'email' => 'old@example.com'],
+]);
+mapper()->resolve(identity([
+    'subject' => 'sub-alice',
+    'username' => 'alice',
+    'displayName' => 'Alice New',
+    'email' => 'new@example.com',
+    'emailVerified' => true,
+]), false, []);
+eq('Alice New', (string)Tree::user($root, 'alice')->descr, 'the display name is refreshed on login');
+eq('new@example.com', (string)Tree::user($root, 'alice')->email, 'so is a verified address');
+
+// An unverified address is not allowed to find an account, and is not allowed to
+// overwrite one either.
+mapper()->resolve(identity([
+    'subject' => 'sub-alice',
+    'username' => 'alice',
+    'email' => 'unverified@example.com',
+]), false, []);
+eq('new@example.com', (string)Tree::user($root, 'alice')->email, 'an unverified address does not overwrite it');
+
+// An identity that asserts nothing leaves what is there alone.
+mapper()->resolve(identity(['subject' => 'sub-alice', 'username' => 'alice']), false, []);
+eq('Alice New', (string)Tree::user($root, 'alice')->descr, 'an assertion with no name changes nothing');
+
+// A pre-existing local account os-sso merely bound to is not ours to rewrite.
+$root = Tree::build([
+    ['name' => 'theirs', 'uid' => '2101', 'password' => '*', 'descr' => 'Hand written'],
+]);
+mapper()->resolve(identity([
+    'subject' => 'sub-t', 'username' => 'theirs', 'displayName' => 'From the IdP',
+]), false, []);
+eq('From the IdP', (string)Tree::user($root, 'theirs')->descr, 'an account we just claimed is ours from then on');

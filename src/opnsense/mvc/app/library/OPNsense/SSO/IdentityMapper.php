@@ -100,8 +100,9 @@ final class IdentityMapper
             LocalAccount::assertUsable($node);
             $this->guardBinding($node);
             $stamped = $this->accounts->addBinding($node, $subjectKey);
+            $refreshed = $this->refreshAttributes($node, $identity);
             $changed = $this->groupMapper->sync($node, $identity, $defaultGroups);
-            if ($stamped || $changed) {
+            if ($stamped || $refreshed || $changed) {
                 $this->accounts->persist((string)$node->name);
             }
             return (string)$node->name;
@@ -114,6 +115,39 @@ final class IdentityMapper
         }
 
         return $this->provision($identity, $defaultGroups, $subjectKey);
+    }
+
+    /**
+     * Bring the account's descriptive fields back in line with the assertion.
+     *
+     * They were written once, at creation, and never again: someone whose display name
+     * or address changed at the directory kept the old one on the firewall for as long
+     * as the account lived, which is the kind of drift nobody notices until an email
+     * goes to an address that no longer exists.
+     *
+     * Only the two fields that describe a person, and only on accounts os-sso owns. The
+     * ones an operator might expect to see here are deliberately absent: a `shell` is
+     * how an account gets SSH, `expires` is the operator's own lever for ending access,
+     * an OTP seed is a second factor for a password these accounts do not have, and API
+     * keys are separate credentials. None of those is a directory's to set.
+     *
+     * @return bool whether anything changed (the caller persists config.xml if so)
+     */
+    private function refreshAttributes(\SimpleXMLElement $node, NormalizedIdentity $identity): bool
+    {
+        if (!$this->accounts->isSsoManaged($node)) {
+            return false; // bound, but not ours to rewrite
+        }
+        $changed = false;
+        if ($identity->displayName !== '') {
+            $changed = $this->accounts->setField($node, 'descr', $identity->displayName) || $changed;
+        }
+        // An address only follows the account when the IdP vouches for it, the same
+        // condition under which it is allowed to FIND an account in the first place.
+        if ($identity->email !== '' && $identity->emailVerified) {
+            $changed = $this->accounts->setField($node, 'email', $identity->email) || $changed;
+        }
+        return $changed;
     }
 
     private function subjectKey(NormalizedIdentity $identity): string
