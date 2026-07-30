@@ -59,9 +59,10 @@ final class IdentityMapper
         //    Immune to later username/email changes and to collisions.
         $node = $this->accounts->findByStamp('sso_subject', $subjectKey);
 
-        // 2. First-time linking: by the configured username claim, then by a
-        //    *verified* email -- and either may only (re)locate an SSO-managed
-        //    account, never bind to a hand-created local user.
+        // 2. First-time linking: by the configured username claim -- which may land on
+        //    any account with no usable local password of its own -- then by a
+        //    *verified* email, which only ever (re)locates an account we already own.
+        //    Neither may take over an account bound to a different subject.
         if ($node === null && $identity->username !== '') {
             $this->accounts->assertValidUsername($identity->username);
             $byName = $this->accounts->findByName($identity->username);

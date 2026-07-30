@@ -130,13 +130,29 @@ final class LocalAccountWriter
         return false;
     }
 
-    /** An account os-sso may (re)bind: it has no usable local password of its own. */
+    /**
+     * An account os-sso itself owns: one it created or has already claimed, carrying
+     * our binding stamp.
+     *
+     * Deliberately NOT "has no local password". A scrambled password is the WebGUI's
+     * own "prevent local database logins" checkbox, which is exactly how an operator
+     * configures an LDAP- or RADIUS-backed account -- including an administrator's.
+     * Reading that as "os-sso manages this" handed every such account, `admins`
+     * members included, straight past guardBinding(): only accounts we own may be
+     * (re)bound to an asserted identity without further proof.
+     *
+     * Whether an account can be bound at all is a separate question, answered by
+     * hasUsableLocalPassword() below.
+     */
     public function isSsoManaged(\SimpleXMLElement $node): bool
     {
-        return (string)($node->scrambled_password ?? '') === '1'
+        return (string)($node->{self::OWNED_FIELD} ?? '') === '1'
             || (string)($node->sso_subject ?? '') !== ''
             || (string)($node->scim_ref ?? '') !== '';
     }
+
+    /** Set on every account create(): "os-sso made this one". */
+    private const OWNED_FIELD = 'sso_owned';
 
     /**
      * True if the account logs in with a real local password -- i.e. a human-owned
@@ -175,6 +191,10 @@ final class LocalAccountWriter
         $node->addChild('disabled', empty($attrs['disabled']) ? '0' : '1');
         $node->addChild('password', '*');
         $node->addChild('scrambled_password', '1');
+        // Ownership marker, independent of the optional binding stamps below: an
+        // account provisioned over SCIM without an externalId, or from an identity
+        // carrying no `sub`, has no stamp to speak of but is still ours.
+        $node->addChild(self::OWNED_FIELD, '1');
         $node->addChild('uid', (string)$this->nextUid($cnf));
         foreach (['sso_subject', 'scim_ref'] as $stamp) {
             if (!empty($attrs[$stamp])) {
