@@ -40,7 +40,10 @@ json() { python3 -c "import json,sys;d=json.load(open('$W/out'));print(eval('d'+
 echo "=== os-sso SCIM end-to-end ($BASE, provider=$PROVIDER) ==="
 
 echo ">>> enabling SCIM on '$PROVIDER'"
-set_provider "sso_scim_enabled=1 sso_scim_token=$TOKEN sso_scim_trusted="
+# The source allowlist is mandatory, so the baseline has to name one. 0.0.0.0/0
+# stands in for "wherever this suite runs from"; case 2 exercises the real thing.
+ANY_SOURCE='0.0.0.0/0,::/0'
+set_provider "sso_scim_enabled=1 sso_scim_token=$TOKEN sso_scim_trusted=$ANY_SOURCE"
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
 
 # --- 1. discovery + authentication ----------------------------------------------
@@ -55,8 +58,11 @@ check "Schemas" 200 "$(code -H "$AUTH" "$BASE/Schemas")"
 echo ">>> case 2: the source allowlist bounds who may use the token"
 set_provider "sso_scim_trusted=203.0.113.0/24"
 check "valid token from an untrusted source is refused" 401 "$(code -H "$AUTH" "$BASE/ServiceProviderConfig")"
+# Empty means "nobody", not "anybody": the allowlist is part of the credential.
 set_provider "sso_scim_trusted="
-check "accepted again once the allowlist is cleared" 200 "$(code -H "$AUTH" "$BASE/ServiceProviderConfig")"
+check "valid token with no allowlist configured is refused" 401 "$(code -H "$AUTH" "$BASE/ServiceProviderConfig")"
+set_provider "sso_scim_trusted=$ANY_SOURCE"
+check "accepted again once the source is allowed" 200 "$(code -H "$AUTH" "$BASE/ServiceProviderConfig")"
 
 # --- 3. user lifecycle -----------------------------------------------------------
 echo ">>> case 3: user lifecycle"
@@ -176,7 +182,7 @@ for line in open('/tmp/authentik-out.env'):
         echo "  SKIP Authentik SCIM provider not set up (run idp/authentik/setup.sh)"
     else
         # The firewall has to accept the token Authentik was given, not ours.
-        set_provider "sso_scim_token=$AK_SCIM_TOKEN"
+        set_provider "sso_scim_token=$AK_SCIM_TOKEN sso_scim_trusted=$ANY_SOURCE"
         ak() { curl -s -H "Authorization: Bearer $AK_TOK" -H 'Content-Type: application/json' "$@"; }
         # A user of its own, so the suite never disables the admin whose token it uses.
         AK_UID=$(ak "$AK_API/core/users/?username=scimprobe" | python3 -c "

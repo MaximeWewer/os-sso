@@ -98,8 +98,9 @@ All types share a few options:
   (hand-assigned groups are kept), and the last member of a privileged group is
   never removed.
 - **SCIM provisioning** - lets the IdP push account lifecycle instead of os-sso
-  waiting for a login. Needs a bearer token and, strongly recommended, the source
-  addresses the IdP connects from. See [SCIM provisioning](#scim-provisioning).
+  waiting for a login. Needs a bearer token *and* the source addresses the IdP connects
+  from - both are required, an empty allowlist refuses every request.
+  See [SCIM provisioning](#scim-provisioning).
 - **Base URL** (required, OIDC/SAML) - the firewall's public `https://host[:port]`.
   Every URL handed to the IdP is built from it: the OIDC redirect/callback, the SAML
   SP EntityID/ACS/SLO. Mind a reverse proxy or port-forward. It is required because
@@ -302,8 +303,9 @@ accounts so they exist before the first login (which matters as soon as you refe
 a user in a rule or a certificate).
 
 Enable it on any authentication server - OIDC, SAML or JWT (**Enable SCIM
-provisioning**, a **bearer token**, and the **source IPs** the IdP connects from),
-then register the base URL at the IdP:
+provisioning**, a **bearer token**, and the **source IPs** the IdP connects from - all
+three required; with no source list every request is refused, rather than every source
+being allowed to try the token), then register the base URL at the IdP:
 
 ```
 https://<opnsense>/api/sso/scim

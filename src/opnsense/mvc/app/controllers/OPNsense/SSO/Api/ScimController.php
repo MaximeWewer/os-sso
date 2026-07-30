@@ -200,8 +200,22 @@ class ScimController extends ApiControllerBase
             // Right token: now check it was presented from an agreed source. Doing it
             // in this order means an attacker probing from elsewhere cannot use the
             // response to tell a valid token from an invalid one.
+            //
+            // The allowlist is required, not advisory -- an empty one refuses everything
+            // rather than allowing everything. This is a write API into the account
+            // database whose entire authentication is one shared secret in config.xml,
+            // so it gets the same fail-closed treatment as the JWT header: the source
+            // restriction is what bounds who can even attempt to use the token.
             $trusted = (array)($auth->ssoScimTrusted ?? []);
-            if (!empty($trusted) && !SourceGate::allows($peer, $trusted)) {
+            if (empty($trusted)) {
+                syslog(LOG_WARNING, sprintf(
+                    'os-sso scim: provider %s has no source allowlist, refusing the request -- '
+                    . 'set "SCIM source IPs/CIDRs" on the authentication server',
+                    $name
+                ));
+                break;
+            }
+            if (!SourceGate::allows($peer, $trusted)) {
                 syslog(LOG_WARNING, sprintf(
                     'os-sso scim: valid token for provider %s presented from untrusted source %s',
                     $name,

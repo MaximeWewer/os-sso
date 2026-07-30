@@ -294,9 +294,10 @@ class SsoSaml extends Local implements IAuthConnector
             ],
             'sso_scim_trusted' => [
                 'name' => gettext('SCIM source IPs/CIDRs'),
-                'help' => gettext('Comma separated addresses the IdP connects from. Strongly recommended: it '
-                    . 'bounds who can even attempt to use the token. Matched on the direct TCP peer, never on '
-                    . 'a forwardable header. Empty means any source may present the token.'),
+                'help' => gettext('Comma separated addresses the IdP connects from. REQUIRED when SCIM is '
+                    . 'enabled: it bounds who can even attempt to use the token, and an empty list refuses '
+                    . 'every request rather than accepting any source. Matched on the direct TCP peer, never '
+                    . 'on a forwardable header.'),
                 'type' => 'text',
             ],
             'sso_button_label' => [
