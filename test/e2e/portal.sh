@@ -105,8 +105,14 @@ portal_login "$ZONE" '' "$W/again.html" >/dev/null
 # Anchor on the session the zone actually holds, not on the newest record: several
 # logins in this suite share a client IP (and a second), so "the last grant written" is
 # not necessarily the one still live.
-CPSESSION=$(vm "configctl captiveportal list_clients $ZONE" \
-    | sed -n 's/.*"sessionId": *"\([^"]*\)".*/\1/p' | head -1)
+# The newest session this provider authorized: a lab zone routinely still holds a
+# client from an earlier run, and picking the first row of the list is how a passing
+# case turns intermittent.
+CPSESSION=$(vm "configctl captiveportal list_clients $ZONE" | python3 -c '
+import json, sys
+rows = [r for r in json.load(sys.stdin) if r.get("authenticated_via") == "'"$PROVIDER"'"]
+print(max(rows, key=lambda r: r.get("startTime", 0))["sessionId"] if rows else "")
+')
 [ -n "$CPSESSION" ] && ok "the client is authorized in the zone" \
     || ko "no captive-portal session in zone $ZONE"
 vm "php /home/vagrant/os-sso/test/vagrant/dump_grants.php portal" | awk '{print $3}' \
