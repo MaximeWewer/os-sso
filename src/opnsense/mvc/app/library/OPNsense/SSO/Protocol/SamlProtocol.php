@@ -128,11 +128,13 @@ final class SamlProtocol implements ProtocolInterface
     {
         $u = htmlspecialchars($ssoUrl, ENT_QUOTES);
         $r = htmlspecialchars($samlRequest, ENT_QUOTES);
-        return "<!doctype html><html><head><meta charset='utf-8'><title>Signing in</title></head>"
+        $title = htmlspecialchars(gettext('Signing in'), ENT_QUOTES);
+        $button = htmlspecialchars(gettext('Continue to the identity provider'), ENT_QUOTES);
+        return "<!doctype html><html><head><meta charset='utf-8'><title>{$title}</title></head>"
             . "<body onload='document.forms[0].submit()'>"
             . "<form method='post' action='{$u}'>"
             . "<input type='hidden' name='SAMLRequest' value='{$r}'>"
-            . "<noscript><button type='submit'>Continue to the identity provider</button></noscript>"
+            . "<noscript><button type='submit'>{$button}</button></noscript>"
             . "</form></body></html>";
     }
 

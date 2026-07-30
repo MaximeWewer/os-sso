@@ -73,14 +73,17 @@ final class LogoutGuard
         $_SESSION[self::TOKEN_KEY] = $token;
         $a = htmlspecialchars($action, ENT_QUOTES);
         $t = htmlspecialchars($token, ENT_QUOTES);
-        return "<!doctype html><html><head><meta charset='utf-8'><title>Sign out</title>"
+        $title = htmlspecialchars(gettext('Sign out'), ENT_QUOTES);
+        $question = htmlspecialchars(gettext('Sign out?'), ENT_QUOTES);
+        $explain = htmlspecialchars(gettext('Confirm that you want to end your session.'), ENT_QUOTES);
+        return "<!doctype html><html><head><meta charset='utf-8'><title>{$title}</title>"
             . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em}"
             . "button{font-size:15px;padding:8px 22px;cursor:pointer}</style>"
-            . "</head><body><h2>Sign out?</h2>"
-            . "<p>Confirm that you want to end your session.</p>"
+            . "</head><body><h2>{$question}</h2>"
+            . "<p>{$explain}</p>"
             . "<form method='post' action='{$a}'>"
             . "<input type='hidden' name='logout_token' value='{$t}'>"
-            . "<button type='submit'>Sign out</button></form>"
+            . "<button type='submit'>{$title}</button></form>"
             . "</body></html>";
     }
 }

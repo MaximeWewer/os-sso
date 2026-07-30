@@ -209,13 +209,21 @@ final class CaptivePortalAuthorizer
             $meta .= "<meta http-equiv='refresh' content='3;url={$r}'>";
             // Name the destination instead of bouncing silently -- the user just typed
             // credentials at their IdP and deserves to see where they are being sent.
-            $link = "<p>Continuing to <a rel='noreferrer noopener' href='{$r}'>{$r}</a>&hellip;</p>";
+            $link = '<p>' . sprintf(
+                htmlspecialchars(gettext('Continuing to %s')),
+                "<a rel='noreferrer noopener' href='{$r}'>{$r}</a>"
+            ) . '&hellip;</p>';
         }
-        return "<!doctype html><html><head><meta charset='utf-8'><title>Connected</title>{$meta}"
+        $title = htmlspecialchars(gettext('Connected'), ENT_QUOTES);
+        $body = sprintf(
+            htmlspecialchars(gettext('Signed in as %s. You now have network access.')),
+            '<strong>' . $u . '</strong>'
+        );
+        return "<!doctype html><html><head><meta charset='utf-8'><title>{$title}</title>{$meta}"
             . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em;color:#1b5e20}"
             . "a{color:#1b5e20;word-break:break-all}</style>"
-            . "</head><body><h2>&#10003; Connected</h2>"
-            . "<p>Signed in as <strong>{$u}</strong>. You now have network access.</p>"
+            . "</head><body><h2>&#10003; {$title}</h2>"
+            . "<p>{$body}</p>"
             . $link
             . "</body></html>";
     }

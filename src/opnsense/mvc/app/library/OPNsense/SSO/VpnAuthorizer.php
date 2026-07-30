@@ -55,10 +55,15 @@ final class VpnAuthorizer
     public static function donePage(string $username): string
     {
         $u = htmlspecialchars($username, ENT_QUOTES);
-        return "<!doctype html><html><head><meta charset='utf-8'><title>VPN authorized</title>"
+        $title = htmlspecialchars(gettext('VPN authorized'), ENT_QUOTES);
+        $body = sprintf(
+            htmlspecialchars(gettext('Signed in as %s. You can close this window and return to your VPN client.')),
+            '<strong>' . $u . '</strong>'
+        );
+        return "<!doctype html><html><head><meta charset='utf-8'><title>{$title}</title>"
             . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em;color:#1b5e20}</style>"
-            . "</head><body><h2>&#10003; VPN authorized</h2>"
-            . "<p>Signed in as <strong>{$u}</strong>. You can close this window and return to your VPN client.</p>"
+            . "</head><body><h2>&#10003; {$title}</h2>"
+            . "<p>{$body}</p>"
             . "</body></html>";
     }
 }

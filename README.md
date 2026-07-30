@@ -451,6 +451,23 @@ least one local admin.
 > `client_secret`, client keys and SP keys live in `config.xml` like other OPNsense
 > credentials (LDAP bind passwords and the like) and are never written to logs.
 
+## Translations
+
+OPNsense has a single gettext domain (`OPNsense`, bound to `/usr/local/share/locale`)
+and its catalogues live in [opnsense/lang](https://github.com/opnsense/lang), built from
+the core and plugin sources - so a plugin ships no catalogue of its own, it ships
+translatable strings. What that needs from this repository is that every user-facing
+string goes through `gettext()` (PHP) or `lang._()` (Volt), which is what
+[`lang/os-sso.pot`](lang/os-sso.pot) makes checkable:
+
+```sh
+sh tools/extract-strings.sh    # rewrites lang/os-sso.pot (needs gettext-tools)
+```
+
+Anything user-facing that is missing from the template is a string somebody forgot to
+wrap. Model and form XML (field labels and help) is translated by the WebGUI renderer at
+display time and cannot be extracted by `xgettext` - core has the same gap.
+
 ## Test / lab
 
 Two layers, both under [`test/`](test/) with their own

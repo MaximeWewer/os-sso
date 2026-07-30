@@ -34,20 +34,22 @@
         function flags(provider) {
             var out = [];
             if (provider.required_groups) {
-                out.push('required groups: ' + escapeHtml(provider.required_groups));
+                out.push('{{ lang._("required groups:") }} ' + escapeHtml(provider.required_groups));
             } else {
-                out.push('<span class="text-warning">no required groups (any IdP account may log in)</span>');
+                out.push('<span class="text-warning">{{ lang._("no required groups (any IdP account may log in)") }}</span>');
             }
-            if (provider.default_groups) { out.push('default groups: ' + escapeHtml(provider.default_groups)); }
-            if (provider.create_users) { out.push('auto-creates users'); }
-            if (provider.group_sync) { out.push('strict group sync'); }
-            if (provider.deprovision) { out.push('deprovisions on refusal'); }
-            if (provider.scim) { out.push('<span class="text-success">SCIM provisioning</span>'); }
+            if (provider.default_groups) {
+                out.push('{{ lang._("default groups:") }} ' + escapeHtml(provider.default_groups));
+            }
+            if (provider.create_users) { out.push('{{ lang._("auto-creates users") }}'); }
+            if (provider.group_sync) { out.push('{{ lang._("strict group sync") }}'); }
+            if (provider.deprovision) { out.push('{{ lang._("deprovisions on refusal") }}'); }
+            if (provider.scim) { out.push('<span class="text-success">{{ lang._("SCIM provisioning") }}</span>'); }
             out.push(provider.session_lifetime > 0
-                ? 'session lifetime: ' + provider.session_lifetime + 's'
-                : '<span class="text-muted">no maximum session lifetime</span>');
+                ? '{{ lang._("session lifetime:") }} ' + provider.session_lifetime + 's'
+                : '<span class="text-muted">{{ lang._("no maximum session lifetime") }}</span>');
             if (!provider.base_url_configured) {
-                out.push('<span class="text-danger">Base URL not set (derived from the request Host)</span>');
+                out.push('<span class="text-danger">{{ lang._("Base URL not set (derived from the request Host)") }}</span>');
             }
             return out.join(' &middot; ');
         }
