@@ -11,6 +11,7 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\JWK;
 use OPNsense\SSO\ClaimPath;
 use OPNsense\SSO\ClientAuth;
+use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
 
@@ -131,7 +132,7 @@ final class OidcProtocol implements ProtocolInterface
         $this->lastState = $state;
         $_SESSION[$this->skey('state')] = $state;
         $_SESSION[$this->skey('nonce')] = $nonce;
-        $_SESSION[$this->skey('return')] = $this->sanitizeReturnUrl($returnUrl);
+        $_SESSION[$this->skey('return')] = ReturnUrl::sanitize($returnUrl);
 
         $params = [
             'response_type' => 'code',
@@ -418,7 +419,7 @@ final class OidcProtocol implements ProtocolInterface
     {
         $url = $_SESSION[$this->skey('return')] ?? '/';
         unset($_SESSION[$this->skey('return')]);
-        return $this->sanitizeReturnUrl((string)$url);
+        return ReturnUrl::sanitize((string)$url);
     }
 
     /** Per-provider session key for the in-flight single-use material. */
@@ -978,20 +979,4 @@ final class OidcProtocol implements ProtocolInterface
         return rtrim(strtr(base64_encode(random_bytes($bytes)), '+/', '-_'), '=');
     }
 
-    /**
-     * Only allow same-host relative return paths -- defeats open redirect (CWE-601).
-     * Rejects "//host" AND "/\host": browsers normalise "\" to "/", so "/\evil.com"
-     * would resolve to a protocol-relative URL. Also strips CR/LF/TAB (header split).
-     */
-    private function sanitizeReturnUrl(string $url): string
-    {
-        if (
-            $url === '' || $url[0] !== '/'
-            || str_starts_with($url, '//') || str_starts_with($url, '/\\')
-            || strpbrk($url, "\\\r\n\t") !== false
-        ) {
-            return '/';
-        }
-        return $url;
-    }
 }

@@ -20,6 +20,7 @@ use OPNsense\SSO\ClientAuth;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\RateLimiter;
+use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\OidcProtocol;
 
@@ -381,29 +382,10 @@ class OidcController extends ApiControllerBase
         ]);
     }
 
-    /**
-     * Post-login landing path: an explicit originally-requested page wins; otherwise
-     * use the provider's configured default landing (same-site only), else '/'.
-     */
+    /** Post-login landing path: requested page, else the configured default (ReturnUrl). */
     private function landing(string $returnUrl, $auth): string
     {
-        if ($returnUrl !== '' && $returnUrl !== '/') {
-            return $returnUrl;
-        }
-        return $this->sanitizeReturn(trim((string)($auth->ssoLoginRedirect ?? '')));
-    }
-
-    /** Same-host relative path only (open redirect / CWE-601). */
-    private function sanitizeReturn(string $url): string
-    {
-        if (
-            $url === '' || $url[0] !== '/'
-            || str_starts_with($url, '//') || str_starts_with($url, '/\\')
-            || strpbrk($url, "\\\r\n\t") !== false
-        ) {
-            return '/';
-        }
-        return $url;
+        return ReturnUrl::landing($returnUrl, (string)($auth->ssoLoginRedirect ?? ''));
     }
 
     /** Configured Base URL override for this provider, else a vetted auto-detect. */

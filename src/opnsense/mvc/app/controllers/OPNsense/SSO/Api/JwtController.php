@@ -14,6 +14,7 @@ use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\RateLimiter;
+use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\SourceGate;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\Protocol\JwtProtocol;
@@ -140,13 +141,13 @@ class JwtController extends ApiControllerBase
         return $auth;
     }
 
-    /** Read the JWT from $_SERVER, stripping an optional "Bearer " prefix. */
     /** Direct TCP peer -- never a forwardable header. */
     private function clientIp(): string
     {
         return (string)($_SERVER['REMOTE_ADDR'] ?? '');
     }
 
+    /** Read the JWT from $_SERVER, stripping an optional "Bearer " prefix. */
     private function readToken(string $headerName): string
     {
         $key = 'HTTP_' . strtoupper(str_replace('-', '_', $headerName));
@@ -160,27 +161,10 @@ class JwtController extends ApiControllerBase
         return trim($val);
     }
 
-    /** Post-login landing: explicit requested page wins, else the configured default. */
+    /** Post-login landing path: requested page, else the configured default (ReturnUrl). */
     private function landing(string $returnUrl, $auth): string
     {
-        $returnUrl = $this->sanitizeReturn($returnUrl);
-        if ($returnUrl !== '/') {
-            return $returnUrl;
-        }
-        return $this->sanitizeReturn(trim((string)($auth->ssoLoginRedirect ?? '')));
-    }
-
-    /** Same-host relative path only (open redirect / CWE-601). */
-    private function sanitizeReturn(string $url): string
-    {
-        if (
-            $url === '' || $url[0] !== '/'
-            || str_starts_with($url, '//') || str_starts_with($url, '/\\')
-            || strpbrk($url, "\\\r\n\t") !== false
-        ) {
-            return '/';
-        }
-        return $url;
+        return ReturnUrl::landing($returnUrl, (string)($auth->ssoLoginRedirect ?? ''));
     }
 
     private function startSession(): void

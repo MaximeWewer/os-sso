@@ -9,6 +9,7 @@ namespace OPNsense\SSO\Protocol;
 
 use OneLogin\Saml2\Auth as Saml2Auth;
 use OPNsense\SSO\NormalizedIdentity;
+use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\StateDir;
 
 /**
@@ -101,7 +102,7 @@ final class SamlProtocol implements ProtocolInterface
         // POST is cross-site.
         $this->saveState((string) $auth->getLastRequestID(), [
             "provider" => (string) ($this->cfg["provider_name"] ?? ""),
-            "return" => $this->sanitizeReturnUrl($returnUrl),
+            "return" => ReturnUrl::sanitize($returnUrl),
             "vpn" => preg_replace('/[^a-f0-9]/', '', $vpn),
             "cp" => preg_replace('/[^0-9]/', '', $cp),
             "cpurl" => $cpurl,
@@ -147,7 +148,7 @@ final class SamlProtocol implements ProtocolInterface
     ): NormalizedIdentity {
         // Stash the recovered return URL so consumeReturnUrl() satisfies the
         // ProtocolInterface contract uniformly with the OIDC protocol.
-        $this->returnUrl = $this->sanitizeReturnUrl((string) ($state["return"] ?? "/"));
+        $this->returnUrl = ReturnUrl::sanitize((string) ($state["return"] ?? "/"));
         if ($requestId === "" && empty($this->cfg["allow_idp_initiated"])) {
             // No AuthnRequest of ours to tie this to. Unless the operator opted into
             // IdP-initiated SSO, that is an unsolicited response and we refuse it:
@@ -278,7 +279,7 @@ final class SamlProtocol implements ProtocolInterface
     {
         $url = $this->returnUrl;
         $this->returnUrl = '/';
-        return $this->sanitizeReturnUrl($url);
+        return ReturnUrl::sanitize($url);
     }
 
     /**
@@ -689,17 +690,4 @@ final class SamlProtocol implements ProtocolInterface
         return ["x509certMulti" => ["signing" => $certs]];
     }
 
-    private function sanitizeReturnUrl(string $url): string
-    {
-        // Reject "//host" AND "/\host" (browsers fold "\"->"/" => protocol-relative)
-        // and any CR/LF/TAB (header split). Same-host relative paths only (CWE-601).
-        if (
-            $url === "" || $url[0] !== "/"
-            || str_starts_with($url, "//") || str_starts_with($url, "/\\")
-            || strpbrk($url, "\\\r\n\t") !== false
-        ) {
-            return "/";
-        }
-        return $url;
-    }
 }

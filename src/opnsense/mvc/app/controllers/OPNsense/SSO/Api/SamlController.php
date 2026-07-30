@@ -19,6 +19,7 @@ use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\RateLimiter;
+use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\SamlMetadata;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\SamlProtocol;
@@ -171,7 +172,7 @@ class SamlController extends ApiControllerBase
                 'nameid_format' => $protocol->getLastNameIdFormat(),
             ];
             session_write_close();
-            $returnUrl = $this->landing($this->sanitizeReturn($state['return'] ?? '/'), $auth);
+            $returnUrl = $this->landing((string)($state['return'] ?? '/'), $auth);
         } catch (\Throwable $e) {
             return $this->fail($e);
         }
@@ -490,30 +491,10 @@ class SamlController extends ApiControllerBase
         }
     }
 
-    /**
-     * Post-login landing path: an explicit originally-requested page wins; otherwise
-     * use the provider's configured default landing (same-site only), else '/'.
-     */
+    /** Post-login landing path: requested page, else the configured default (ReturnUrl). */
     private function landing(string $returnUrl, $auth): string
     {
-        if ($returnUrl !== '' && $returnUrl !== '/') {
-            return $returnUrl;
-        }
-        return $this->sanitizeReturn(trim((string)($auth->ssoLoginRedirect ?? '')));
-    }
-
-    /** Same-host relative path only (open redirect / CWE-601). Rejects "//host",
-     *  "/\host" (browsers fold "\"->"/") and CR/LF/TAB (header split). */
-    private function sanitizeReturn(string $url): string
-    {
-        if (
-            $url === '' || $url[0] !== '/'
-            || str_starts_with($url, '//') || str_starts_with($url, '/\\')
-            || strpbrk($url, "\\\r\n\t") !== false
-        ) {
-            return '/';
-        }
-        return $url;
+        return ReturnUrl::landing($returnUrl, (string)($auth->ssoLoginRedirect ?? ''));
     }
 
     /** Configured Base URL override for this provider, else a vetted auto-detect. */
