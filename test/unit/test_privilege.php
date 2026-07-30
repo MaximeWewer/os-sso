@@ -40,6 +40,12 @@ $root = Tree::build([
     ['name' => 'boss', 'uid' => '2101', 'scope' => 'user'],
     ['name' => 'ordinary', 'uid' => '2102', 'scope' => 'user'],
     ['name' => 'nouid', 'scope' => 'user'],
+    // Privileges granted on the account itself, no admins membership anywhere: the
+    // "LDAP-backed administrator" shape.
+    ['name' => 'directadmin', 'uid' => '2103', 'scope' => 'user', 'priv' => ['page-all']],
+    ['name' => 'shelluser', 'uid' => '2104', 'scope' => 'user', 'priv' => ['user-shell-access']],
+    ['name' => 'usermgr', 'uid' => '2105', 'scope' => 'user', 'priv' => ['page-dashboard-all,page-system-usermanager']],
+    ['name' => 'reader', 'uid' => '2106', 'scope' => 'user', 'priv' => ['page-dashboard-all']],
 ], [
     ['name' => 'admins', 'gid' => '1999', 'member' => '2101'],
     ['name' => 'staff', 'gid' => '2000', 'member' => '2102'],
@@ -50,6 +56,10 @@ truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'sysacct')), 'a system-s
 truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'boss')), 'a member of admins is privileged');
 falsy(Privilege::isPrivilegedAccount(Tree::user($root, 'ordinary')), 'a member of an ordinary group is not');
 falsy(Privilege::isPrivilegedAccount(Tree::user($root, 'nouid')), 'an account with no uid is not');
+truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'directadmin')), 'page-all on the account itself is privileged');
+truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'shelluser')), 'user-shell-access on the account is privileged');
+truthy(Privilege::isPrivilegedAccount(Tree::user($root, 'usermgr')), 'page-system-usermanager inside a csv priv list is found');
+falsy(Privilege::isPrivilegedAccount(Tree::user($root, 'reader')), 'an ordinary page privilege on the account is not escalation');
 
 // LocalAccountWriter delegates now; prove the public entry point still answers the same,
 // since IdentityMapper and ScimUsers gate on it.

@@ -111,7 +111,11 @@ final class Tree
         foreach ($users as $user) {
             $node = $root->system->addChild('user');
             foreach ($user as $key => $value) {
-                $node->addChild((string)$key, htmlspecialchars((string)$value, ENT_XML1));
+                // An array value becomes repeated children, the shape config.xml uses
+                // for a user's own <priv> entries and for os-sso's <sso_subject>.
+                foreach (is_array($value) ? $value : [$value] as $entry) {
+                    $node->addChild((string)$key, htmlspecialchars((string)$entry, ENT_XML1));
+                }
             }
         }
         \OPNsense\Core\Config::useTree($root);

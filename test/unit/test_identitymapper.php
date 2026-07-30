@@ -154,6 +154,19 @@ throws(
     'a privileged passwordless account is refused'
 );
 
+// Same escalation without the group: OPNsense also grants privileges on the account
+// itself, and an administrator configured that way is just as often the one wearing the
+// "prevent local database logins" checkbox.
+$root = Tree::build([
+    ['name' => 'directadmin', 'uid' => '2103', 'password' => '*', 'scrambled_password' => '1',
+     'priv' => ['page-all']],
+]);
+throws(
+    fn() => mapper()->resolve(identity(['subject' => 's', 'username' => 'directadmin']), false, []),
+    'refusing to bind to privileged local account',
+    'an account carrying page-all of its own is refused'
+);
+
 // An account os-sso itself created may be privileged and still bind: the operator put it
 // in admins on purpose, and the stamp proves whose it is.
 $root = Tree::build([

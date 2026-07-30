@@ -67,12 +67,17 @@ $root = Tree::build([
     ['name' => 'human', 'uid' => '2101', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
     ['name' => 'theirs', 'uid' => '2102', 'scrambled_password' => '1', 'scim_ref' => 'other|ext-x'],
     ['name' => 'loggedin', 'uid' => '2103', 'scrambled_password' => '1', 'sso_subject' => 'other|sub-y'],
+    // Privileges granted on the account rather than through admins: deactivating this
+    // one over SCIM would lock the firewall's administrator out.
+    ['name' => 'directadmin', 'uid' => '2104', 'scrambled_password' => '1',
+     'scim_ref' => 'kc|ext-direct', 'priv' => ['page-all']],
 ], [
     ['name' => 'admins', 'gid' => '1999', 'member' => '2100'],
 ]);
 
 throws(fn() => $users()->deactivate('2100'), 'privileged', 'a privileged account is never deactivated');
 throws(fn() => $users()->replace('2100', ['userName' => 'boss']), 'privileged', 'nor replaced');
+throws(fn() => $users()->deactivate('2104'), 'privileged', 'an account carrying page-all of its own either');
 throws(fn() => $users()->get('2101'), 'not found', 'a password account is not even addressable');
 
 // Cross-provider: enabling SCIM on one authentication server must not hand it another's

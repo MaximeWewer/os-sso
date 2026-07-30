@@ -41,10 +41,18 @@ final class Privilege
      */
     public static function isPrivilegedGroup(\SimpleXMLElement $group): bool
     {
-        if (strtolower((string)$group->name) === 'admins') {
-            return true;
-        }
-        foreach ($group->priv as $priv) {
+        return strtolower((string)$group->name) === 'admins' || self::hasEscalationPriv($group);
+    }
+
+    /**
+     * Does this node's own <priv> list carry a privilege that amounts to owning the
+     * firewall? Shared by groups and accounts: a <priv> element is the same
+     * comma-separated list on both, and an escalation privilege means the same thing
+     * whichever one holds it.
+     */
+    private static function hasEscalationPriv(\SimpleXMLElement $node): bool
+    {
+        foreach ($node->priv as $priv) {
             foreach (array_filter(array_map('trim', explode(',', (string)$priv))) as $p) {
                 if (in_array($p, self::ESCALATION_PRIVS, true)) {
                     return true;
@@ -55,14 +63,25 @@ final class Privilege
     }
 
     /**
-     * A built-in/system account, root, or a member of the admins group.
+     * A built-in/system account, root, an account carrying an escalation privilege of
+     * its own, or a member of the admins group.
      *
-     * Membership is read from config.xml rather than taken from the node, because the
-     * node knows its uid and nothing else -- the group holds the list.
+     * The direct privileges matter as much as the group ones: OPNsense lets an operator
+     * grant page-all (or a shell, or the user manager) on the account itself, and an
+     * administrator configured that way is frequently also the one wearing the WebGUI's
+     * "prevent local database logins" checkbox -- so without this the account reads as
+     * unprivileged AND as having no usable local password, which is precisely the
+     * combination IdentityMapper and the SCIM writes are allowed to take over.
+     *
+     * Group membership is read from config.xml rather than taken from the node, because
+     * the node knows its uid and nothing else -- the group holds the list.
      */
     public static function isPrivilegedAccount(\SimpleXMLElement $node): bool
     {
         if ((string)($node->scope ?? '') === 'system' || (string)($node->uid ?? '') === '0') {
+            return true;
+        }
+        if (self::hasEscalationPriv($node)) {
             return true;
         }
         $uid = (string)($node->uid ?? '');
