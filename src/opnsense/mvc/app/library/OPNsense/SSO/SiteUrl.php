@@ -134,6 +134,10 @@ final class SiteUrl
         // Same reasoning as ownNames(): SERVER_NAME mirrors the Host header, so it
         // cannot be the safe fallback for a Host we just refused.
         $addr = trim((string)($_SERVER['SERVER_ADDR'] ?? ''));
-        return $addr !== '' ? $addr : 'localhost';
+        if ($addr === '') {
+            return 'localhost';
+        }
+        // An IPv6 literal needs its brackets back to be a URL authority.
+        return str_contains($addr, ':') ? '[' . trim($addr, '[]') . ']' : $addr;
     }
 }
