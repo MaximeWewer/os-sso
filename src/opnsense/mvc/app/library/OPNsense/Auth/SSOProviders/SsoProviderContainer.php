@@ -8,6 +8,7 @@
 namespace OPNsense\Auth\SSOProviders;
 
 use OPNsense\Core\Config;
+use OPNsense\SSO\ServiceScope;
 
 /**
  * Single coupling point with the login page. Implements the core ISSOContainer
@@ -41,6 +42,10 @@ class SsoProviderContainer implements ISSOContainer
             if ($label === '') {
                 $label = $name;
             }
+            // Where the operator said this provider applies. Read from config.xml rather
+            // than from the connector: this runs on the login page, for every configured
+            // server, before anyone has authenticated.
+            $services = ServiceScope::parse((string)($server->sso_services ?? ''));
 
             $loginUri = sprintf('/api/sso/%s/login?provider=%s', $type, rawurlencode($name));
             $iconUri = sprintf('/api/sso/%s/icon?provider=%s', $type, rawurlencode($name));
@@ -50,7 +55,7 @@ class SsoProviderContainer implements ISSOContainer
             // The zone id + return URL are appended by the portal page at click time.
             // JWT forward-auth is proxy-header based and does not fit a captive client,
             // so it is offered on the WebGUI only.
-            if ($type !== 'jwt') {
+            if ($type !== 'jwt' && ServiceScope::allows($services, ServiceScope::PORTAL)) {
                 $cpProviders[] = new Provider([
                     'id' => 'sso-cp-' . $type . '-' . $name,
                     'appcode' => $type,
@@ -58,6 +63,10 @@ class SsoProviderContainer implements ISSOContainer
                     'name' => $label,
                     'login_uri' => $loginUri,
                 ]);
+            }
+
+            if (!ServiceScope::allows($services, ServiceScope::WEBGUI)) {
+                continue; // portal- or VPN-only: no button on the firewall login page
             }
 
             // Full-width button: "Login with XXX" with the IdP favicon to the right.

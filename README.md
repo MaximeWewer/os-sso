@@ -78,6 +78,7 @@ own help in the form; below is only what is easy to get wrong, and shared by all
 
 | Option | What to watch |
 |---|---|
+| **Applies to** | Which of *webgui*, *portal*, *vpn* this provider serves. Empty = all three, so a provider added for the portal is also a WebGUI door. |
 | **Base URL** (required, OIDC/SAML) | Every URL the IdP is given is built from it; the fallback would trust the request `Host`. Mind a reverse proxy or port-forward. |
 | **Username claim/attribute** | Must be immutable and IdP-administered: `preferred_username`, not `email`. |
 | **Required groups** | Empty lets in *every* account the IdP authenticates - WebGUI, portal and VPN alike. |

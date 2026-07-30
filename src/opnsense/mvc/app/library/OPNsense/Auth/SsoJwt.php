@@ -36,6 +36,7 @@ class SsoJwt extends Local implements IAuthConnector
     public $ssoScimEnabled = false;
     public $ssoScimToken = null;
     public $ssoScimTrusted = [];
+    public $ssoServices = [];
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
     public $ssoDeprovision = false;
@@ -75,6 +76,7 @@ class SsoJwt extends Local implements IAuthConnector
                 $this->$prop = $config[$k];
             }
         }
+        $this->ssoServices = \OPNsense\SSO\ServiceScope::parse($config['sso_services'] ?? '');
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
         $this->ssoScimEnabled = !empty($config['sso_scim_enabled']);
         $this->ssoScimTrusted = array_filter(array_map('trim', explode(',', $config['sso_scim_trusted'] ?? '')));

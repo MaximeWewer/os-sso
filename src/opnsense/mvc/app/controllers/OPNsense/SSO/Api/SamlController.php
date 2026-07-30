@@ -23,6 +23,7 @@ use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\SamlMetadata;
+use OPNsense\SSO\ServiceScope;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\SamlProtocol;
 
@@ -67,12 +68,16 @@ class SamlController extends ApiControllerBase
             NavigationGuard::assertNavigation();
             RateLimiter::hit('saml-login', $this->clientIp(), 60);
             $provider = $this->request->get('provider');
-            $protocol = $this->protocolFor($provider);
+            $auth = $this->authServer($provider);
             // OpenVPN deferred web-auth: carry the one-time VPN session id in the
             // server-side state so the ACS can authorize the tunnel. Captive Portal:
             // carry the zone id + the client's original destination likewise.
             $vpn = (string)$this->request->get('vpn');
             $cp = (string)($this->request->get('cp') ?? '');
+            // Which of the three doors this login is for, and whether this provider was
+            // offered for it. Checked again at the ACS, which is where it binds.
+            ServiceScope::assert((array)$auth->ssoServices, self::serviceFor($vpn, $cp), (string)$provider);
+            $protocol = $this->protocolFor($provider, $auth);
             // Validated here, at the door: the portal page filters it too, but a
             // crafted login link never goes through the portal page.
             $cpurl = CaptivePortalAuthorizer::sanitizeRedirect((string)($this->request->get('cpurl') ?? ''));
@@ -121,6 +126,15 @@ class SamlController extends ApiControllerBase
 
             $identity = $protocol->handleCallback($_POST, $inResponseTo, $state);
             $identity->authServer = (string)$provider;
+
+            // The door this assertion is about to open has to be one this provider was
+            // offered for. The state was written by our own /login, but an operator can
+            // narrow a provider between the two.
+            ServiceScope::assert(
+                (array)$auth->ssoServices,
+                self::serviceFor((string)($state['vpn'] ?? ''), (string)($state['cp'] ?? '')),
+                (string)$provider
+            );
 
             // Provider-level door policy, before ANY path below (captive portal, VPN
             // or WebGUI) and before any local account is touched or created.
@@ -506,6 +520,15 @@ class SamlController extends ApiControllerBase
     private function clientIp(): string
     {
         return (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    }
+
+    /** Which door a flow is for, from the two parameters that mark the other two. */
+    private static function serviceFor(string $vpn, string $cp): string
+    {
+        if ($cp !== '') {
+            return ServiceScope::PORTAL;
+        }
+        return $vpn !== '' ? ServiceScope::VPN : ServiceScope::WEBGUI;
     }
 
     /**

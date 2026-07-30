@@ -23,6 +23,7 @@ use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
+use OPNsense\SSO\ServiceScope;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\OidcProtocol;
 
@@ -70,9 +71,7 @@ class OidcController extends ApiControllerBase
             NavigationGuard::assertNavigation();
             RateLimiter::hit('oidc-login', $this->clientIp(), 60);
             $provider = $this->request->get('provider');
-            $protocol = $this->protocolFor($provider);
-            $returnUrl = (string)($this->request->get('url') ?? '/');
-            $url = $protocol->startLogin($returnUrl);
+            $auth = $this->authServer($provider);
 
             // OpenVPN deferred web-auth: the one-time VPN session id, and Captive
             // Portal deferred login: the zone id + the client's original destination.
@@ -80,6 +79,15 @@ class OidcController extends ApiControllerBase
             // tunnel / captive client instead of opening a WebGUI session.
             $vpn = preg_replace('/[^a-f0-9]/', '', (string)$this->request->get('vpn'));
             $cp = preg_replace('/[^0-9]/', '', (string)$this->request->get('cp'));
+            // Which of the three doors this login is for, and whether this provider was
+            // offered for it. Checked here so a ceremony that could not be honoured is
+            // never started, and again at the callback, which is where it binds.
+            ServiceScope::assert((array)$auth->ssoServices, self::serviceFor($vpn, $cp), (string)$provider);
+
+            $protocol = $this->protocolFor($provider, $auth);
+            $returnUrl = (string)($this->request->get('url') ?? '/');
+            $url = $protocol->startLogin($returnUrl);
+
             // Validated here, at the door: the portal page filters it too, but a
             // crafted login link never goes through the portal page.
             $cpurl = $cp !== ''
@@ -132,6 +140,14 @@ class OidcController extends ApiControllerBase
             $identity = $protocol->handleCallback($response);
             $identity->authServer = (string)$provider;
 
+            $cp = is_array($flow) ? (string)($flow['cp'] ?? '') : '';
+            $cpurl = is_array($flow) ? (string)($flow['cpurl'] ?? '') : '';
+            $vpn = is_array($flow) ? (string)($flow['vpn'] ?? '') : '';
+            // The door this login is about to open has to be one this provider was
+            // offered for. Asserted again here, not only at /login: this is the request
+            // that authorizes something.
+            ServiceScope::assert((array)$auth->ssoServices, self::serviceFor($vpn, $cp), (string)$provider);
+
             // Provider-level door policy, before ANY path below (captive portal, VPN
             // or WebGUI) and before any local account is touched or created.
             AccessPolicy::assert((array)$auth->ssoRequiredGroups, $identity, (bool)$auth->ssoDeprovision);
@@ -140,8 +156,6 @@ class OidcController extends ApiControllerBase
             // WebGUI session, and no local account required -- evaluated from the
             // verified identity and the zone's group policy before any mapping, though
             // an account that IS there must not be disabled.
-            $cp = is_array($flow) ? (string)($flow['cp'] ?? '') : '';
-            $cpurl = is_array($flow) ? (string)($flow['cpurl'] ?? '') : '';
             if ($cp !== '') {
                 $cpRes = CaptivePortalAuthorizer::authorize(
                     $cp,
@@ -167,7 +181,6 @@ class OidcController extends ApiControllerBase
 
             // OpenVPN deferred web-auth path: authorize the tunnel, do NOT open a
             // WebGUI admin session (different security context).
-            $vpn = is_array($flow) ? (string)($flow['vpn'] ?? '') : '';
             if ($vpn !== '') {
                 VpnAuthorizer::authorize($vpn, $username, (string)($_SERVER['REMOTE_ADDR'] ?? ''));
                 session_write_close();
@@ -417,6 +430,15 @@ class OidcController extends ApiControllerBase
     private function clientIp(): string
     {
         return (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    }
+
+    /** Which door a flow is for, from the two parameters that mark the other two. */
+    private static function serviceFor(string $vpn, string $cp): string
+    {
+        if ($cp !== '') {
+            return ServiceScope::PORTAL;
+        }
+        return $vpn !== '' ? ServiceScope::VPN : ServiceScope::WEBGUI;
     }
 
     /**

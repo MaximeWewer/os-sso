@@ -41,6 +41,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoScimEnabled = false;
     public $ssoScimToken = null;
     public $ssoScimTrusted = [];
+    public $ssoServices = [];
     public $ssoCreateUsers = false;
     public $ssoRequiredGroups = [];
     public $ssoDeprovision = false;
@@ -93,6 +94,7 @@ class SsoOidc extends Local implements IAuthConnector
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
             $this->ssoMaxAge = (int)$config['sso_max_age'];
         }
+        $this->ssoServices = \OPNsense\SSO\ServiceScope::parse($config['sso_services'] ?? '');
         $this->ssoCreateUsers = !empty($config['sso_create_users']);
         $this->ssoScimEnabled = !empty($config['sso_scim_enabled']);
         $this->ssoScimTrusted = array_filter(array_map('trim', explode(',', $config['sso_scim_trusted'] ?? '')));
@@ -271,6 +273,18 @@ class SsoOidc extends Local implements IAuthConnector
                 'default' => '0',
                 'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))
                     ? [] : [gettext('Maximum session lifetime must be a number of seconds (0 = disabled).')],
+            ],
+            'sso_services' => [
+                'name' => gettext('Applies to'),
+                'help' => gettext('Where this provider may be used, comma separated: "webgui", "portal" '
+                    . '(captive portal), "vpn". Empty means all three, which is what it was before this '
+                    . 'setting existed. It matters because every provider otherwise puts a button on the '
+                    . 'firewall login page: a provider added for guest wifi, or for the VPN, is also a '
+                    . 'WebGUI door - and one left without required groups because the portal zone does its '
+                    . 'own group check then admits the whole directory to the WebGUI.'),
+                'type' => 'text',
+                'validate' => fn($v) => empty(\OPNsense\SSO\ServiceScope::unknown((string)$v))
+                    ? [] : [gettext('Applies to accepts only: ') . join(', ', \OPNsense\SSO\ServiceScope::SERVICES)],
             ],
             'sso_create_users' => [
                 'name' => gettext('Automatic user creation'),

@@ -16,6 +16,7 @@ use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
+use OPNsense\SSO\ServiceScope;
 use OPNsense\SSO\SourceGate;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\Protocol\JwtProtocol;
@@ -54,6 +55,13 @@ class JwtController extends ApiControllerBase
             // all, so it must at least be a navigation the user's browser made.
             NavigationGuard::assertNavigation();
             $auth = $this->authServer($this->request->get('provider'));
+            // Forward-auth opens a WebGUI session and nothing else, so a provider the
+            // operator narrowed to the portal or the VPN has no business here.
+            ServiceScope::assert(
+                (array)$auth->ssoServices,
+                ServiceScope::WEBGUI,
+                (string)$this->request->get('provider')
+            );
 
             // SOURCE GATE -- before reading any header. The TCP peer must be a
             // configured trusted proxy; client-supplied XFF is deliberately ignored.
