@@ -251,17 +251,43 @@ final class ClientAuth
         ];
     }
 
-    /** Write a PEM to a private file named after its own digest, and return the path. */
+    /** How long a staged PEM nobody has used survives. */
+    private const STAGED_TTL = 2592000; // 30 days
+
+    /**
+     * Write a PEM to a private file named after its own digest, and return the path.
+     *
+     * The name is the digest, so a rotated certificate or key is written next to the old
+     * one rather than over it -- and the old one is a private key that stays on disk for
+     * good unless something removes it. Each use refreshes the file's timestamp, so
+     * "nobody has presented this in a month" is a safe reading of "no provider uses it
+     * any more".
+     */
     private static function materialise(string $kind, string $pem): string
     {
-        $file = StateDir::path('oidc-mtls') . '/' . $kind . '-' . hash('sha256', $pem) . '.pem';
+        $dir = StateDir::path('oidc-mtls');
+        $file = $dir . '/' . $kind . '-' . hash('sha256', $pem) . '.pem';
         if (!is_file($file) || (string)@file_get_contents($file) !== $pem) {
             if (@file_put_contents($file, $pem, LOCK_EX) === false) {
                 throw new \RuntimeException('OIDC: cannot stage the mutual-TLS ' . $kind);
             }
             @chmod($file, 0600);
+        } else {
+            @touch($file); // still in use
         }
+        self::sweepStaged($dir);
         return $file;
+    }
+
+    /** Drop staged key material no token request has needed in a long while. */
+    private static function sweepStaged(string $dir): void
+    {
+        $now = time();
+        foreach (glob($dir . '/*.pem') ?: [] as $staged) {
+            if (($now - (int)@filemtime($staged)) > self::STAGED_TTL) {
+                @unlink($staged);
+            }
+        }
     }
 
     private function requireSecret(string $method): string

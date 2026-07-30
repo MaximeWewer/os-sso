@@ -165,6 +165,30 @@ eq(
     'with no alias published, the normal endpoint is used'
 );
 
+// curl wants paths, so the certificate pair is staged on disk. Named after its own
+// digest, a rotated key is written beside the old one -- and the old one is a private
+// key, so it must not stay there for good.
+if (stateDirUsable()) {
+    $stagedDir = \OPNsense\SSO\StateDir::path('oidc-mtls');
+    $pair = ['client_id' => 'c', 'tls_cert' => "-- CERT --\n", 'tls_key' => "-- KEY --\n"];
+    $options = [];
+    $headers = [];
+    $body = [];
+    (new ClientAuth($pair))->apply($disco, ClientAuth::TLS, $body, $headers, $options);
+    $cert = (string)($options[CURLOPT_SSLCERT] ?? '');
+    truthy(is_file($cert), 'the certificate is staged on disk');
+    eq(0, fileperms($cert) & 0077, 'and readable by nobody else');
+
+    $stale = $stagedDir . '/cert-' . str_repeat('0', 64) . '.pem';
+    file_put_contents($stale, 'old');
+    touch($stale, time() - 60 * 86400);
+    (new ClientAuth($pair))->apply($disco, ClientAuth::TLS, $body, $headers, $options);
+    falsy(is_file($stale), 'material nothing has presented in a month is dropped');
+    truthy(is_file($cert), 'while the pair still in use is kept');
+    @unlink($cert);
+    @unlink((string)($options[CURLOPT_SSLKEY] ?? ''));
+}
+
 T::group('ClientAuth: the published JWKS carries public material only');
 
 $jwks = ClientAuth::publicJwks($rsaPem, 'RS256', 'k1');
