@@ -14,13 +14,17 @@ namespace OPNsense\SSO;
  * <link rel="icon"> of the IdP home page.
  *
  * SSRF hardening (this endpoint is pre-auth):
- *   - https only, on the request AND on every redirect (CURLOPT_*PROTOCOLS).
- *   - the host is pinned to the operator-configured issuer origin: redirects that
- *     leave that host are rejected (effective-URL host check), and an absolute
- *     <link href> pointing off-origin is ignored.
- *   - literal private / loopback / link-local / reserved IPs are refused outright.
+ *   - https only (CURLOPT_PROTOCOLS).
+ *   - everything stays inside the operator-configured issuer origin, port included:
+ *     redirects are followed by us rather than by curl and each hop is checked
+ *     BEFORE it is requested, and an absolute <link href> pointing off-origin is
+ *     ignored. Letting curl chase a Location would put the request on the wire first
+ *     and leave us judging the effective URL afterwards, which is a blind SSRF.
+ *   - literal private / loopback / link-local / reserved IPs are refused outright,
+ *     and the vetted addresses are pinned into curl (no attacker-timed re-resolve).
  *   - the result is cached on disk, so an anonymous caller cannot use the pre-auth
  *     icon endpoint as an outbound request amplifier.
+ *   - only raster image types come back out (see asIcon).
  */
 final class FaviconProxy
 {
@@ -28,6 +32,7 @@ final class FaviconProxy
     private const MAX_BYTES = 262144; // 256 KiB
     private const CACHE_TTL = 86400;  // a favicon is not a moving target
     private const MISS_TTL = 3600;    // remember "no icon" too, or we retry forever
+    private const MAX_REDIRECTS = 3;  // hops followed inside the pinned origin
 
     /**
      * Cached favicon fetch.
@@ -75,7 +80,7 @@ final class FaviconProxy
             throw new \RuntimeException('icon: refusing non-public issuer host');
         }
         // Resolve the host once and vet every address, then pin curl to those IPs.
-        // Closes the DNS-rebinding window the effective-URL host check alone cannot:
+        // Closes the DNS-rebinding window an origin check on its own cannot:
         // a hostname that resolves to an internal/loopback IP is refused here, and
         // curl is not allowed a second (attacker-timed) resolution.
         $ips = self::resolveHostIps($host);
@@ -87,21 +92,21 @@ final class FaviconProxy
         $origin = 'https://' . $host . (isset($p['port']) ? ':' . $p['port'] : '');
 
         // 1. the conventional /favicon.ico
-        $icon = self::asIcon(self::get($origin . '/favicon.ico', $host, $resolve));
+        $icon = self::asIcon(self::get($origin . '/favicon.ico', $origin, $resolve));
         if ($icon !== null) {
             return $icon;
         }
 
         // 2. parse the home page for a <link rel="icon" href="...">
-        $home = self::get($origin . '/', $host, $resolve);
+        $home = self::get($origin . '/', $origin, $resolve);
         if ($home !== null && preg_match(
             '/<link[^>]+rel=["\'][^"\']*icon[^"\']*["\'][^>]*>/i',
             $home['data'],
             $m
         ) && preg_match('/href=["\']([^"\']+)["\']/i', $m[0], $h)) {
-            $href = self::resolveHref($h[1], $origin, $host);
+            $href = self::resolveHref($h[1], $origin);
             if ($href !== null) {
-                $icon = self::asIcon(self::get($href, $host, $resolve));
+                $icon = self::asIcon(self::get($href, $origin, $resolve));
                 if ($icon !== null) {
                     return $icon;
                 }
@@ -218,10 +223,14 @@ final class FaviconProxy
     }
 
     /**
-     * Resolve a <link href> against the origin, refusing anything that would point
-     * off the issuer host (an absolute URL to another host is an SSRF lever).
+     * Resolve a <link href> against the origin, refusing anything that would point off
+     * it (an absolute URL elsewhere is an SSRF lever).
+     *
+     * Compared as a whole origin, port included: only the origin we resolved and pinned
+     * is reachable over the pinned IPs, so a same-host href on a different port would
+     * be fetched with a fresh, unpinned DNS lookup.
      */
-    private static function resolveHref(string $href, string $origin, string $originHost): ?string
+    private static function resolveHref(string $href, string $origin): ?string
     {
         if (str_starts_with($href, '//')) {
             $href = 'https:' . $href;
@@ -230,23 +239,34 @@ final class FaviconProxy
         } elseif (!preg_match('#^https?://#i', $href)) {
             return $origin . '/' . $href; // relative
         }
-        // Absolute URL: must be https and stay on the issuer host.
-        $hp = parse_url($href);
-        if (
-            empty($hp['scheme']) || strtolower($hp['scheme']) !== 'https'
-            || empty($hp['host']) || strcasecmp((string)$hp['host'], $originHost) !== 0
-        ) {
-            return null;
+        return self::isSameOrigin($href, $origin) ? $href : null;
+    }
+
+    /** Normalised https origin of a URL ('' when it is not usable as one). */
+    private static function originOf(string $url): string
+    {
+        $p = parse_url($url);
+        if (empty($p['scheme']) || strtolower((string)$p['scheme']) !== 'https' || empty($p['host'])) {
+            return '';
         }
-        return $href;
+        return 'https://' . strtolower((string)$p['host'])
+            . (isset($p['port']) ? ':' . (int)$p['port'] : '');
+    }
+
+    private static function isSameOrigin(string $url, string $origin): bool
+    {
+        $a = self::originOf($url);
+        return $a !== '' && $a === self::originOf($origin);
     }
 
     /**
-     * @param string $allowedHost the issuer host; the final (post-redirect) URL must
-     *                            still resolve to it, otherwise the response is dropped
+     * One HTTPS GET inside the pinned origin, following redirects ourselves.
+     *
+     * @param string $allowedOrigin the origin resolved and pinned by fetchLive; every
+     *                              hop must stay inside it
      * @return array{type:string,data:string}|null
      */
-    private static function get(string $url, string $allowedHost, array $resolve = []): ?array
+    private static function get(string $url, string $allowedOrigin, array $resolve = [], int $depth = 0): ?array
     {
         if (stripos($url, 'https://') !== 0) {
             return null;
@@ -258,12 +278,14 @@ final class FaviconProxy
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_CONNECTTIMEOUT => self::TIMEOUT,
             CURLOPT_TIMEOUT => self::TIMEOUT,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
-            // https only -- on the initial request and on every redirect hop. Blocks
-            // http://, file://, gopher:// and friends as redirect targets.
+            // Redirects are followed below, by us, not by curl: CURLOPT_RESOLVE only
+            // pins the hop we hand it, so curl chasing a Location to another host would
+            // resolve that one freely and the request would leave the box before the
+            // effective URL could be rejected -- a blind SSRF with the redirect target
+            // chosen by whoever answers for the IdP host.
+            CURLOPT_FOLLOWLOCATION => false,
+            // https only. Blocks http://, file://, gopher:// and friends.
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
             // Pin the issuer host to the pre-vetted IPs (no attacker-timed re-resolve).
             CURLOPT_RESOLVE => $resolve,
             CURLOPT_NOPROGRESS => false,
@@ -272,27 +294,24 @@ final class FaviconProxy
         $data = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $type = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-        $effective = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        // Populated by curl precisely because FOLLOWLOCATION is off.
+        $next = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         curl_close($ch);
 
-        if ($data === false || $code < 200 || $code >= 300 || $data === '') {
-            return null;
+        // Follow it only if it stays inside the origin we pinned; anything else ends
+        // here, before a request is made, rather than being judged after the fact.
+        if ($code >= 300 && $code < 400) {
+            return $depth < self::MAX_REDIRECTS && self::isSameOrigin($next, $allowedOrigin)
+                ? self::get($next, $allowedOrigin, $resolve, $depth + 1)
+                : null;
         }
-        // Pin the final URL to the issuer host: a redirect that left it (to an
-        // internal service or a blocked IP) is rejected rather than returned.
-        $effHost = (string)(parse_url($effective, PHP_URL_HOST) ?? '');
-        if ($effHost === '' || strcasecmp($effHost, $allowedHost) !== 0 || self::isBlockedHost($effHost)) {
+
+        if ($data === false || $code < 200 || $code >= 300 || $data === '') {
             return null;
         }
         return ['type' => $type ?: 'application/octet-stream', 'data' => (string)$data];
     }
 
-    /**
-     * Reject hosts that must never be reachable from a pre-auth proxy: localhost and
-     * literal private / loopback / link-local / reserved IPs (incl. 169.254.169.254).
-     * Hostnames that resolve via DNS are not pre-resolved here -- the effective-URL
-     * host pin in get() is what bounds redirect-based abuse.
-     */
     /**
      * Resolve a host (A + AAAA) to vetted IP literals. A literal IP is returned as-is
      * if public. A hostname is resolved and EVERY address must be public -- if it has
