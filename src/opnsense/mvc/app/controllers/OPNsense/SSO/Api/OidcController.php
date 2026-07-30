@@ -63,9 +63,12 @@ class OidcController extends ApiControllerBase
         $this->startSession();
         try {
             // Pre-auth endpoint: cap how often one source can start a ceremony (each
-            // one costs a discovery/JWKS lookup and a session write).
+            // one costs a discovery/JWKS lookup and a session write). Counted per
+            // source, and a source is frequently a whole NATed office arriving at nine
+            // in the morning -- so the ceiling is a floor under abuse, not an estimate
+            // of how many people are behind one address.
             NavigationGuard::assertNavigation();
-            RateLimiter::hit('oidc-login', $this->clientIp(), 20);
+            RateLimiter::hit('oidc-login', $this->clientIp(), 60);
             $provider = $this->request->get('provider');
             $protocol = $this->protocolFor($provider);
             $returnUrl = (string)($this->request->get('url') ?? '/');
@@ -114,7 +117,7 @@ class OidcController extends ApiControllerBase
         // form_post delivers the same parameters in the body instead of the query.
         $response = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !empty($_POST) ? $_POST : $_GET;
         try {
-            RateLimiter::hit('oidc-callback', $this->clientIp(), 20);
+            RateLimiter::hit('oidc-callback', $this->clientIp(), 60);
             // Recover this login's in-flight record by the state the IdP echoes back
             // (single use). Trust the provider recorded at startLogin over any query
             // param, so a crafted callback URL cannot steer which provider validates.

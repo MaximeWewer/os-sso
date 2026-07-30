@@ -62,9 +62,10 @@ class SamlController extends ApiControllerBase
         // SameSite=Lax session cookie would not survive the round-trip anyway).
         try {
             // Pre-auth endpoint: cap how often one source can start a ceremony (each
-            // one writes an in-flight state file).
+            // one writes an in-flight state file). Generous on purpose: one source is
+            // often a whole NATed office logging in at the same time.
             NavigationGuard::assertNavigation();
-            RateLimiter::hit('saml-login', $this->clientIp(), 20);
+            RateLimiter::hit('saml-login', $this->clientIp(), 60);
             $provider = $this->request->get('provider');
             $protocol = $this->protocolFor($provider);
             // OpenVPN deferred web-auth: carry the one-time VPN session id in the
@@ -99,7 +100,7 @@ class SamlController extends ApiControllerBase
         }
         try {
             // Pre-auth endpoint: XML parsing and signature verification are not free.
-            RateLimiter::hit('saml-acs', $this->clientIp(), 20);
+            RateLimiter::hit('saml-acs', $this->clientIp(), 60);
             // Recover in-flight state via the response InResponseTo (single use).
             $inResponseTo = SamlProtocol::peekInResponseTo($_POST);
             $state = SamlProtocol::consumeState($inResponseTo);
