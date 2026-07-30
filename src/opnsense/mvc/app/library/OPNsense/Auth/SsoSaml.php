@@ -284,10 +284,12 @@ class SsoSaml extends Local implements IAuthConnector
             ],
             'sso_session_lifetime' => [
                 'name' => gettext('Maximum session lifetime (s)'),
-                'help' => gettext('End the WebGUI session this long after login whatever the user is doing, '
-                    . 'unlike the idle timeout. Enforced by the scheduled "os-sso: expire SSO sessions" job '
-                    . '(added for you under System > Settings > Cron) and on every SSO login. 0 keeps sessions '
-                    . 'until they idle out.'),
+                'help' => gettext('End the access this long after login whatever the user is doing, unlike '
+                    . 'the idle timeout - the WebGUI session, and also the captive-portal client and the '
+                    . 'OpenVPN tunnel, neither of which has an idle timeout of ours to fall back on. Enforced '
+                    . 'by the scheduled "os-sso: expire SSO sessions" job (added for you under System > '
+                    . 'Settings > Cron) and on every SSO login. Portal and VPN grants are capped at 24h '
+                    . 'regardless. 0 keeps sessions until they idle out.'),
                 'type' => 'text',
                 'default' => '0',
                 'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))

@@ -174,6 +174,7 @@ class OidcController extends ApiControllerBase
                     'sid' => $protocol->getLastSessionId(),
                     'cp_session' => (string)($cpRes['session']['sessionId'] ?? ''),
                     'zone' => $cpRes['zone'],
+                    'lifetime' => (int)$auth->ssoSessionLifetime,
                 ]);
                 session_write_close();
                 // This page bounces off-site; our own URL holds the code and state.
@@ -206,6 +207,7 @@ class OidcController extends ApiControllerBase
                     'sub' => $identity->subject,
                     'sid' => $protocol->getLastSessionId(),
                     'vpn_cn' => $commonName,
+                    'lifetime' => (int)$auth->ssoSessionLifetime,
                 ]);
                 session_write_close();
                 $this->html();

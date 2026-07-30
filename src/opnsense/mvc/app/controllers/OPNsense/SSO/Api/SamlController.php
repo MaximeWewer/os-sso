@@ -162,6 +162,7 @@ class SamlController extends ApiControllerBase
                     'sid' => $protocol->getLastSessionIndex(),
                     'cp_session' => (string)($cpRes['session']['sessionId'] ?? ''),
                     'zone' => $cpRes['zone'],
+                    'lifetime' => (int)$auth->ssoSessionLifetime,
                 ]);
                 // This page bounces off-site; keep our own URL out of the Referer.
                 $this->html("'self'", false, ['Referrer-Policy' => 'no-referrer']);
@@ -192,6 +193,7 @@ class SamlController extends ApiControllerBase
                     'sub' => $identity->subject,
                     'sid' => $protocol->getLastSessionIndex(),
                     'vpn_cn' => $commonName,
+                    'lifetime' => (int)$auth->ssoSessionLifetime,
                 ]);
                 $this->html();
                 return VpnAuthorizer::donePage($username);

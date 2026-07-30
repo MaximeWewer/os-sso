@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-07-30 19:24+0200\n"
+"POT-Creation-Date: 2026-07-30 19:26+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -196,41 +196,44 @@ msgstr ""
 #: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:282
 #: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:287
 msgid ""
-"End the WebGUI session this long after login whatever the user is doing, "
-"unlike the idle timeout. Enforced by the scheduled \"os-sso: expire SSO "
-"sessions\" job (added for you under System > Settings > Cron) and on every "
-"SSO login. 0 keeps sessions until they idle out."
+"End the access this long after login whatever the user is doing, unlike the "
+"idle timeout - the WebGUI session, and also the captive-portal client and "
+"the OpenVPN tunnel, neither of which has an idle timeout of ours to fall "
+"back on. Enforced by the scheduled \"os-sso: expire SSO sessions\" job "
+"(added for you under System > Settings > Cron) and on every SSO login. "
+"Portal and VPN grants are capped at 24h regardless. 0 keeps sessions until "
+"they idle out."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:209
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:289
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:294
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:211
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:291
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:296
 msgid "Maximum session lifetime must be a number of seconds (0 = disabled)."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:212
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:304
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:309
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:214
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:306
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:311
 msgid "Automatic user creation"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:213
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:305
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:310
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:215
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:307
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:312
 msgid ""
 "Discouraged on a firewall. Persists new users to config.xml with no local "
 "password."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:217
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:309
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:314
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:219
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:311
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:316
 msgid "Strict account binding"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:218
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:310
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:315
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:220
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:312
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:317
 msgid ""
 "Only let this provider bind to a local account that no OTHER provider has "
 "already claimed - by a previous login, or by a SCIM push. Leave it on unless "
@@ -242,15 +245,15 @@ msgid ""
 "time match by username or verified email."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:229
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:321
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:326
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:231
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:323
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:328
 msgid "Required groups"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:230
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:322
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:327
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:232
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:324
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:329
 msgid ""
 "Access gate: comma separated IdP group names, at least one of which the user "
 "must hold to log in through this provider (WebGUI, Captive Portal and VPN "
@@ -259,15 +262,15 @@ msgid ""
 "authenticates log in."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:237
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:329
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:334
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:239
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:331
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:336
 msgid "Deprovision on refused login"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:238
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:330
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:335
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:240
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:332
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:337
 msgid ""
 "When a login is refused by the required groups above, also disable the local "
 "account it belongs to and end its open sessions. This is how a revocation at "
@@ -277,27 +280,27 @@ msgid ""
 "any use."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:246
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:338
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:343
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:248
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:340
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:345
 msgid "Default groups"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:247
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:339
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:344
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:249
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:341
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:346
 msgid "Comma separated OPNsense groups granted to mapped users."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:251
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:343
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:348
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:253
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:345
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:350
 msgid "Group mapping"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:252
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:344
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:349
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:254
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:346
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:351
 msgid ""
 "Optional explicit IdP-group to OPNsense-group map, comma separated as "
 "\"idpGroup:opnsenseGroup\". Mapped groups are trusted and may target "
@@ -305,15 +308,15 @@ msgid ""
 "match that refuses privileged groups."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:259
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:351
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:356
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:261
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:353
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:358
 msgid "Strict group sync"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:260
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:352
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:357
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:262
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:354
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:359
 msgid ""
 "Reconcile group membership on every login: remove the user from groups os-"
 "sso previously granted but the IdP no longer asserts. Only groups os-sso "
@@ -322,15 +325,15 @@ msgid ""
 "are only ever added)."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:268
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:360
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:365
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:270
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:362
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:367
 msgid "Enable SCIM provisioning"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:269
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:361
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:366
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:271
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:363
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:368
 msgid ""
 "Let this IdP push account lifecycle to the firewall over SCIM 2.0, instead "
 "of os-sso only learning about changes when someone logs in. Base URL to "
@@ -339,36 +342,36 @@ msgid ""
 "rather than removes."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:276
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:368
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:373
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:278
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:370
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:375
 msgid "SCIM bearer token"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:277
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:369
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:374
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:279
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:371
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:376
 msgid ""
 "Shared secret the IdP presents as \"Authorization: Bearer ...\". It is the "
 "whole authentication of a write API into the account database - generate a "
 "long random value and treat it as a credential."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:282
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:374
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:379
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:284
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:376
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:381
 msgid "The SCIM token should be at least 32 characters."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:285
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:377
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:382
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:287
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:379
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:384
 msgid "SCIM source IPs/CIDRs"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:286
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:378
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:383
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:288
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:380
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:385
 msgid ""
 "Comma separated addresses the IdP connects from. REQUIRED when SCIM is "
 "enabled: it bounds who can even attempt to use the token, and an empty list "
@@ -376,33 +379,33 @@ msgid ""
 "direct TCP peer, never on a forwardable header."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:293
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:385
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:390
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:295
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:387
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:392
 msgid "Login button label"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:294
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:386
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:391
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:296
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:388
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:393
 msgid "Text shown on the login-page button (defaults to the server name)."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:298
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:400
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:405
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:300
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:402
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:407
 msgid "Default landing URL"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:299
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:301
 msgid ""
 "Same-site relative path where users land after login (e.g. /ui/dashboard). "
 "Leave empty for the requested page or the dashboard."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:303
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:406
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:411
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoJwt.php:305
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:408
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:413
 msgid "Landing URL must be a same-site path starting with \"/\"."
 msgstr ""
 
@@ -624,13 +627,13 @@ msgid ""
 "are ever called."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:292
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:297
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:294
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:299
 msgid "Applies to"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:293
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:298
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:295
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:300
 msgid ""
 "Where this provider may be used, comma separated: \"webgui\", \"portal\" "
 "(captive portal), \"vpn\". Empty means all three, which is what it was "
@@ -641,17 +644,17 @@ msgid ""
 "directory to the WebGUI."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:301
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:306
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:303
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:308
 msgid "Applies to accepts only: "
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:390
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:395
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:392
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:397
 msgid "Base URL"
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:391
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:393
 msgid ""
 "Public base URL of this firewall (https://host[:port]) used to build the "
 "OIDC redirect/callback URL registered at the IdP (and the post-logout URL). "
@@ -660,13 +663,13 @@ msgid ""
 "reverse proxy or port-forward)."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:397
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:402
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:399
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:404
 msgid "Base URL is required and must be a valid https URL."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:401
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:406
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoOidc.php:403
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:408
 msgid ""
 "Same-site relative path where users land after a successful WebGUI login "
 "when no specific page was requested (e.g. /ui/dashboard or /index.php). "
@@ -939,7 +942,7 @@ msgstr ""
 msgid "Same, for the NameID element alone."
 msgstr ""
 
-#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:396
+#: src/opnsense/mvc/app/library/OPNsense/Auth/SsoSaml.php:398
 msgid ""
 "Public base URL of this firewall (https://host[:port]) used to build the SP "
 "EntityID, ACS, SLO and metadata URLs. Required: without it those URLs are "

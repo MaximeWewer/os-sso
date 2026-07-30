@@ -35,7 +35,8 @@ final class SessionRegistry
     public const VPN = 'vpn';
 
     /**
-     * How long a portal or VPN grant stays on the books when nothing revokes it.
+     * How long a portal or VPN grant stays on the books when nothing revokes it, and the
+     * ceiling on the provider's own maximum session lifetime here.
      *
      * Neither is a PHP session we can look at to see whether it is still there: the
      * portal ends its own on an idle timeout, and a tunnel ends when the client leaves.
@@ -78,8 +79,16 @@ final class SessionRegistry
      * the tunnel until those timed out on their own -- which is the half of "revoked"
      * that matters on a firewall.
      *
-     * @param array $meta kind (portal|vpn), username, provider, issuer, sub, sid, plus
-     *        what it takes to take it away: cp_session + zone, or vpn_cn
+     * The provider's maximum session lifetime applies here as much as it does to a WebGUI
+     * session, and for a better reason: a tab that idles out is at least a session that
+     * ends by itself, while a tunnel and a portal client have nothing that reconsiders
+     * them at all. Ignoring it meant a provider set to an hour still left both on the
+     * network for a day. Bounded by GRANT_TTL either way, so the record cannot outlive
+     * the point of keeping it.
+     *
+     * @param array $meta kind (portal|vpn), username, provider, issuer, sub, sid,
+     *        lifetime (s, 0 = none), plus what it takes to take it away: cp_session +
+     *        zone, or vpn_cn
      */
     public static function recordGrant(array $meta): void
     {
@@ -87,6 +96,7 @@ final class SessionRegistry
         if (!in_array($kind, [self::PORTAL, self::VPN], true)) {
             return;
         }
+        $lifetime = max(0, (int)($meta['lifetime'] ?? 0));
         self::write(hash('sha256', $kind . '|' . bin2hex(random_bytes(16))), [
             'kind' => $kind,
             'username' => (string)($meta['username'] ?? ''),
@@ -98,7 +108,7 @@ final class SessionRegistry
             'zone' => (string)($meta['zone'] ?? ''),
             'vpn_cn' => (string)($meta['vpn_cn'] ?? ''),
             'started' => time(),
-            'expires_at' => time() + self::GRANT_TTL,
+            'expires_at' => time() + ($lifetime > 0 ? min($lifetime, self::GRANT_TTL) : self::GRANT_TTL),
         ]);
     }
 

@@ -94,7 +94,7 @@ own help in the form; below is only what is easy to get wrong, and shared by all
 | **Group mapping** | An explicit mapping may target `admins`; the 1:1 name fallback refuses privileged groups. |
 | **Strict group sync** | Off = additive. On, revokes only what os-sso granted, never the last privileged member. |
 | **Deprovision on refused login** | Disables the account behind a refused login, and re-enables it when the IdP allows that account again. Does nothing without *Required groups*. |
-| **Maximum session lifetime** | The WebGUI timeout is *idle*-only. Enforced by the **os-sso: expire SSO sessions** cron job, which the plugin schedules for itself every 10 minutes. |
+| **Maximum session lifetime** | The WebGUI timeout is *idle*-only. Applies to the portal client and the VPN tunnel too (capped at 24 h there). Enforced by the **os-sso: expire SSO sessions** cron job, which the plugin schedules for itself every 10 minutes. |
 | **SCIM provisioning** | Token **and** source addresses, both required - see [SCIM](#scim-provisioning). |
 
 The Base URL matters more than it looks: an IdP doing wildcard redirect matching plus a
