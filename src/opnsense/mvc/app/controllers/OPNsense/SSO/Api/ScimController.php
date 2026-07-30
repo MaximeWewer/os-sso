@@ -375,14 +375,30 @@ class ScimController extends ApiControllerBase
         return trim((string)($this->request->get('filter') ?? ''));
     }
 
+    /**
+     * RFC 7644 section 3.4.2.4: a value less than 1 is interpreted as 1, so anything
+     * unreadable landing on the first page is the behaviour the spec asks for.
+     */
     private function startIndex(): int
     {
         return max(1, (int)($this->request->get('startIndex') ?? 1));
     }
 
+    /**
+     * Unlike startIndex, an unreadable count cannot be shrugged off: 0 is a MEANINGFUL
+     * value here -- "tell me the total, send no resources" -- so casting junk to an
+     * integer answered a mistyped count with an empty page and a total, which reads to
+     * the client exactly like a correct answer. Refused instead.
+     */
     private function count(): int
     {
         $count = $this->request->get('count');
-        return $count === null || $count === '' ? ScimUsers::MAX_RESULTS : max(0, (int)$count);
+        if ($count === null || $count === '') {
+            return ScimUsers::MAX_RESULTS;
+        }
+        if (!ctype_digit((string)$count)) {
+            throw ScimError::badRequest('count must be a non-negative integer', 'invalidValue');
+        }
+        return (int)$count;
     }
 }
