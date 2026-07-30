@@ -184,6 +184,7 @@ final class SamlProtocol implements ProtocolInterface
         // closes the window where an attacker replays the response before the
         // victim's browser delivers it.
         $this->guardAssertionReplay((string) $auth->getLastAssertionId());
+        $this->assertStrongSignature((string) $auth->getLastResponseXML());
         $this->assertAuthnAge($auth);
 
         // Keep what Single Logout needs from the (verified) assertion.
@@ -192,6 +193,98 @@ final class SamlProtocol implements ProtocolInterface
         $this->lastNameIdFormat = (string) $auth->getNameIdFormat();
 
         return $this->toIdentity($auth);
+    }
+
+    /** XML-DSig algorithm URIs that end in one of these are not evidence of anything. */
+    private const WEAK_ALG_SUFFIXES = ['sha1', 'md5', 'ripemd160'];
+
+    /**
+     * Refuse a response whose signature or digest uses a broken algorithm.
+     *
+     * php-saml verifies whatever the message declares in SignatureMethod: the certificate
+     * has to be the right one, but the hash it commits to may still be SHA-1, and this
+     * vendored version has no option to say otherwise. A signature over a broken hash
+     * proves the IdP signed *some* document, not this one -- chosen-prefix collisions on
+     * SHA-1 have been practical for years, and an assertion is exactly the kind of
+     * attacker-influenced document (NameID, attributes) they need.
+     *
+     * Checked on the signatures php-saml actually validated -- the response's and the
+     * assertion's -- and on the digest of each Reference under them, because a SHA-256
+     * signature over a SHA-1 digest is no better than the digest. Off only if the
+     * operator ticks the legacy box, which is there for an IdP that cannot be moved yet.
+     */
+    private function assertStrongSignature(string $xml): void
+    {
+        if (!empty($this->cfg['allow_sha1'])) {
+            return;
+        }
+        $weak = self::weakAlgorithm($xml);
+        if ($weak !== '') {
+            throw new \RuntimeException(sprintf(
+                'SAML: the assertion is signed with a broken algorithm (%s) -- configure the IdP for '
+                . 'RSA-SHA256, or tick "Accept SHA-1 signatures" on this server if it cannot be moved',
+                $weak
+            ));
+        }
+    }
+
+    /**
+     * The first broken signature or digest algorithm a validated response carries, ''
+     * when it carries none.
+     *
+     * Namespaces are matched by URI, not by the prefix the IdP happened to pick, and
+     * only the two signature positions php-saml validates are looked at.
+     */
+    public static function weakAlgorithm(string $xml): string
+    {
+        if ($xml === '') {
+            return '';
+        }
+        $doc = new \DOMDocument();
+        if (!@$doc->loadXML($xml, LIBXML_NONET | LIBXML_NSCLEAN)) {
+            return ''; // php-saml parsed and verified it; we cannot second-guess it
+        }
+        $xpath = new \DOMXPath($doc);
+        $xpath->registerNamespace('samlp', 'urn:oasis:names:tc:SAML:2.0:protocol');
+        $xpath->registerNamespace('saml', 'urn:oasis:names:tc:SAML:2.0:assertion');
+        $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+        // Spelled out rather than composed: "|" unions whole paths, so appending one
+        // suffix to a union only reaches its last branch.
+        $paths = [];
+        foreach (['/samlp:Response/ds:Signature', '/samlp:Response/saml:Assertion/ds:Signature'] as $signature) {
+            $paths[] = $signature . '//ds:SignatureMethod';
+            $paths[] = $signature . '//ds:DigestMethod';
+        }
+        $nodes = $xpath->query(implode('|', $paths));
+        foreach ($nodes ?: [] as $node) {
+            $alg = strtolower(trim((string) $node->getAttribute('Algorithm')));
+            foreach (self::WEAK_ALG_SUFFIXES as $weak) {
+                if ($alg !== '' && str_ends_with($alg, $weak)) {
+                    return $alg;
+                }
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Same question for a redirect-binding Single Logout message, where the algorithm
+     * travels as a query parameter rather than inside the XML.
+     */
+    private function assertStrongSloSignature(array $request): void
+    {
+        $sigAlg = strtolower(trim((string) ($request['SigAlg'] ?? '')));
+        if (!empty($this->cfg['allow_sha1']) || $sigAlg === '') {
+            return;
+        }
+        foreach (self::WEAK_ALG_SUFFIXES as $weak) {
+            if (str_ends_with($sigAlg, $weak)) {
+                throw new \RuntimeException(
+                    'SAML: the logout message is signed with a broken algorithm (' . $sigAlg . ')'
+                );
+            }
+        }
     }
 
     /**
@@ -302,6 +395,7 @@ final class SamlProtocol implements ProtocolInterface
      */
     public function processSlo(string $requestId): array
     {
+        $this->assertStrongSloSignature($_GET);
         $auth = new Saml2Auth($this->settings(true));
         $url = $auth->processSLO(false, $requestId !== '' ? $requestId : null, false, null, true);
         $errors = $auth->getErrors();

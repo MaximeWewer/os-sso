@@ -27,6 +27,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoEmailAttribute = null;
     public $ssoDisplayNameAttribute = null;
     public $ssoWantMessagesSigned = false;
+    public $ssoAllowSha1 = false;
     public $ssoAuthnPostBinding = false;
     public $ssoAuthnRequestsSigned = false;
     public $ssoForceAuthn = false;
@@ -93,6 +94,7 @@ class SsoSaml extends Local implements IAuthConnector
         }
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
+        $this->ssoAllowSha1 = !empty($config['sso_allow_sha1']);
         $this->ssoAuthnPostBinding = !empty($config['sso_authn_post_binding']);
         $this->ssoAuthnRequestsSigned = !empty($config['sso_authn_requests_signed']);
         $this->ssoForceAuthn = !empty($config['sso_force_authn']);
@@ -198,6 +200,15 @@ class SsoSaml extends Local implements IAuthConnector
             'sso_want_messages_signed' => [
                 'name' => gettext('Require signed response'),
                 'help' => gettext('Require the SAML Response (message) itself to be signed, not only the assertion. Enable when the IdP supports it (mitigates signature-wrapping).'),
+                'type' => 'checkbox',
+            ],
+            'sso_allow_sha1' => [
+                'name' => gettext('Accept SHA-1 signatures'),
+                'help' => gettext('Legacy escape hatch. By default an assertion signed - or digested - with '
+                    . 'SHA-1 (or MD5, or RIPEMD-160) is refused: the certificate may be the right one, but a '
+                    . 'signature over a broken hash proves the IdP signed some document, not this one. Tick '
+                    . 'this only for an IdP that cannot be reconfigured for RSA-SHA256 yet, and untick it '
+                    . 'once it can.'),
                 'type' => 'checkbox',
             ],
             'sso_force_authn' => [

@@ -161,7 +161,9 @@ roles or a group filter.
    - ACS: `https://<opnsense>/api/sso/saml/acs?provider=<name>`
    - Metadata / EntityID: `https://<opnsense>/api/sso/saml/metadata?provider=<name>`
    - SLO: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
-3. The IdP must **sign the assertion** and send **at least one attribute** - an empty
+3. The IdP must **sign the assertion** with RSA-SHA256 (a SHA-1 signature *or digest* is
+   refused, unless **Accept SHA-1 signatures** is ticked for an IdP that cannot be moved
+   yet) and send **at least one attribute** - an empty
    `<AttributeStatement/>` is invalid per the schema and the strict validation rejects
    it, and you need the groups attribute anyway. Map the NameID to the username; set the
    username/email/display-name attributes explicitly when your IdP emits OID-style names
