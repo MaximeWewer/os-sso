@@ -308,7 +308,7 @@ class OidcController extends ApiControllerBase
             syslog(LOG_ERR, 'os-sso oidc logout: ' . $e->getMessage());
         }
 
-        $this->clearSession();
+        SessionEstablisher::destroyCurrent();
         $this->response->redirect($url !== '' ? $url : '/', true);
         return 'Logging out...';
     }
@@ -420,16 +420,6 @@ class OidcController extends ApiControllerBase
         }
     }
 
-    /** Local WebGUI logout: wipe + destroy the session (mirrors the core logout). */
-    private function clearSession(): void
-    {
-        SessionRegistry::forget((string)session_id());
-        $_SESSION = [];
-        if (isset($_COOKIE[session_name()])) {
-            setcookie(session_name(), '', time() - 42000, '/', '', true, true);
-        }
-        @session_destroy();
-    }
 
     private function fail(\Throwable $e): string
     {

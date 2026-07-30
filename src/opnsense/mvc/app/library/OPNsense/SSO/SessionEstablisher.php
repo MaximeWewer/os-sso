@@ -104,6 +104,23 @@ final class SessionEstablisher
         return null;
     }
 
+    /**
+     * End the current browser's WebGUI session, the mirror of establish().
+     *
+     * Drops the registry record first so a swept-away session file cannot be mistaken for
+     * a live one, then wipes the data, expires the cookie and destroys the store. Mirrors
+     * what core's own logout does; the two SSO logout paths had a copy each.
+     */
+    public static function destroyCurrent(): void
+    {
+        SessionRegistry::forget((string)session_id());
+        $_SESSION = [];
+        if (isset($_COOKIE[session_name()])) {
+            setcookie(session_name(), '', time() - 42000, '/', '', true, true);
+        }
+        @session_destroy();
+    }
+
     private function audit(string $username, string $authServerName): void
     {
         openlog("audit", LOG_ODELAY, LOG_AUTH);

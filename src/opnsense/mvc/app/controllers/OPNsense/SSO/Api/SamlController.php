@@ -25,9 +25,9 @@ use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\Protocol\SamlProtocol;
 
 /**
- * SAML SP endpoints: login (AuthnRequest), acs (assertion consumer), metadata.
- * Pre-auth via doAuth()=>true; security rests on signature + InResponseTo replay
- * protection inside SamlProtocol. Phase 4.
+ * SAML SP endpoints: login (AuthnRequest), acs (assertion consumer), metadata, slo.
+ * Pre-auth via doAuth()=>true; security rests on the assertion signature and the
+ * single-use InResponseTo check inside SamlProtocol.
  */
 class SamlController extends ApiControllerBase
 {
@@ -260,7 +260,7 @@ class SamlController extends ApiControllerBase
             } catch (\Throwable $e) {
                 return $this->fail($e);
             }
-            $this->clearSession();
+            SessionEstablisher::destroyCurrent();
             $this->response->redirect($redirect, true);
             return 'Logged out.';
         }
@@ -300,7 +300,7 @@ class SamlController extends ApiControllerBase
             return $this->fail($e);
         }
         // No IdP SLO configured: local logout only.
-        $this->clearSession();
+        SessionEstablisher::destroyCurrent();
         $this->response->redirect('/', true);
         return 'Logged out.';
     }
@@ -334,16 +334,6 @@ class SamlController extends ApiControllerBase
         }
     }
 
-    /** Local WebGUI logout: wipe + destroy the session (mirrors the core logout). */
-    private function clearSession(): void
-    {
-        SessionRegistry::forget((string)session_id());
-        $_SESSION = [];
-        if (isset($_COOKIE[session_name()])) {
-            setcookie(session_name(), '', time() - 42000, '/', '', true, true);
-        }
-        @session_destroy();
-    }
 
     /** First configured SAML auth server name (for IdP-initiated SLO without a session). */
     private function firstSamlProvider(): string

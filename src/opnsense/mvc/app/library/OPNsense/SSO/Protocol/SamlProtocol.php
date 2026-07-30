@@ -15,17 +15,16 @@ use OPNsense\SSO\StateDir;
 /**
  * SAML 2.0 Service Provider on top of SAML-Toolkits/php-saml (onelogin/php-saml).
  *
- * Phase 4. The toolkit does XML-DSig verification, but the SP
- * settings decide WHAT must be signed and validated -- the security lives in the
- * settings below and in the post-conditions we assert after processResponse():
+ * The toolkit does XML-DSig verification, but the SP settings decide WHAT must be signed
+ * and validated -- the security lives in the settings() array below and in the
+ * post-conditions asserted after processResponse():
  *   - wantAssertionsSigned / wantMessagesSigned (response AND/OR assertion).
  *   - NotBefore / NotOnOrAfter, Audience, Destination.
- *   - InResponseTo replay protection (single-use request id).
+ *   - InResponseTo replay protection (single-use request id), plus a consumed-assertion
+ *     cache covering the window before the victim's browser delivers the response.
+ *   - AuthnInstant against the configured maximum authentication age.
  *   - IdP x509 CERTIFICATE registered (never just a fingerprint).
- *   - RelayState validated against a same-host allowlist (open redirect / CWE-601).
- *
- * NOTE: this is the structured shell. The settings array is real; wiring it to
- * the provider config + a request-id store is the remaining Phase 4 work.
+ *   - return URLs reduced to a same-site path (open redirect / CWE-601, see ReturnUrl).
  */
 final class SamlProtocol implements ProtocolInterface
 {
