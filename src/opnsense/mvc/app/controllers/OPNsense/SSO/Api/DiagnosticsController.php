@@ -134,6 +134,14 @@ class DiagnosticsController extends ApiControllerBase
             'issuer' => $auth->ssoIssuer,
             'client_id' => $auth->ssoClientId,
             'client_secret' => $auth->ssoClientSecret,
+            // So the reported token_auth_method is the one a login would really use,
+            // not what "auto" would have negotiated.
+            'token_auth_method' => $auth->ssoTokenAuthMethod,
+            'assertion_alg' => $auth->ssoAssertionAlg,
+            'private_key' => $auth->ssoPrivateKey,
+            'private_key_id' => $auth->ssoPrivateKeyId,
+            'tls_cert' => $auth->ssoMtlsCert,
+            'tls_key' => $auth->ssoMtlsKey,
         ]);
         $disco = $protocol->describe();
         return [
@@ -229,6 +237,9 @@ class DiagnosticsController extends ApiControllerBase
                     'Redirect / callback' => $base . '/api/sso/oidc/callback',
                     'Back-channel logout' => $base . '/api/sso/oidc/backchannel' . $q,
                     'Post-logout redirect' => $base . '/',
+                    // Only of interest with private_key_jwt, but cheap to always show:
+                    // it is where the IdP reads our client public key from.
+                    'Client JWKS' => $base . '/api/sso/oidc/jwks' . $q,
                 ];
                 break;
             case 'saml':

@@ -10,6 +10,7 @@ namespace OPNsense\SSO\Protocol;
 use Firebase\JWT\JWT;
 use Firebase\JWT\JWK;
 use OPNsense\SSO\ClaimPath;
+use OPNsense\SSO\ClientAuth;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
 
@@ -54,6 +55,8 @@ final class OidcProtocol implements ProtocolInterface
     private array $extraParams;
     /** per-provider session-key prefix so concurrent flows do not clobber each other */
     private string $sessionPrefix;
+    /** how this firewall proves it is the client when calling the token endpoint */
+    private ClientAuth $clientAuth;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -88,6 +91,16 @@ final class OidcProtocol implements ProtocolInterface
             (array)($cfg['required_acr'] ?? [])
         )));
         $this->extraParams = self::parseExtraParams((string)($cfg['extra_params'] ?? ''));
+        $this->clientAuth = new ClientAuth([
+            'client_id' => $this->clientId,
+            'client_secret' => $this->clientSecret,
+            'token_auth_method' => $cfg['token_auth_method'] ?? 'auto',
+            'assertion_alg' => $cfg['assertion_alg'] ?? '',
+            'private_key' => $cfg['private_key'] ?? '',
+            'private_key_id' => $cfg['private_key_id'] ?? '',
+            'tls_cert' => $cfg['tls_cert'] ?? '',
+            'tls_key' => $cfg['tls_key'] ?? '',
+        ]);
         // Namespace the in-flight session keys (state/nonce/verifier/return) by
         // provider so two concurrent logins to different providers in one browser
         // session cannot overwrite each other's single-use anti-replay material.
@@ -660,24 +673,32 @@ final class OidcProtocol implements ProtocolInterface
             }
             $body['code_verifier'] = $verifier;
         }
+        return $this->tokenRequest($disco, $body);
+    }
 
+    /**
+     * POST a grant to the token endpoint, authenticated as this client.
+     *
+     * Shared by the authorization-code exchange and by the client-credentials grant the
+     * Entra group-overage lookup needs -- the client authentication is identical, and
+     * having one place for it means a private_key_jwt or mTLS setup works for both
+     * without being wired twice.
+     */
+    private function tokenRequest(array $disco, array $body): array
+    {
         $headers = [
             'Content-Type: application/x-www-form-urlencoded',
             'Accept: application/json',
         ];
-        // Client authentication: client_secret_basic is the default every IdP must
-        // support, but a fair number advertise only client_secret_post -- against
-        // those, a Basic header is simply an unauthenticated client. Take the answer
-        // from the IdP's own discovery document rather than assuming.
-        if ($this->tokenAuthMethod($disco) === 'client_secret_post') {
-            $body['client_id'] = $this->clientId;
-            $body['client_secret'] = $this->clientSecret;
-        } else {
-            $headers[] = 'Authorization: Basic ' . base64_encode(
-                rawurlencode($this->clientId) . ':' . rawurlencode($this->clientSecret)
-            );
+        $curlOptions = [];
+        $method = $this->clientAuth->method($disco);
+        $this->clientAuth->apply($disco, $method, $body, $headers, $curlOptions);
+
+        $endpoint = $this->clientAuth->tokenEndpoint($disco, $method);
+        if ($endpoint === '') {
+            throw new \RuntimeException('OIDC: discovery has no usable token_endpoint');
         }
-        $resp = $this->httpPost((string)$disco['token_endpoint'], http_build_query($body), $headers);
+        $resp = $this->curl($endpoint, http_build_query($body), $headers, $curlOptions);
         $json = json_decode($resp, true);
         if (!is_array($json) || isset($json['error'])) {
             throw new \RuntimeException('OIDC: token endpoint error: ' . ($json['error'] ?? 'invalid response'));
@@ -685,20 +706,10 @@ final class OidcProtocol implements ProtocolInterface
         return $json;
     }
 
-    /**
-     * How to authenticate to the token endpoint. Per OIDC Discovery, omitting
-     * token_endpoint_auth_methods_supported means client_secret_basic; we only ever
-     * choose client_secret_post when the IdP lists it and not basic.
-     */
+    /** The client authentication method in force against this IdP (for diagnostics). */
     private function tokenAuthMethod(array $disco): string
     {
-        $methods = (array)($disco['token_endpoint_auth_methods_supported'] ?? []);
-        if (empty($methods) || in_array('client_secret_basic', $methods, true)) {
-            return 'client_secret_basic';
-        }
-        return in_array('client_secret_post', $methods, true)
-            ? 'client_secret_post'
-            : 'client_secret_basic';
+        return $this->clientAuth->method($disco);
     }
 
     private function fetchUserInfo(array $disco, string $accessToken): array
@@ -759,7 +770,11 @@ final class OidcProtocol implements ProtocolInterface
         return $this->curl($url, $body, $headers);
     }
 
-    private function curl(string $url, ?string $postBody, array $headers): string
+    /**
+     * @param array $extraOptions curl options from the client authentication (the mTLS
+     *                            certificate pair), applied after ours
+     */
+    private function curl(string $url, ?string $postBody, array $headers, array $extraOptions = []): string
     {
         if (stripos($url, 'https://') !== 0) {
             throw new \RuntimeException('OIDC: refusing non-https endpoint ' . $url);
@@ -782,6 +797,9 @@ final class OidcProtocol implements ProtocolInterface
         if ($postBody !== null) {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $postBody);
+        }
+        if (!empty($extraOptions)) {
+            curl_setopt_array($ch, $extraOptions);
         }
         $resp = curl_exec($ch);
         $err = curl_error($ch);

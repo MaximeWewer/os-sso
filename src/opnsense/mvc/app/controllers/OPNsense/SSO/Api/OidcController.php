@@ -16,6 +16,7 @@ use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\SessionRegistry;
 use OPNsense\SSO\VpnAuthorizer;
 use OPNsense\SSO\CaptivePortalAuthorizer;
+use OPNsense\SSO\ClientAuth;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\RateLimiter;
@@ -209,6 +210,35 @@ class OidcController extends ApiControllerBase
     }
 
     /**
+     * GET /api/sso/oidc/jwks?provider=<name> -- the public half of our client key.
+     *
+     * Only meaningful with private_key_jwt. Point the IdP's JWKS URL here and a key
+     * rollover on this side needs no copy-paste over there. Public parameters only:
+     * ClientAuth::publicJwks() reads n/e (or crv/x/y) out of the key and has no path
+     * that can emit the private exponent.
+     */
+    public function jwksAction()
+    {
+        try {
+            RateLimiter::hit('oidc-jwks', $this->clientIp(), 60);
+            $auth = $this->authServer($this->request->get('provider'));
+            $jwks = ClientAuth::publicJwks(
+                (string)$auth->ssoPrivateKey,
+                (string)$auth->ssoAssertionAlg,
+                (string)$auth->ssoPrivateKeyId
+            );
+        } catch (\Throwable $e) {
+            // A provider with no client key simply has no JWKS to publish.
+            syslog(LOG_NOTICE, 'os-sso oidc jwks: ' . $e->getMessage());
+            $this->response->setStatusCode(404, 'Not Found');
+            return '';
+        }
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setHeader('Cache-Control', 'public, max-age=3600');
+        return json_encode($jwks, JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
      * POST /api/sso/oidc/backchannel?provider=<name> -- OIDC Back-Channel Logout.
      *
      * The IdP calls this server-to-server when a session ends on its side, so that a
@@ -340,6 +370,12 @@ class OidcController extends ApiControllerBase
             'form_post' => $auth->ssoFormPost,
             'required_acr' => $auth->ssoRequiredAcr,
             'extra_params' => $auth->ssoExtraParams,
+            'token_auth_method' => $auth->ssoTokenAuthMethod,
+            'assertion_alg' => $auth->ssoAssertionAlg,
+            'private_key' => $auth->ssoPrivateKey,
+            'private_key_id' => $auth->ssoPrivateKeyId,
+            'tls_cert' => $auth->ssoMtlsCert,
+            'tls_key' => $auth->ssoMtlsKey,
             'redirect_uri' => $this->baseUrlFor($auth) . '/api/sso/oidc/callback',
         ]);
     }

@@ -29,6 +29,12 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoMaxAge = 0;
     public $ssoFormPost = false;
     public $ssoRequiredAcr = [];
+    public $ssoTokenAuthMethod = 'auto';
+    public $ssoAssertionAlg = 'RS256';
+    public $ssoPrivateKey = null;
+    public $ssoPrivateKeyId = null;
+    public $ssoMtlsCert = null;
+    public $ssoMtlsKey = null;
     public $ssoExtraParams = null;
     public $ssoSessionLifetime = 0;
     public $ssoScimEnabled = false;
@@ -68,6 +74,12 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_group_map' => 'ssoGroupMap',
             'sso_scim_token' => 'ssoScimToken',
             'sso_extra_params' => 'ssoExtraParams',
+            'sso_token_auth_method' => 'ssoTokenAuthMethod',
+            'sso_assertion_alg' => 'ssoAssertionAlg',
+            'sso_private_key' => 'ssoPrivateKey',
+            'sso_private_key_id' => 'ssoPrivateKeyId',
+            'sso_mtls_cert' => 'ssoMtlsCert',
+            'sso_mtls_key' => 'ssoMtlsKey',
         ];
         foreach ($map as $k => $prop) {
             if (!empty($config[$k]) && property_exists($this, $prop)) {
@@ -115,9 +127,11 @@ class SsoOidc extends Local implements IAuthConnector
             ],
             'sso_client_secret' => [
                 'name' => gettext('Client Secret'),
-                'help' => gettext('Secret of the confidential client created at the IdP (public clients are not supported).'),
+                'help' => gettext('Secret of the confidential client created at the IdP. Public clients are '
+                    . 'not supported. Leave empty only when the client authentication method below is '
+                    . 'private_key_jwt or one of the mutual-TLS ones, which carry no shared secret; a '
+                    . 'method that does need one refuses the login at run time if it is missing.'),
                 'type' => 'text',
-                'validate' => fn($v) => !empty($v) ? [] : [gettext('Client Secret is required (public clients unsupported).')],
             ],
             'sso_scopes' => [
                 'name' => gettext('Scopes'),
@@ -164,6 +178,57 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'request (e.g. "prompt=login, ui_locales=fr"). Parameters that carry the security of the '
                     . 'flow (state, nonce, redirect_uri, PKCE, max_age, acr_values...) are ignored here - use '
                     . 'the dedicated fields, which also verify what comes back.'),
+                'type' => 'text',
+            ],
+            'sso_token_auth_method' => [
+                'name' => gettext('Client authentication method'),
+                'help' => gettext('How this firewall proves it is the client when it calls the token '
+                    . 'endpoint. "auto" picks client_secret_basic or client_secret_post from the IdP '
+                    . 'discovery document. The others must be set explicitly, because they need key '
+                    . 'material registered at the IdP first: client_secret_jwt (the secret signs a '
+                    . 'short-lived assertion and never travels), private_key_jwt (no shared secret at '
+                    . 'all - see the private key below), tls_client_auth and self_signed_tls_client_auth '
+                    . '(the client certificate on the TLS handshake is the credential).'),
+                'type' => 'text',
+                'default' => 'auto',
+                'validate' => fn($v) => empty($v) || $v === 'auto'
+                    || in_array($v, \OPNsense\SSO\ClientAuth::METHODS, true)
+                    ? [] : [gettext('Client authentication method must be "auto" or one of: ')
+                        . join(', ', \OPNsense\SSO\ClientAuth::METHODS)],
+            ],
+            'sso_assertion_alg' => [
+                'name' => gettext('Assertion signing algorithm'),
+                'help' => gettext('Algorithm signing the client assertion. private_key_jwt: RS256, '
+                    . 'RS384, RS512, PS256, ES256 or ES384, matching the private key type. '
+                    . 'client_secret_jwt: HS256, HS384 or HS512. Ignored by the other methods.'),
+                'type' => 'text',
+                'default' => 'RS256',
+            ],
+            'sso_private_key' => [
+                'name' => gettext('Client private key (PEM)'),
+                'help' => gettext('Private key signing the assertion for private_key_jwt. Register its '
+                    . 'public half at the IdP - either paste it there, or point the IdP JWKS URL at '
+                    . '<code>https://{opnsense}/api/sso/oidc/jwks?provider={name}</code>, which serves '
+                    . 'the public key derived from this one (never the private part).'),
+                'type' => 'text',
+            ],
+            'sso_private_key_id' => [
+                'name' => gettext('Client key ID (kid)'),
+                'help' => gettext('Optional. Goes in the assertion header so an IdP holding several of '
+                    . 'our public keys knows which one to verify with - which is what makes a key '
+                    . 'rollover possible without an outage.'),
+                'type' => 'text',
+            ],
+            'sso_mtls_cert' => [
+                'name' => gettext('Mutual-TLS client certificate (PEM)'),
+                'help' => gettext('Certificate presented to the token endpoint for tls_client_auth or '
+                    . 'self_signed_tls_client_auth. RFC 8705: when the IdP publishes '
+                    . 'mtls_endpoint_aliases, the aliased token endpoint is used automatically.'),
+                'type' => 'text',
+            ],
+            'sso_mtls_key' => [
+                'name' => gettext('Mutual-TLS private key (PEM)'),
+                'help' => gettext('Private key of the certificate above.'),
                 'type' => 'text',
             ],
             'sso_username_claim' => [
@@ -299,7 +364,25 @@ class SsoOidc extends Local implements IAuthConnector
     {
         return <<<'JS'
 (function () {
+    // A PEM does not belong on one line.
+    function toTextarea(name) {
+        var el = document.querySelector('tr.auth_oidc [name="' + name + '"]')
+            || document.querySelector('[name="' + name + '"]');
+        if (!el || el.tagName.toLowerCase() === 'textarea') { return; }
+        var ta = document.createElement('textarea');
+        for (var i = 0; i < el.attributes.length; i++) {
+            ta.setAttribute(el.attributes[i].name, el.attributes[i].value);
+        }
+        ta.value = el.value;
+        ta.setAttribute('rows', '5');
+        ta.style.width = '100%';
+        ta.style.fontFamily = 'monospace';
+        el.parentNode.replaceChild(ta, el);
+    }
     function init() {
+        toTextarea('sso_private_key');
+        toTextarea('sso_mtls_cert');
+        toTextarea('sso_mtls_key');
         // The legacy form renders every auth type's fields (one row per type, tagged
         // auth_<type>); there are multiple [name=sso_base_url], so scope to ours.
         var base = document.querySelector('tr.auth_oidc [name="sso_base_url"]')

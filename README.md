@@ -123,8 +123,25 @@ All types share a few options:
 2. In OPNsense fill **Issuer URL** + **Client ID/Secret**. Discovery and keys are
    fetched automatically from `<issuer>/.well-known/openid-configuration`.
 3. Keep **PKCE** on; scopes `openid email profile` (+ a groups scope if you map
-   groups). The client authentication method (`client_secret_basic` or
-   `client_secret_post`) is taken from the IdP's discovery document.
+   groups). **Client authentication method** defaults to `auto`, which picks
+   `client_secret_basic` or `client_secret_post` from the IdP's discovery document.
+   Set it explicitly for the methods that get the shared secret off the wire - or
+   remove it entirely:
+
+   | Method | What it needs here | Shared secret |
+   |---|---|---|
+   | `client_secret_basic` / `client_secret_post` | the client secret | sent on every token request |
+   | `client_secret_jwt` | the client secret, ≥32 chars for HS256 | never leaves the firewall (signs an assertion) |
+   | `private_key_jwt` | a **client private key** (PEM) + algorithm, optional `kid` | none |
+   | `tls_client_auth` / `self_signed_tls_client_auth` | a **client certificate** + key (PEM) | none |
+
+   These are not auto-selected even when the IdP advertises them, because they need key
+   material registered over there first. For `private_key_jwt`, point the IdP's *JWKS
+   URL* at `https://<opnsense>/api/sso/oidc/jwks?provider=<name>` (shown on the
+   diagnostics page) and a key rollover on this side needs no copy-paste - the endpoint
+   serves the public key derived from the private one, and nothing else. Mutual TLS
+   follows RFC 8705: when the IdP publishes `mtls_endpoint_aliases`, the aliased token
+   endpoint is used automatically.
 4. Optional hardening: **Maximum authentication age** sends `max_age` and enforces
    the returned `auth_time`, so an old IdP session must re-authenticate;
    **Required authentication context** sends `acr_values` and enforces the returned
