@@ -19,6 +19,7 @@ use OPNsense\SSO\CaptivePortalAuthorizer;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\HtmlPage;
 use OPNsense\SSO\LogoutGuard;
+use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\SamlMetadata;
@@ -62,6 +63,7 @@ class SamlController extends ApiControllerBase
         try {
             // Pre-auth endpoint: cap how often one source can start a ceremony (each
             // one writes an in-flight state file).
+            NavigationGuard::assertNavigation();
             RateLimiter::hit('saml-login', $this->clientIp(), 20);
             $provider = $this->request->get('provider');
             $protocol = $this->protocolFor($provider);

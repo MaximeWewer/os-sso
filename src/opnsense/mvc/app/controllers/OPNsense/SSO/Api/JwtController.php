@@ -12,6 +12,7 @@ use OPNsense\Base\ApiControllerBase;
 use OPNsense\SSO\AccessPolicy;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\GroupMapper;
+use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\SessionEstablisher;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
@@ -49,6 +50,9 @@ class JwtController extends ApiControllerBase
             return 'Already logged in.';
         }
         try {
+            // A forward-auth login is whatever request reaches the proxy, header and
+            // all, so it must at least be a navigation the user's browser made.
+            NavigationGuard::assertNavigation();
             $auth = $this->authServer($this->request->get('provider'));
 
             // SOURCE GATE -- before reading any header. The TCP peer must be a

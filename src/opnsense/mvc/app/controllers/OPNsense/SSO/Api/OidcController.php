@@ -20,6 +20,7 @@ use OPNsense\SSO\ClientAuth;
 use OPNsense\SSO\FaviconProxy;
 use OPNsense\SSO\HtmlPage;
 use OPNsense\SSO\LogoutGuard;
+use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\RateLimiter;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\SiteUrl;
@@ -63,6 +64,7 @@ class OidcController extends ApiControllerBase
         try {
             // Pre-auth endpoint: cap how often one source can start a ceremony (each
             // one costs a discovery/JWKS lookup and a session write).
+            NavigationGuard::assertNavigation();
             RateLimiter::hit('oidc-login', $this->clientIp(), 20);
             $provider = $this->request->get('provider');
             $protocol = $this->protocolFor($provider);

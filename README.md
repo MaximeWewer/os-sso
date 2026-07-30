@@ -399,7 +399,10 @@ IdP is *asked* for is also *checked* on return - `max_age` against `auth_time` (
 `AuthnInstant`), the required `acr` against the returned one - because requesting an MFA
 context is voluntary per the spec, so only the answer proves anything. The client can
 authenticate to the token endpoint with no shared secret at all (`private_key_jwt`, mutual
-TLS), and the pre-auth endpoints are rate limited per source.
+TLS), and the pre-auth endpoints are rate limited per source (per /64 in IPv6). A login
+endpoint only answers a request the browser reports as a top-level navigation, so a
+third-party page cannot start one - or, on the forward-auth path where the proxy adds
+the token to whatever goes through it, complete one - from an `<img>` tag.
 
 **SCIM** needs a bearer token **and** a source-address allowlist, and refuses on the same
 principles as the login path - see [SCIM provisioning](#scim-provisioning).
