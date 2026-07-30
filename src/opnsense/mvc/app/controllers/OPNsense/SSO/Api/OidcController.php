@@ -409,6 +409,7 @@ class OidcController extends ApiControllerBase
             'use_pkce' => $auth->ssoUsePkce,
             'max_age' => $auth->ssoMaxAge,
             'form_post' => $auth->ssoFormPost,
+            'use_par' => $auth->ssoUsePar,
             'required_acr' => $auth->ssoRequiredAcr,
             'extra_params' => $auth->ssoExtraParams,
             'graph_overage' => $auth->ssoGraphOverage,

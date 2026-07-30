@@ -105,8 +105,16 @@ the exact redirect/ACS URL to copy into the IdP.
    returned `auth_time`), **Required authentication context** (`acr_values`, checked
    against the returned `acr` - the only way to actually require the IdP's MFA context,
    since honouring the request is voluntary per the spec), **form_post response mode** to
-   keep the authorization code out of the URL, and **Extra authorization parameters** for
-   things like `prompt=login`.
+   keep the authorization code out of the URL, **pushed authorization requests** (PAR,
+   RFC 9126 - the request goes over the back channel and the browser only carries an
+   opaque reference; used automatically when the IdP declares it requires them), and
+   **Extra authorization parameters** for things like `prompt=login`.
+
+Deliberately absent: a **request object** (JAR) adds little once PAR keeps the request
+off the browser entirely; **refresh tokens** would be an offline credential for calls
+os-sso never makes; **DPoP** binds access tokens the firewall does not keep; and an
+**encrypted ID token** (JWE) is a decryption key to hold for a token that already
+travels inside TLS to a back-channel endpoint.
 
 **Client authentication.** `auto` picks `client_secret_basic` or `client_secret_post` from
 the discovery document. The others must be chosen explicitly - they need key material

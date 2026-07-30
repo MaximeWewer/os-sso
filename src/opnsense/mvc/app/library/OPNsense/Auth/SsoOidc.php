@@ -28,6 +28,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoUsePkce = true;
     public $ssoMaxAge = 0;
     public $ssoFormPost = false;
+    public $ssoUsePar = false;
     public $ssoRequiredAcr = [];
     public $ssoTokenAuthMethod = 'auto';
     public $ssoAssertionAlg = 'RS256';
@@ -90,6 +91,7 @@ class SsoOidc extends Local implements IAuthConnector
         }
         $this->ssoUsePkce = !empty($config['sso_use_pkce']);
         $this->ssoFormPost = !empty($config['sso_form_post']);
+        $this->ssoUsePar = !empty($config['sso_use_par']);
         $this->ssoGraphOverage = !empty($config['sso_graph_overage']);
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
             $this->ssoMaxAge = (int)$config['sso_max_age'];
@@ -164,6 +166,16 @@ class SsoOidc extends Local implements IAuthConnector
                 'help' => gettext('Ask the IdP to POST the authorization response instead of putting the code '
                     . 'in the callback URL, keeping it out of browser history, Referer headers and proxy logs. '
                     . 'Enable only if the IdP supports response_mode=form_post.'),
+                'type' => 'checkbox',
+            ],
+            'sso_use_par' => [
+                'name' => gettext('Pushed authorization requests (PAR)'),
+                'help' => gettext('Send the authorization request to the IdP over the back channel and put '
+                    . 'only an opaque reference in the browser URL (RFC 9126). Nothing in between - browser '
+                    . 'history, a Referer, a proxy log - then sees the scopes, the state or the PKCE '
+                    . 'challenge, and none of them can be altered on the way. Needs an IdP that publishes a '
+                    . 'pushed_authorization_request_endpoint; it is used automatically, whatever this box '
+                    . 'says, when the IdP declares it requires PAR.'),
                 'type' => 'checkbox',
             ],
             'sso_required_acr' => [

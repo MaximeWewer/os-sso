@@ -60,6 +60,8 @@ final class OidcProtocol implements ProtocolInterface
     private ClientAuth $clientAuth;
     /** follow an Entra ID group-overage claim to Microsoft Graph */
     private bool $graphOverage;
+    /** push the authorization request to the IdP instead of sending it through the browser */
+    private bool $usePar;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -95,6 +97,7 @@ final class OidcProtocol implements ProtocolInterface
         )));
         $this->extraParams = self::parseExtraParams((string)($cfg['extra_params'] ?? ''));
         $this->graphOverage = (bool)($cfg['graph_overage'] ?? false);
+        $this->usePar = (bool)($cfg['use_par'] ?? false);
         $this->clientAuth = new ClientAuth([
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
@@ -168,7 +171,52 @@ final class OidcProtocol implements ProtocolInterface
         // already dropped anything that would overwrite a parameter we depend on.
         $params += $this->extraParams;
 
+        if ($this->usePar($disco)) {
+            return $disco['authorization_endpoint'] . '?' . http_build_query([
+                'client_id' => $this->clientId,
+                'request_uri' => $this->pushAuthorizationRequest($disco, $params),
+            ]);
+        }
         return $disco['authorization_endpoint'] . '?' . http_build_query($params);
+    }
+
+    /**
+     * Should this request be pushed to the IdP instead of sent through the browser?
+     *
+     * On when the operator asked, and on when the IdP says it will take nothing else.
+     * Never on merely because the endpoint exists: PAR is an authenticated back-channel
+     * call, so a misconfigured client secret would turn every login into a failure at a
+     * point where the ordinary flow works fine.
+     */
+    private function usePar(array $disco): bool
+    {
+        if (empty($disco['pushed_authorization_request_endpoint'])) {
+            return false;
+        }
+        return $this->usePar || !empty($disco['require_pushed_authorization_requests']);
+    }
+
+    /**
+     * Push the authorization request and return the request_uri that stands for it
+     * (RFC 9126).
+     *
+     * The parameters travel over an authenticated back channel instead of through the
+     * user's browser, so what reaches the address bar is a client id and an opaque
+     * reference. Nothing in between -- history, a Referer, a proxy log, a shoulder --
+     * sees the redirect_uri, the scopes, the state or the PKCE challenge, and nothing
+     * can alter them on the way: the IdP already has the request it will honour.
+     */
+    private function pushAuthorizationRequest(array $disco, array $params): string
+    {
+        $endpoint = (string)$disco['pushed_authorization_request_endpoint'];
+        $response = $this->postToEndpoint($disco, $endpoint, $params);
+        $requestUri = (string)($response['request_uri'] ?? '');
+        // "urn:ietf:params:oauth:request_uri:<reference>" per the RFC; anything else is
+        // not something to put in front of the user.
+        if (stripos($requestUri, 'urn:') !== 0) {
+            throw new \RuntimeException('OIDC: the pushed authorization request returned no usable request_uri');
+        }
+        return $requestUri;
     }
 
     /**
@@ -845,6 +893,24 @@ final class OidcProtocol implements ProtocolInterface
      */
     private function tokenRequest(array $disco, array $body): array
     {
+        $method = $this->clientAuth->method($disco);
+        $endpoint = $this->clientAuth->tokenEndpoint($disco, $method);
+        if ($endpoint === '') {
+            throw new \RuntimeException('OIDC: discovery has no usable token_endpoint');
+        }
+        return $this->postToEndpoint($disco, $endpoint, $body);
+    }
+
+    /**
+     * POST a form to one of the IdP's authenticated endpoints, as this client.
+     *
+     * Shared by the token endpoint and the pushed-authorization one: both are called
+     * from the firewall rather than through the browser, and both authenticate the
+     * client exactly the same way, so a private_key_jwt or mTLS setup works for both
+     * without being wired twice.
+     */
+    private function postToEndpoint(array $disco, string $endpoint, array $body): array
+    {
         $headers = [
             'Content-Type: application/x-www-form-urlencoded',
             'Accept: application/json',
@@ -853,14 +919,10 @@ final class OidcProtocol implements ProtocolInterface
         $method = $this->clientAuth->method($disco);
         $this->clientAuth->apply($disco, $method, $body, $headers, $curlOptions);
 
-        $endpoint = $this->clientAuth->tokenEndpoint($disco, $method);
-        if ($endpoint === '') {
-            throw new \RuntimeException('OIDC: discovery has no usable token_endpoint');
-        }
         $resp = $this->curl($endpoint, http_build_query($body), $headers, $curlOptions);
         $json = json_decode($resp, true);
         if (!is_array($json) || isset($json['error'])) {
-            throw new \RuntimeException('OIDC: token endpoint error: ' . ($json['error'] ?? 'invalid response'));
+            throw new \RuntimeException('OIDC: ' . $endpoint . ' returned: ' . ($json['error'] ?? 'an invalid response'));
         }
         return $json;
     }
