@@ -238,10 +238,20 @@ final class ScimUsers
 
     /* ---- helpers ----------------------------------------------------- */
 
+    /**
+     * The account behind a resource id, or 404.
+     *
+     * isOurs() is part of the lookup, not a separate check the write paths remember to
+     * make: uids are sequential from nextuid, so without it a token holder walks
+     * /Users/0, /Users/2000, ... and reads back the userName, description, email and
+     * enabled state of every local account on the firewall -- root included. Search
+     * already filtered; a direct id must too, and it answers 404 rather than 403 so the
+     * response says nothing about whether the account exists.
+     */
     private function requireNode(string $id): \SimpleXMLElement
     {
         $node = $this->accounts->findByUid($id);
-        if ($node === null) {
+        if ($node === null || !$this->isOurs($node)) {
             throw ScimError::notFound('user');
         }
         return $node;
