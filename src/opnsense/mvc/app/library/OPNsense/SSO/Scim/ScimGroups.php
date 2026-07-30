@@ -10,6 +10,7 @@ namespace OPNsense\SSO\Scim;
 use OPNsense\Core\Config;
 use OPNsense\SSO\ConfigLock;
 use OPNsense\SSO\LocalAccountWriter;
+use OPNsense\SSO\Privilege;
 
 /**
  * The /Groups half: membership, and only membership.
@@ -28,8 +29,6 @@ use OPNsense\SSO\LocalAccountWriter;
 final class ScimGroups
 {
     /** Privileges that make a group admin-equivalent; mirrors GroupMapper. */
-    private const ESCALATION_PRIVS = ['page-all', 'user-shell-access', 'page-system-usermanager'];
-
     private LocalAccountWriter $accounts;
     private string $base;
 
@@ -162,7 +161,7 @@ final class ScimGroups
 
     private function assertMayTouch(\SimpleXMLElement $group): void
     {
-        if ($this->isPrivileged($group)) {
+        if (Privilege::isPrivilegedGroup($group)) {
             throw new ScimError(403, sprintf(
                 "'%s' grants administrative privileges; its membership is not managed over SCIM",
                 (string)$group->name
@@ -170,20 +169,6 @@ final class ScimGroups
         }
     }
 
-    private function isPrivileged(\SimpleXMLElement $group): bool
-    {
-        if (strtolower((string)$group->name) === 'admins') {
-            return true;
-        }
-        foreach ($group->priv as $priv) {
-            foreach (array_filter(array_map('trim', explode(',', (string)$priv))) as $p) {
-                if (in_array($p, self::ESCALATION_PRIVS, true)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     /** @return string[] */
     private function membersOf(\SimpleXMLElement $group): array

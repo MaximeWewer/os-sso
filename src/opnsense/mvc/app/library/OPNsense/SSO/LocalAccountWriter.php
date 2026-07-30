@@ -110,24 +110,7 @@ final class LocalAccountWriter
     /** Built-in/system account, or a member of the admins group. */
     public function isPrivileged(\SimpleXMLElement $node): bool
     {
-        if ((string)($node->scope ?? '') === 'system' || (string)($node->uid ?? '') === '0') {
-            return true;
-        }
-        $uid = (string)($node->uid ?? '');
-        if ($uid === '') {
-            return false;
-        }
-        foreach ((Config::getInstance()->object()->system->group ?? []) as $group) {
-            if (strtolower((string)$group->name) !== 'admins') {
-                continue;
-            }
-            foreach ($group->member as $member) {
-                if (in_array($uid, array_filter(explode(',', (string)$member)), true)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return Privilege::isPrivilegedAccount($node);
     }
 
     /**

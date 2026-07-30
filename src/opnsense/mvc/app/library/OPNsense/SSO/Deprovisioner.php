@@ -48,7 +48,7 @@ final class Deprovisioner
                     return false;
                 }
                 $username = (string)$node->name;
-                if (self::isPrivileged($node)) {
+                if (Privilege::isPrivilegedAccount($node)) {
                     syslog(LOG_WARNING, sprintf(
                         "os-sso: NOT deprovisioning privileged account '%s' refused by %s -- " .
                         "disable it by hand if that is what you want",
@@ -100,26 +100,4 @@ final class Deprovisioner
         return null;
     }
 
-    /** Built-in/system account, or a member of the admins group. */
-    private static function isPrivileged(\SimpleXMLElement $node): bool
-    {
-        if ((string)($node->scope ?? '') === 'system' || (string)($node->uid ?? '') === '0') {
-            return true;
-        }
-        $uid = (string)($node->uid ?? '');
-        if ($uid === '') {
-            return false;
-        }
-        foreach ((Config::getInstance()->object()->system->group ?? []) as $group) {
-            if (strtolower((string)$group->name) !== 'admins') {
-                continue;
-            }
-            foreach ($group->member as $member) {
-                if (in_array($uid, array_filter(explode(',', (string)$member)), true)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 }

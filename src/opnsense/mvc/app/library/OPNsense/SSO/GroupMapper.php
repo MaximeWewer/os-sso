@@ -109,7 +109,7 @@ final class GroupMapper
             // group name matched 1:1 -- the IdP group name is attacker-influenced
             // (often self-service). defaultGroups and explicit operator maps are
             // trusted and may target privileged groups on purpose.
-            if ($targets[$groupName] === 'idp' && $this->isPrivilegedGroup($group)) {
+            if ($targets[$groupName] === 'idp' && Privilege::isPrivilegedGroup($group)) {
                 syslog(LOG_WARNING, sprintf(
                     "os-sso: ignoring unmapped IdP group '%s' -> privileged OPNsense group '%s' " .
                     "(configure an explicit mapping or default group to allow)",
@@ -185,7 +185,7 @@ final class GroupMapper
             if (!isset($previous[$groupName]) || isset($granted[$groupName])) {
                 continue;
             }
-            if ($this->isPrivilegedGroup($group) && $this->isLastEnabledMember($group, $uid)) {
+            if (Privilege::isPrivilegedGroup($group) && $this->isLastEnabledMember($group, $uid)) {
                 syslog(LOG_WARNING, sprintf(
                     "os-sso: keeping uid %s in privileged group '%s' (would remove its last member)",
                     $uid,
@@ -237,27 +237,8 @@ final class GroupMapper
      * group. Checked against the group's actual ACL privileges, not just its name,
      * so a custom admin-equivalent group is covered too.
      */
-    private function isPrivilegedGroup(\SimpleXMLElement $group): bool
-    {
-        if (strtolower((string)$group->name) === 'admins') {
-            return true;
-        }
-        foreach ($group->priv as $priv) {
-            foreach (array_filter(array_map('trim', explode(',', (string)$priv))) as $p) {
-                if (in_array($p, self::ESCALATION_PRIVS, true)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
 
     /** ACL privileges that make a group admin-equivalent for 1:1-fallback gating. */
-    private const ESCALATION_PRIVS = [
-        'page-all',                 // unrestricted WebGUI access
-        'user-shell-access',        // shell login
-        'page-system-usermanager',  // edit users/groups -> grant self anything
-    ];
 
     private function addMember(\SimpleXMLElement $group, string $uid): bool
     {
