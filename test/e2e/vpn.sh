@@ -65,6 +65,78 @@ echo ">>> case 7: an unknown session id is refused"
 grep -q 'unknown vpn session' "$W/v4" && ok "unknown session id refused" \
     || ko "unknown id accepted ($(cat "$W/v4"))"
 
+# OpenVPN keeps using the username the CLIENT sent -- it never asks again on a deferred
+# path -- so that name, not the authenticated one, drives username-as-common-name, a
+# client-config-dir and per-user rules. The state file records both so a mismatch is
+# visible, and refuses it when the operator asked.
+defer() { # $1 = claimed username, $2 = pending file -> echoes the session id
+    : > "$2"
+    env IV_SSO=webauth username="$1" auth_pending_file="$2" auth_control_file="$3" \
+        untrusted_ip=203.0.113.7 sh "$HOOK" >/dev/null 2>&1
+    sed -n 's/.*&vpn=//p' "$2"
+}
+
+echo ">>> case 8: the claimed username is recorded alongside the control path"
+SID3=$(defer 'claimed.bob' "$W/pending4" "$W/control4")
+[ "$(sed -n 3p "$STATE/$SID3")" = "claimed.bob" ] \
+    && ok "the client-supplied username is stored" \
+    || ko "line 3 of the session file is '$(sed -n 3p "$STATE/$SID3")'"
+
+# The verdict script sources vpn.conf AFTER the environment, so the file is what
+# decides -- which is right in production, and means the setting has to be flipped there
+# to test it. The generated file is restored from the model at the end of the suite.
+CONF=/usr/local/etc/sso/vpn.conf
+set_enforce() {
+    sed -i '' '/^ENFORCE_USERNAME=/d' "$CONF" 2>/dev/null
+    printf "ENFORCE_USERNAME='%s'\n" "$1" >> "$CONF"
+}
+
+echo ">>> case 9: a mismatch is allowed but logged while enforcement is off"
+set_enforce 0
+: > "$W/control4"
+"$VERDICT" "$SID3" 1 203.0.113.7 'real.alice' >"$W/v5" 2>&1
+[ "$(cat "$W/v5")" = "ok" ] && ok "a differing username is accepted when not enforced" \
+    || ko "verdict said '$(cat "$W/v5")'"
+[ "$(cat "$W/control4")" = "1" ] && ok "and the tunnel was authorized" \
+    || ko "control file holds '$(cat "$W/control4")'"
+
+echo ">>> case 10: with enforcement on, a mismatch is refused"
+SID4=$(defer 'claimed.bob' "$W/pending5" "$W/control5")
+: > "$W/control5"
+set_enforce 1
+"$VERDICT" "$SID4" 1 203.0.113.7 'real.alice' >"$W/v6" 2>&1
+grep -q 'username mismatch' "$W/v6" && ok "the mismatch is refused ($(cat "$W/v6"))" \
+    || ko "mismatch not caught ($(cat "$W/v6"))"
+[ "$(cat "$W/control5")" = "0" ] && ok "a deny was written to the control file" \
+    || ko "control file holds '$(cat "$W/control5")'"
+
+echo ">>> case 11: with enforcement on, a matching username passes"
+SID5=$(defer 'real.alice' "$W/pending6" "$W/control6")
+: > "$W/control6"
+"$VERDICT" "$SID5" 1 203.0.113.7 'real.alice' >"$W/v7" 2>&1
+[ "$(cat "$W/v7")" = "ok" ] && ok "a matching username is accepted" \
+    || ko "verdict said '$(cat "$W/v7")'"
+[ "$(cat "$W/control6")" = "1" ] && ok "and the tunnel was authorized" \
+    || ko "control file holds '$(cat "$W/control6")'"
+
+echo ">>> case 12: a client that sent no username has nothing to spoof"
+SID6=$(defer '' "$W/pending7" "$W/control7")
+: > "$W/control7"
+"$VERDICT" "$SID6" 1 203.0.113.7 'real.alice' >"$W/v8" 2>&1
+[ "$(cat "$W/v8")" = "ok" ] && ok "an empty claimed username is not refused" \
+    || ko "verdict said '$(cat "$W/v8")'"
+
+echo ">>> case 13: abandoned session files are swept"
+STALE="$STATE/staleaaaabbbbccccddddeeeeffff0000"
+printf '/tmp/x\n203.0.113.7\nold\n' > "$STALE"
+touch -t 202001010000 "$STALE"
+defer 'sweep.probe' "$W/pending8" "$W/control8" >/dev/null
+[ ! -f "$STALE" ] && ok "a session file older than the web-auth timeout is removed" \
+    || ko "the stale session file survived"
+
+# Put the generated file back the way the model says.
+configctl template reload OPNsense/SSO >/dev/null 2>&1
+
 echo ""
 echo ">>> RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -28,8 +28,10 @@ IDP_PASS="${IDP_PASS:-Test12345!}"
 W=$(mktemp -d)
 pass=0; fail=0
 
+restore_provider() { :; }   # replaced below once the previous value is known
 cleanup() {
     [ -f "$W/vpn.pid" ] && kill "$(cat "$W/vpn.pid")" 2>/dev/null
+    restore_provider
     rm -rf "$W"
 }
 trap cleanup EXIT
@@ -41,6 +43,21 @@ vm()   { vagrant ssh -c "sudo sh -c '$1'" 2>/dev/null | tr -d '\r'; }
 echo "=== os-sso OpenVPN web-auth with a real client (idp=$IDP) ==="
 
 command -v openvpn >/dev/null || { echo "  SKIP openvpn is not installed on the host"; exit 0; }
+
+# Point the VPN web-auth setting at the provider under test and re-render vpn.conf: the
+# server hands the client a WEB_AUTH url built from that setting, so a suite driving one
+# IdP against a setting naming another logs in at the wrong door. Restored on exit.
+PREV_PROVIDER=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_vpn_settings.php provider")
+if [ "$PREV_PROVIDER" != "$PROVIDER" ]; then
+    echo ">>> pointing VPN web-auth at '$PROVIDER' (was '$PREV_PROVIDER')"
+    vm "php /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php provider=$PROVIDER" >/dev/null
+    restore_provider() {
+        [ -n "$PREV_PROVIDER" ] && \
+            vm "php /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php provider=$PREV_PROVIDER" >/dev/null
+    }
+else
+    restore_provider() { :; }
+fi
 
 echo ">>> fetching the lab client profile"
 vm "cat /usr/local/etc/sso/client.ovpn" > "$W/client.ovpn"

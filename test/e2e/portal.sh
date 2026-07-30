@@ -81,6 +81,10 @@ grep -q 'javascript:' "$W/evil.html" 2>/dev/null \
     && ko "a javascript: destination survived into the page" \
     || ok "the javascript: destination was dropped"
 
+# Leave the LAN interface un-intercepted for the next suite (see disable_cp_zones.php).
+vm "php /home/vagrant/os-sso/test/vagrant/disable_cp_zones.php" >/dev/null 2>&1
+vm "configctl captiveportal reconfigure" >/dev/null 2>&1
+
 echo ""
 echo ">>> RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

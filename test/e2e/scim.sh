@@ -113,9 +113,15 @@ vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php scim.alice" | grep -q 'u
 
 # --- 6. the guards ---------------------------------------------------------------
 echo ">>> case 6: privileged accounts are out of reach"
-check "PATCH on uid 0 is refused" 403 "$(code -H "$AUTH" -H "$CT" -X PATCH "$BASE/Users/0" \
+# 404, not 403: an account os-sso does not own is not addressable over SCIM at all, so
+# the response says nothing about whether it exists. uids run sequentially from nextuid,
+# and a 403 here would have turned /Users/<n> into an enumeration of every local account
+# on the firewall -- root included.
+check "PATCH on uid 0 is not addressable" 404 "$(code -H "$AUTH" -H "$CT" -X PATCH "$BASE/Users/0" \
     -d '{"Operations":[{"op":"replace","path":"active","value":false}]}')"
-check "DELETE on uid 0 is refused" 403 "$(code -H "$AUTH" -X DELETE "$BASE/Users/0")"
+check "DELETE on uid 0 is not addressable" 404 "$(code -H "$AUTH" -X DELETE "$BASE/Users/0")"
+grep -q 'not found' "$W/out" && ok "the refusal does not confirm the account exists" \
+    || ko "the refusal leaked something ($(head -c 120 "$W/out"))"
 check "POST colliding with a local account is refused" 403 \
     "$(code -H "$AUTH" -H "$CT" -X POST "$BASE/Users" -d '{"userName":"root","externalId":"ext-evil"}')"
 vm "php /home/vagrant/os-sso/test/vagrant/dump_user.php root" | grep -q 'disabled=0' \

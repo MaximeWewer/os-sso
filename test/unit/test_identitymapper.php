@@ -69,27 +69,65 @@ $root = Tree::build([
 ]);
 throws(
     fn() => mapper()->resolve(identity(['subject' => 'sub-mallory', 'username' => 'alice']), false, []),
-    'already bound to another IdP subject',
-    'a different subject cannot take over the account by username'
+    "already bound to another subject of provider 'kc'",
+    'a different subject of the same provider cannot take over the account'
 );
 eq('kc|sub-alice', (string)Tree::user($root, 'alice')->sso_subject, 'the original binding is untouched');
 
-// No subject asserted at all is the same problem: nothing proves it is the same person.
+// No subject asserted at all cannot be pinned, so it may not claim a bound account.
 throws(
     fn() => mapper()->resolve(identity(['subject' => '', 'username' => 'alice']), false, []),
-    'already bound to another IdP subject',
-    'an identity with no subject cannot claim a stamped account'
+    'asserts none',
+    'an identity with no subject cannot claim a bound account'
 );
 
-// A second provider is not a loophole either.
-throws(
-    fn() => mapper()->resolve(
-        identity(['authServer' => 'other', 'subject' => 'sub-alice', 'username' => 'alice']),
+T::group('IdentityMapper: one account, several providers');
+
+// The shape the lab exposed: one directory fronted by OIDC and by SAML, the same person,
+// two subjects. Each provider vouches for its own users -- the operator registered them
+// separately -- so a second provider binds alongside the first rather than being refused.
+$root = Tree::build([
+    ['name' => 'kctest', 'uid' => '2100', 'scrambled_password' => '1', 'sso_subject' => 'kc|sub-oidc'],
+]);
+eq(
+    'kctest',
+    mapper()->resolve(
+        identity(['authServer' => 'kc-saml', 'subject' => 'nameid-saml', 'username' => 'kctest']),
         false,
         []
     ),
-    'already bound to another IdP subject',
-    'the same subject id from a different provider is refused'
+    'a second provider binds to the same account'
+);
+$bindings = [];
+foreach (Tree::user($root, 'kctest')->sso_subject as $b) {
+    $bindings[] = (string)$b;
+}
+eq(['kc|sub-oidc', 'kc-saml|nameid-saml'], $bindings, 'both bindings are recorded, one per provider');
+
+// And each is then durable in its own right.
+eq(
+    'kctest',
+    mapper()->resolve(identity(['subject' => 'sub-oidc', 'username' => 'renamed']), false, []),
+    'the first provider still resolves by its own binding'
+);
+eq(
+    'kctest',
+    mapper()->resolve(
+        identity(['authServer' => 'kc-saml', 'subject' => 'nameid-saml', 'username' => 'renamed']),
+        false,
+        []
+    ),
+    'and so does the second'
+);
+// The takeover is still closed WITHIN each provider.
+throws(
+    fn() => mapper()->resolve(
+        identity(['authServer' => 'kc-saml', 'subject' => 'nameid-other', 'username' => 'kctest']),
+        false,
+        []
+    ),
+    "another subject of provider 'kc-saml'",
+    'a second subject of the second provider is still refused'
 );
 
 T::group('IdentityMapper: human-owned and privileged accounts');
@@ -151,8 +189,8 @@ throws(
         false,
         []
     ),
-    'already bound to another IdP subject',
-    'a verified email cannot cross subjects'
+    "already bound to another subject of provider 'kc'",
+    'a verified email cannot cross subjects of one provider'
 );
 // Isolate the email path: a subject the stamp does not answer to, so the durable match
 // above cannot resolve it first.
