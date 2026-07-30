@@ -185,10 +185,23 @@ final class SessionRegistry
     public static function sweep(): int
     {
         $now = time();
-        return self::destroyWhere(function (array $entry) use ($now) {
+        $accounts = new LocalAccountWriter();
+        return self::destroyWhere(function (array $entry) use ($now, $accounts) {
             $expires = (int)($entry['expires_at'] ?? 0);
             if ($expires > 0 && $expires <= $now) {
                 return true;
+            }
+            // An account disabled or expired since the login keeps whatever it was
+            // granted until it makes a request -- and a captive-portal client or a
+            // tunnel never makes one to us at all. The operator's own checkbox, an
+            // <expires> date and anything that disabled the account outside the two
+            // paths that end sessions themselves all land here.
+            $username = (string)($entry['username'] ?? '');
+            if ($username !== '') {
+                $node = $accounts->findByName($username);
+                if ($node !== null && !LocalAccount::isUsable($node)) {
+                    return true;
+                }
             }
             // A portal or VPN grant has no PHP session behind it; its own deadline is
             // the only thing that retires it (see GRANT_TTL).

@@ -266,9 +266,9 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_session_lifetime' => [
                 'name' => gettext('Maximum session lifetime (s)'),
                 'help' => gettext('End the WebGUI session this long after login whatever the user is doing, '
-                    . 'unlike the idle timeout. Enforced when the "sso expire_sessions" action runs (schedule '
-                    . 'it under System > Settings > Cron) and on every SSO login. 0 keeps sessions until they '
-                    . 'idle out.'),
+                    . 'unlike the idle timeout. Enforced by the scheduled "os-sso: expire SSO sessions" job '
+                    . '(added for you under System > Settings > Cron) and on every SSO login. 0 keeps sessions '
+                    . 'until they idle out.'),
                 'type' => 'text',
                 'default' => '0',
                 'validate' => fn($v) => ($v === '' || ctype_digit((string)$v))

@@ -165,3 +165,38 @@ throws(
     'disabled or expired',
     'assertUsable explains itself'
 );
+
+T::group('SessionRegistry: what a sweep ends');
+
+if (!stateDirUsable()) {
+    T::skip('the sweep cases', 'needs a writable /var/db/os-sso');
+} else {
+    $dir = \OPNsense\SSO\StateDir::path('sessions');
+    foreach (glob($dir . '/*.json') ?: [] as $stale) {
+        unlink($stale);
+    }
+    Tree::build([
+        ['name' => 'live', 'uid' => '2100', 'scrambled_password' => '1'],
+        ['name' => 'revoked', 'uid' => '2101', 'scrambled_password' => '1', 'disabled' => '1'],
+    ]);
+
+    /** Write a registry record by hand, the way a login would. */
+    $record = function (array $entry) use ($dir) {
+        $file = $dir . '/' . hash('sha256', json_encode($entry) . random_bytes(8)) . '.json';
+        file_put_contents($file, json_encode($entry));
+        return $file;
+    };
+
+    // A portal grant and a VPN grant have no PHP session behind them, so the old sweep
+    // (which ended anything whose session file was gone) would have dropped them both on
+    // the first pass -- and the account being disabled is what should end them instead.
+    $keep = $record(['kind' => 'portal', 'username' => 'live', 'cp_session' => 's1', 'expires_at' => time() + 3600]);
+    $gone = $record(['kind' => 'portal', 'username' => 'revoked', 'cp_session' => 's2', 'expires_at' => time() + 3600]);
+    $old = $record(['kind' => 'vpn', 'username' => 'live', 'vpn_cn' => 'alice', 'expires_at' => time() - 1]);
+
+    eq(2, \OPNsense\SSO\SessionRegistry::sweep(), 'the expired grant and the revoked account are ended');
+    truthy(is_file($keep), 'a live grant for an enabled account survives');
+    falsy(is_file($gone), 'the grant of a disabled account is gone');
+    falsy(is_file($old), 'so is the one past its deadline');
+    unlink($keep);
+}
