@@ -216,6 +216,49 @@ check "garbage logout_token refused" 400 \
 check "no logout_token refused" 400 \
     "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$GUI/api/sso/oidc/backchannel?provider=$PROVIDER")"
 
+# --- 11. service scoping --------------------------------------------------------
+# A provider narrowed to the portal must stop being a WebGUI door -- button and
+# endpoint both, since the button is only the part an attacker does not need.
+echo ">>> case 11: a provider scoped away from the WebGUI"
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_services=portal" >/dev/null
+check "the login endpoint refuses a WebGUI login" 400 \
+    "$(curl -sk -o /dev/null -w '%{http_code}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")"
+curl -sk -o "$W/loginpage.html" "$GUI/"
+grep -q "api/sso/oidc/login?provider=$PROVIDER" "$W/loginpage.html" \
+    && ko "the login page still offers the provider" \
+    || ok "no button for it on the login page"
+vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_services=" >/dev/null
+check "and it works again once the scope is cleared" 302 "$(login "$W/jar5")"
+
+# --- 12. ending a session from the diagnostics page -----------------------------
+# One administrator ends somebody else's session: which is the point of the button, and
+# what tells the two sessions apart is the handle the page lists (a digest of the
+# session id, never the id).
+echo ">>> case 12: an administrator ends another session"
+handles() { curl -sk -b "$1" "$GUI/api/sso/diagnostics/sessions" \
+    | grep -o '"id":"[a-f0-9]\{64\}"' | sed 's/.*:"//;s/"//' | sort; }
+# The WebGUI's own CSRF token, read the way the page's JS gets it. Without it core
+# refuses the POST, which is a property worth asserting in its own right.
+curl -sk -b "$W/jar5" "$GUI/ui/sso/diagnostics" -o "$W/diag.html"
+TOK=$(sed -n 's/.*"X-CSRFToken", "\([^"]*\)".*/\1/p' "$W/diag.html" | head -1)
+[ -n "$TOK" ] && ok "the diagnostics page carries a CSRF token" || ko "no CSRF token on the page"
+BEFORE=$(handles "$W/jar5")
+check "a second login" 302 "$(login "$W/jar6")"
+SID=$(comm -13 <(printf '%s\n' "$BEFORE") <(handles "$W/jar5") | head -1)
+[ -n "$SID" ] && ok "the new session shows up with its own handle" || ko "the new session is not listed"
+check "ending it needs a POST" 405 \
+    "$(curl -sk -b "$W/jar5" -H "X-CSRFToken: $TOK" -o /dev/null -w '%{http_code}' \
+        "$GUI/api/sso/diagnostics/endSession/$SID")"
+check "and a CSRF token" 403 \
+    "$(curl -sk -b "$W/jar5" -X POST -o /dev/null -w '%{http_code}' \
+        "$GUI/api/sso/diagnostics/endSession/$SID")"
+curl -sk -b "$W/jar5" -H "X-CSRFToken: $TOK" -X POST -o "$W/end.json" \
+    "$GUI/api/sso/diagnostics/endSession/$SID" >/dev/null
+grep -q '"ended":1' "$W/end.json" && ok "one access was ended ($(cat "$W/end.json"))" \
+    || ko "endSession answered $(cat "$W/end.json")"
+not_live "$W/jar6" "the ended session no longer authenticates"
+is_live "$W/jar5" "the administrator's own session is untouched"
+
 echo ""
 echo ">>> RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
