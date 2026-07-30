@@ -21,6 +21,9 @@ CONF=/usr/local/etc/sso/vpn.conf
 [ -r "$CONF" ] && . "$CONF"
 PROTOCOL="${PROTOCOL:-oidc}"   # oidc | saml
 PROVIDER="${PROVIDER:-}"
+# Percent-encoded form for the query string. Falls back to the raw name so a
+# vpn.conf written by an older build still works (rewritten on the next save).
+PROVIDER_ENC="${PROVIDER_ENC:-$PROVIDER}"
 HOST="${HOST:-}"
 TIMEOUT="${TIMEOUT:-180}"
 # Root-owned tree, not the world-writable /var/tmp: the per-session file holds the
@@ -93,7 +96,8 @@ chmod 600 "$STATE_DIR/$SID" || { rm -f "$STATE_DIR/$SID"; echo "os-sso vpn: cann
 {
     printf '%s\n' "$TIMEOUT"
     printf 'webauth\n'
-    printf 'WEB_AUTH::https://%s/api/sso/%s/login?provider=%s&vpn=%s\n' "$HOST" "$PROTOCOL" "$PROVIDER" "$SID"
+    printf 'WEB_AUTH::https://%s/api/sso/%s/login?provider=%s&vpn=%s\n' \
+        "$HOST" "$PROTOCOL" "$PROVIDER_ENC" "$SID"
 } > "$auth_pending_file"
 
 exit 2   # 2 = authentication deferred
