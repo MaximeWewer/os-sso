@@ -47,6 +47,8 @@ final class OidcProtocol implements ProtocolInterface
     private int $maxAge;
     /** ask the IdP to POST the response back instead of putting it in the URL */
     private bool $formPost;
+    /** @var string[] authentication context classes we require (empty = any) */
+    private array $requiredAcr;
     /** @var array<string,string> extra authorization-request parameters */
     private array $extraParams;
     /** per-provider session-key prefix so concurrent flows do not clobber each other */
@@ -80,6 +82,10 @@ final class OidcProtocol implements ProtocolInterface
         $this->usePkce = (bool)($cfg['use_pkce'] ?? true);
         $this->maxAge = max(0, (int)($cfg['max_age'] ?? 0));
         $this->formPost = (bool)($cfg['form_post'] ?? false);
+        $this->requiredAcr = array_values(array_filter(array_map(
+            'strval',
+            (array)($cfg['required_acr'] ?? [])
+        )));
         $this->extraParams = self::parseExtraParams((string)($cfg['extra_params'] ?? ''));
         // Namespace the in-flight session keys (state/nonce/verifier/return) by
         // provider so two concurrent logins to different providers in one browser
@@ -135,7 +141,12 @@ final class OidcProtocol implements ProtocolInterface
             // Keep the code out of the URL (browser history, Referer, proxy logs).
             $params['response_mode'] = 'form_post';
         }
-        // Operator extras (prompt, acr_values, login_hint, ui_locales...). parseExtra
+        if (!empty($this->requiredAcr)) {
+            // Ask for the context we are going to insist on in validateIdToken. Order is
+            // the preference order per OIDC Core; the check accepts any of them.
+            $params['acr_values'] = implode(' ', $this->requiredAcr);
+        }
+        // Operator extras (prompt, login_hint, ui_locales...). parseExtra
         // already dropped anything that would overwrite a parameter we depend on.
         $params += $this->extraParams;
 
@@ -156,6 +167,10 @@ final class OidcProtocol implements ProtocolInterface
         static $reserved = [
             'response_type', 'response_mode', 'client_id', 'redirect_uri', 'scope',
             'state', 'nonce', 'code_challenge', 'code_challenge_method', 'max_age',
+            // acr_values belongs to the "Required authentication context" setting, which
+            // also verifies the acr that comes back. Requesting one here and not
+            // checking it is how you end up believing MFA is enforced when it is not.
+            'acr_values',
         ];
         $out = [];
         foreach (preg_split('/[,\r\n]+/', $spec) ?: [] as $pair) {
@@ -446,12 +461,51 @@ final class OidcProtocol implements ProtocolInterface
                 throw new \RuntimeException('OIDC: the IdP authentication is older than the configured max_age');
             }
         }
+        // We asked the IdP for a particular authentication context; check we got it.
+        $this->assertAcr($claims);
         // at_hash binds the ID token to the access token delivered with it. Without
         // it, an access token from another (attacker) session could be paired with a
         // genuine ID token and drive the userinfo enrichment below.
         $this->assertAtHash($idToken, $claims, $accessToken);
 
         return $claims;
+    }
+
+    /**
+     * Enforce the configured authentication context class.
+     *
+     * Sending acr_values is a *voluntary* request per OIDC Core: an IdP that cannot, or
+     * will not, honour it answers with an ordinary session and no error. So the request
+     * on its own enforces nothing -- asking for an MFA context and never reading the
+     * answer is exactly how an operator ends up believing MFA is required when it is
+     * not. The returned acr is the only evidence there is, and a missing claim is a
+     * failure rather than a reason to accept an authentication of unknown strength.
+     *
+     * acr is a single string per the spec, but IdPs have been seen returning a list;
+     * accept either. The comparison is exact -- an acr is an identifier, not a level to
+     * be ordered.
+     */
+    private function assertAcr(object $claims): void
+    {
+        if (empty($this->requiredAcr)) {
+            return;
+        }
+        $got = [];
+        foreach ((array)($claims->acr ?? []) as $value) {
+            if (is_scalar($value)) {
+                $got[] = (string)$value;
+            }
+        }
+        foreach ($got as $value) {
+            if (in_array($value, $this->requiredAcr, true)) {
+                return;
+            }
+        }
+        throw new \RuntimeException(sprintf(
+            'OIDC: the ID token acr (%s) is none of the required values (%s)',
+            $got !== [] ? implode(', ', $got) : 'absent',
+            implode(', ', $this->requiredAcr)
+        ));
     }
 
     /**

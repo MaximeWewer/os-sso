@@ -126,9 +126,12 @@ All types share a few options:
    `client_secret_post`) is taken from the IdP's discovery document.
 4. Optional hardening: **Maximum authentication age** sends `max_age` and enforces
    the returned `auth_time`, so an old IdP session must re-authenticate;
-   **form_post response mode** keeps the authorization code out of the URL;
-   **Extra authorization parameters** passes things like `prompt=login` or
-   `acr_values=mfa` through to the IdP.
+   **Required authentication context** sends `acr_values` and enforces the returned
+   `acr`, which is how you actually require the IdP's MFA context (requesting one is
+   voluntary per the spec - an IdP may ignore it, so only the returned `acr` proves
+   anything); **form_post response mode** keeps the authorization code out of the URL;
+   **Extra authorization parameters** passes things like `prompt=login` through to the
+   IdP.
 
 | Provider | Issuer URL | Groups |
 |---|---|---|

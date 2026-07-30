@@ -28,6 +28,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoUsePkce = true;
     public $ssoMaxAge = 0;
     public $ssoFormPost = false;
+    public $ssoRequiredAcr = [];
     public $ssoExtraParams = null;
     public $ssoSessionLifetime = 0;
     public $ssoScimEnabled = false;
@@ -89,6 +90,7 @@ class SsoOidc extends Local implements IAuthConnector
         if (!empty($config['sso_scopes'])) {
             $this->ssoScopes = array_filter(array_map('trim', explode(',', $config['sso_scopes'])));
         }
+        $this->ssoRequiredAcr = array_filter(array_map('trim', explode(',', $config['sso_required_acr'] ?? '')));
         $this->ssoRequiredGroups = array_filter(array_map('trim', explode(',', $config['sso_required_groups'] ?? '')));
         $this->ssoDefaultGroups = array_filter(array_map('trim', explode(',', $config['sso_default_groups'] ?? '')));
     }
@@ -146,11 +148,22 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'Enable only if the IdP supports response_mode=form_post.'),
                 'type' => 'checkbox',
             ],
+            'sso_required_acr' => [
+                'name' => gettext('Required authentication context (acr)'),
+                'help' => gettext('Comma separated authentication context class references, in preference '
+                    . 'order - typically the one your IdP uses for MFA. They are sent as acr_values AND the '
+                    . '"acr" claim that comes back must be one of them. Both halves matter: requesting a '
+                    . 'context is voluntary per the spec, so an IdP is free to ignore it and return an '
+                    . 'ordinary session - only the returned acr proves anything. Empty accepts whatever '
+                    . 'context the IdP used.'),
+                'type' => 'text',
+            ],
             'sso_extra_params' => [
                 'name' => gettext('Extra authorization parameters'),
                 'help' => gettext('Optional "key=value" pairs, comma separated, appended to the authorization '
-                    . 'request (e.g. "prompt=login, acr_values=mfa, ui_locales=fr"). Parameters that carry the '
-                    . 'security of the flow (state, nonce, redirect_uri, PKCE, max_age...) are ignored here.'),
+                    . 'request (e.g. "prompt=login, ui_locales=fr"). Parameters that carry the security of the '
+                    . 'flow (state, nonce, redirect_uri, PKCE, max_age, acr_values...) are ignored here - use '
+                    . 'the dedicated fields, which also verify what comes back.'),
                 'type' => 'text',
             ],
             'sso_username_claim' => [

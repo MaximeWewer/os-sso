@@ -332,6 +332,7 @@ class OidcController extends ApiControllerBase
             'use_pkce' => $auth->ssoUsePkce,
             'max_age' => $auth->ssoMaxAge,
             'form_post' => $auth->ssoFormPost,
+            'required_acr' => $auth->ssoRequiredAcr,
             'extra_params' => $auth->ssoExtraParams,
             'redirect_uri' => $this->baseUrlFor($auth) . '/api/sso/oidc/callback',
         ]);
