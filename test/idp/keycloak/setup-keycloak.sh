@@ -81,9 +81,31 @@ fi
 echo "user_uuid=$UID_"
 
 # --- IdP SAML signing certificate (for the OPNsense SP to trust) ---
-"${KC[@]}" get "keys" -r "$R" 2>/dev/null | grep -o '"certificate"[^,]*' | head -1 | cut -d'"' -f4 > /tmp/kc-saml-cert.txt || true
+# Pick the SIGNING key, by algorithm and use -- not the first certificate in the list.
+# A realm carries several keys (RS256/SIG, RSA-OAEP/ENC, AES, HS512) in no guaranteed
+# order, and here the encryption certificate comes first: taking it registered a key
+# Keycloak never signs with, and every assertion was then rejected for a bad signature.
+"${KC[@]}" get "keys" -r "$R" 2>/dev/null | python3 -c '
+import json, sys
+keys = json.load(sys.stdin).get("keys", [])
+for k in keys:
+    if k.get("algorithm") == "RS256" and k.get("use") == "SIG" and k.get("certificate"):
+        sys.stdout.write(k["certificate"])
+        break
+' > /tmp/kc-saml-cert.txt || true
 echo "saml_cert_written=$(wc -c </tmp/kc-saml-cert.txt 2>/dev/null || echo 0)"
 
-# Persist OIDC creds for the next step
-printf 'OIDC_CLIENT_ID=opnsense-oidc\nOIDC_CLIENT_SECRET=%s\nSAML_ENTITY=%s\n' "$SECRET" "$SAML_ENTITY" > /tmp/kc-out.env
-echo "DONE"
+# Persist everything the next step needs, under the same key names Authentik's setup
+# writes, so one registration script can consume either IdP without special-casing.
+# SAML_ENTITY is kept for compatibility with anything already reading this file.
+IDP_BASE="${IDP_BASE:-https://keycloak.test:9443}"
+cat > /tmp/kc-out.env <<EOF
+OIDC_CLIENT_ID=opnsense-oidc
+OIDC_CLIENT_SECRET=$SECRET
+OIDC_ISSUER=$IDP_BASE/realms/$R
+SAML_IDP_ENTITY=$IDP_BASE/realms/$R
+SAML_IDP_SSO=$IDP_BASE/realms/$R/protocol/saml
+SAML_CERT=$(cat /tmp/kc-saml-cert.txt 2>/dev/null || true)
+SAML_ENTITY=$SAML_ENTITY
+EOF
+echo "DONE -> /tmp/kc-out.env"

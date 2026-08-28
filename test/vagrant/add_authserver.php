@@ -18,11 +18,21 @@ $name = getenv('AS_NAME') ?: $type;
 
 $cfg = Config::getInstance()->object();
 
-foreach ($cfg->system->authserver as $existing) {
-    if ((string)$existing->name === $name) {
+// AS_REPLACE=1 drops an existing server of that name first, so a lab script can repair
+// a registration made with the wrong values rather than silently leaving it in place --
+// which is how an empty signing certificate survived and took the SAML suite with it.
+$replace = getenv('AS_REPLACE') === '1';
+foreach ($cfg->system->authserver as $index => $existing) {
+    if ((string)$existing->name !== $name) {
+        continue;
+    }
+    if (!$replace) {
         fwrite(STDERR, "authserver '$name' already present; leaving as-is\n");
         exit(0);
     }
+    unset($cfg->system->authserver[$index]);
+    fwrite(STDERR, "authserver '$name' replaced\n");
+    break;
 }
 
 $as = $cfg->system->addChild('authserver');

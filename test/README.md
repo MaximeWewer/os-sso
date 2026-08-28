@@ -39,7 +39,38 @@ vagrant up                            # boot the OPNsense VM + deploy the plugin
 cd idp && ./up.sh                     # start Authentik + Keycloak (+ TLS proxy)
 bash keycloak/setup-keycloak.sh       # create realm, clients, test user
 bash authentik/setup.sh               # create OIDC/SAML providers + mappings
+cd .. && vagrant/register-authservers.sh   # tell OPNsense about them
 ```
+
+That last step is not optional and used to be missing: the setup scripts configure the
+IdP, but nothing told OPNsense which authentication servers to offer. A VM that had been
+around a while carried them in its `config.xml` from some earlier hand-registration, so
+the gap only showed up on a freshly built box -- as most suites failing against a
+provider that did not exist. It reads whatever the setup wrote (`/tmp/kc-out.env`,
+`/tmp/authentik-out.env`), so it registers the values actually provisioned:
+
+```sh
+IDP=authentik vagrant/register-authservers.sh          # the other IdP
+FORCE=1 vagrant/register-authservers.sh                # repair a wrong registration
+```
+
+An existing server is left alone by default -- the suites write their own settings onto
+these (SCIM token, service scope, session lifetime) and recreating one mid-run discards
+them. `FORCE=1` replaces it instead.
+
+### Building the FreeBSD 15 box
+
+`puzzle/opnsense` stops at 26.1 (FreeBSD 14, php83), so the php85 side of the matrix
+needs a box built locally from the official image. Point the lab at it with `SSO_BOX`:
+
+```sh
+SSO_BOX=opnsense/26.7 vagrant up
+SSO_BOX=opnsense/26.7 SSO_GUI_URL=https://192.168.60.10 e2e/run-all.sh
+```
+
+The box wants the Vagrant conventions OPNsense does not ship with: a `vagrant` user in
+the **wheel** group (its sshd sets `AllowGroups wheel`, so a key is refused otherwise),
+the insecure public key, passwordless sudo, and `bash` (Vagrant runs `bash -l`).
 
 Host `/etc/hosts` needs `127.0.0.1 authentik.test keycloak.test`. The VM gets a host-only
 address (`192.168.60.10`) *and* a NAT forward for the WebGUI; override either when
