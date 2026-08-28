@@ -17,8 +17,15 @@ VPN_PORT = (ENV["SSO_VPN_PORT"] || "1194").to_i
 LAN_IP = ENV["SSO_LAN_IP"] || "192.168.60.10"
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "puzzle/opnsense"
-  config.vm.box_version = "26.1"
+  # puzzle/opnsense publishes up to 26.1 (FreeBSD 14, php83) and no further, so the
+  # FreeBSD 15 / php85 side of the matrix -- OPNsense 26.7, where a php83-* dependency
+  # does not resolve at all -- has to come from a box built locally. Point SSO_BOX at
+  # one (see test/README.md) and the whole lab follows.
+  BOX = ENV["SSO_BOX"] || "puzzle/opnsense"
+  # A locally added box carries no version; only constrain the upstream one.
+  BOX_VERSION = ENV["SSO_BOX_VERSION"] || (BOX == "puzzle/opnsense" ? "26.1" : nil)
+  config.vm.box = BOX
+  config.vm.box_version = BOX_VERSION if BOX_VERSION
   # NOTE: no config.vm.hostname -- OPNsense has no /etc/rc.conf, the standard
   # FreeBSD hostname provisioner errors out and aborts the boot.
 
@@ -52,8 +59,14 @@ Vagrant.configure("2") do |config|
   end
 
   # 1. clean staging dir (idempotent across re-provisions, avoids SCP dir nesting).
+  #    The chown is not decoration: a shell provisioner runs as root wherever sudo
+  #    works, so the directory would end up root-owned and the file provisioners
+  #    below -- which are plain SCP as the vagrant user -- could not write into it.
+  #    puzzle/opnsense hides this by running provisioners unprivileged; a box that
+  #    does not fails on the very first upload.
   config.vm.provision "shell", run: "always",
-    inline: "rm -rf /home/vagrant/os-sso && mkdir -p /home/vagrant/os-sso/test/idp"
+    inline: "rm -rf /home/vagrant/os-sso && mkdir -p /home/vagrant/os-sso/test/idp && " \
+            "chown -R vagrant:vagrant /home/vagrant/os-sso"
   # 2. upload the plugin source (incl. vendored libs under src/.../SSO/vendor).
   config.vm.provision "file", run: "always",
     source: "../src", destination: "/home/vagrant/os-sso/src"
