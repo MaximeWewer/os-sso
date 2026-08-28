@@ -87,12 +87,19 @@ jobs:
         include:
           # opnsense: the OLDEST supported OPNsense whose pkg we align with (see the
           # "Align pkg" note below). Empty when OPNsense has no build for that major yet.
+          # php: the PHP major that OPNsense base ships for this ABI, and therefore
+          # the php<major>-* packages this .pkg must depend on. Verified against
+          # pkg.opnsense.org: 25.7 and 26.1 on FreeBSD:14 carry php83, 26.7 on
+          # FreeBSD:15 carries php85. Mk/defaults.mk would derive it from the build
+          # host's own php, and this VM has none -- hence passing it explicitly.
           - freebsd: "14.3"
             abi: "FreeBSD-14"
             opnsense: "25.7"
+            php: "83"
           - freebsd: "15.1"
             abi: "FreeBSD-15"
             opnsense: ""
+            php: "85"
     steps:
       - name: Clone the opnsense/plugins tree
         run: git clone --depth 1 https://github.com/opnsense/plugins.git "${GITHUB_WORKSPACE}/plugins"
@@ -131,8 +138,9 @@ jobs:
         uses: vmactions/freebsd-vm@v1
         env:
           OPNSENSE_REL: ${{ matrix.opnsense }}
+          PLUGIN_PHP: ${{ matrix.php }}
         with:
-          envs: "PLUGIN_NAME PLUGIN_CATEGORY OPNSENSE_REL"
+          envs: "PLUGIN_NAME PLUGIN_CATEGORY OPNSENSE_REL PLUGIN_PHP"
           usesh: true
           release: ${{ matrix.freebsd }}
           prepare: |
@@ -146,10 +154,12 @@ jobs:
             fi
           run: |
             set -e
-            echo ">>> make package with pkg $(pkg -v)"
+            echo ">>> make package with pkg $(pkg -v), php${PLUGIN_PHP}"
             git config --global --add safe.directory '*'
             cd plugins/$PLUGIN_CATEGORY/$PLUGIN_NAME
-            make package
+            # On the command line so it beats the ?= in Mk/defaults.mk, which has no
+            # php here to derive a value from.
+            make package PLUGIN_PHP="${PLUGIN_PHP}"
             ls -la work/pkg/
             if [ -n "${OPNSENSE_REL}" ]; then
               echo ">>> re-creating the artifact with OPNsense's pkg (so its pkg can extract it)"

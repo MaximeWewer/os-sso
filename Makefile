@@ -2,7 +2,13 @@ PLUGIN_NAME=            sso
 PLUGIN_VERSION=         0.0.0-dev
 PLUGIN_COMMENT=         SSO (OIDC + SAML + JWT) and SCIM provisioning for WebGUI / Captive Portal / VPN
 PLUGIN_MAINTAINER=      https://github.com/MaximeWewer
-PLUGIN_DEPENDS=         php83-curl php83-dom php83-xml php83-mbstring php83-gettext zip
+# php${PLUGIN_PHP}-*, never a hardcoded major: OPNsense 25.7/26.1 are FreeBSD 14 with
+# php83, 26.7 is FreeBSD 15 with php85, and a package naming php83-curl on 26.7 refuses
+# to install at all ("Missing dependency 'php83-curl'"). Mk/defaults.mk derives
+# PLUGIN_PHP from the php binary on the build host; the release workflow has no php in
+# its build VM and passes it per ABI on the make command line instead.
+PLUGIN_DEPENDS=         php${PLUGIN_PHP}-curl php${PLUGIN_PHP}-dom php${PLUGIN_PHP}-xml \
+                        php${PLUGIN_PHP}-mbstring php${PLUGIN_PHP}-gettext zip
 
 # Composer-vendored runtime libraries.
 # Vendored into src/opnsense/mvc/app/library/OPNsense/SSO/vendor at build time.

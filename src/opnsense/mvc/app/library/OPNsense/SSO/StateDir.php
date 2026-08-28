@@ -66,7 +66,7 @@ final class StateDir
      *
      * On OPNsense itself this never fires, and is not what makes the tree work. Both ends
      * already run as root -- the /api/sso endpoints included, so the tree is created
-     * root-owned on the first request -- and posix is not compiled into its php83, so
+     * root-owned on the first request -- and posix is not compiled into its php, so
      * webUid() returns null and this returns immediately. Kept as belt and braces for a
      * platform where neither of those holds; if OPNsense ever moves the API off root,
      * this has to start working (webUid() would need to read /etc/passwd rather than ask
@@ -89,7 +89,7 @@ final class StateDir
     /**
      * uid/gid of the WebGUI user, null when there is none to ask about.
      *
-     * Null on OPNsense, always: its php83 ships without ext-posix. That is survivable
+     * Null on OPNsense, always: its php ships without ext-posix. That is survivable
      * only because nothing there needs the answer (see adopt()).
      *
      * @return array{uid:int,gid:int}|null
