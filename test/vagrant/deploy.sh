@@ -75,10 +75,19 @@ cp -R "$SVC_SRC/service/templates/OPNsense/SSO/." /usr/local/opnsense/service/te
 # saved settings still has a usable file.
 mkdir -p /usr/local/etc/sso
 if [ ! -f /usr/local/etc/sso/vpn.conf ]; then
-    printf "PROFILE_default_PROTOCOL='oidc'\nPROFILE_default_PROVIDER='keycloak'\n"\
-        "PROFILE_default_PROVIDER_ENC='keycloak'\nPROFILE_default_HOST='localhost:8443'\n"\
-        "PROFILE_default_TIMEOUT='180'\nPROFILE_default_ENFORCE_USERNAME='0'\nDEFAULT_PROFILE='default'\n" \
-        > /usr/local/etc/sso/vpn.conf
+    # A heredoc, not printf with continued string literals: the continuations left
+    # whitespace between them, so the shell passed three arguments rather than one
+    # format -- which printed only the first chunk on FreeBSD 14 (a silently truncated
+    # vpn.conf) and fails outright on 15, aborting the deploy under set -e.
+    cat > /usr/local/etc/sso/vpn.conf <<'CONF'
+PROFILE_default_PROTOCOL='oidc'
+PROFILE_default_PROVIDER='keycloak'
+PROFILE_default_PROVIDER_ENC='keycloak'
+PROFILE_default_HOST='localhost:8443'
+PROFILE_default_TIMEOUT='180'
+PROFILE_default_ENFORCE_USERNAME='0'
+DEFAULT_PROFILE='default'
+CONF
 fi
 # Privileged helpers + configd actions (verdict writer, session expiry, cp template).
 mkdir -p /usr/local/opnsense/scripts/OPNsense/SSO
