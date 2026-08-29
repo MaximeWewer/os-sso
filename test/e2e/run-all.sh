@@ -91,6 +91,19 @@ sync_vm_clock() {
     fi
 }
 
+# The IdP hostnames the firewall resolves. deploy.sh writes them, and OPNsense
+# regenerates /etc/hosts every time it reconfigures an interface -- which the captive
+# portal suites do -- so they are gone by the time a later run needs them. Re-asserted
+# here, next to the clock fix-up, for the same reason: a lab quirk that otherwise
+# surfaces as "Could not resolve host: keycloak.test" behind a generic 400.
+assert_idp_hosts() {
+    if vagrant ssh -c 'sudo sh -c "for h in authentik.test keycloak.test; do grep -q \$h /etc/hosts || echo \"10.0.2.2 \$h\" >> /etc/hosts; done"' >/dev/null 2>&1; then
+        echo ">>> hosts: IdP names present in the VM"
+    else
+        echo ">>> hosts: WARNING could not assert them; logins may fail to resolve the IdP"
+    fi
+}
+
 run_host() {
     echo "############ ${1} (host, idp=$IDP) ############"
     SSO_GUI_PORT="$PORT" SSO_GUI_URL="$GUI_URL" IDP="$IDP" IDP_BASE="$IDP_BASE" \
@@ -105,6 +118,7 @@ run_vm() {
 }
 
 sync_vm_clock
+assert_idp_hosts
 
 for suite in $WANT; do
     case " $HOST_SUITES " in *" $suite "*) run_host "$suite"; continue ;; esac

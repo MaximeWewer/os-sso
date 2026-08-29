@@ -112,3 +112,54 @@ echo ">>> os-sso: deployed. Files:"
 ls "$DST/library/OPNsense/SSO"
 echo ">>> vendor:"
 ls "$SSO_LIB/vendor" 2>/dev/null || echo "  (no vendor dir -- composer step failed)"
+
+# A real web-auth profile in the settings model, not just the seeded file above: the
+# file is generated from the model by "configctl template reload", so a seed written by
+# hand is erased by the next reload or reboot and the VPN hook then reports "no enabled
+# web-auth profile". Seeding the file keeps a brand-new box usable; this keeps it usable.
+if [ -f /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php ]; then
+    php /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php \
+        profile=default enabled=1 protocol=oidc provider=keycloak \
+        host=localhost:8443 timeout=180 enforce_username=0 >/dev/null 2>&1 \
+        && echo ">>> os-sso: web-auth profile 'default' in the settings model" \
+        || echo ">>> os-sso: WARNING could not write the web-auth profile"
+fi
+
+# Lab network layout. Applied here rather than baked into the box, so the box stays a
+# plain OPNsense and the lab owns its addressing: LAN on the second NIC (the host-only
+# segment the captive portal and the host-side suites use -- the portal listens on
+# 8000+zoneid of the zone interface, which a NAT forward cannot reach) and WAN on the
+# Vagrant NAT, which keeps vagrant ssh and the WebGUI forward working.
+SSO_LAN_IP="${SSO_LAN_IP:-192.168.60.10}"
+php <<PHP
+<?php
+require_once("config.inc");
+require_once("util.inc");
+\$lan = &\$config['interfaces']['lan'];
+\$wan = &\$config['interfaces']['wan'];
+\$want = '${SSO_LAN_IP}';
+if ((string)(\$lan['if'] ?? '') === 'em1' && (string)(\$lan['ipaddr'] ?? '') === \$want) {
+    echo "layout already applied\n";
+    exit(0);
+}
+\$lan['if'] = 'em1';
+\$lan['ipaddr'] = \$want;
+\$lan['subnet'] = '24';
+unset(\$lan['ipaddrv6'], \$lan['subnetv6']);
+\$wan['if'] = 'em0';
+\$wan['ipaddr'] = 'dhcp';
+write_config('os-sso lab: LAN on the host-only segment');
+echo "layout applied\n";
+PHP
+configctl interface reconfigure lan >/dev/null 2>&1 || true
+configctl interface reconfigure wan >/dev/null 2>&1 || true
+echo ">>> os-sso: LAN ${SSO_LAN_IP} on em1, WAN dhcp on em0"
+
+# Re-assert the IdP hostnames LAST. They are also written near the top, but OPNsense
+# regenerates /etc/hosts whenever it reconfigures interfaces -- which happens during
+# this very deploy -- so on a freshly built box the entries were gone by the time the
+# suites ran and every login failed with "Could not resolve host: keycloak.test".
+for h in authentik.test keycloak.test; do
+    grep -q "$h" /etc/hosts || echo "10.0.2.2 $h" >> /etc/hosts
+done
+echo ">>> os-sso: IdP hostnames in /etc/hosts: $(grep -c -E 'authentik.test|keycloak.test' /etc/hosts)"
