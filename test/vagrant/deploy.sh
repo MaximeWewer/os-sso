@@ -118,9 +118,12 @@ ls "$SSO_LIB/vendor" 2>/dev/null || echo "  (no vendor dir -- composer step fail
 # hand is erased by the next reload or reboot and the VPN hook then reports "no enabled
 # web-auth profile". Seeding the file keeps a brand-new box usable; this keeps it usable.
 if [ -f /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php ]; then
+    # The host is what goes into the WEB_AUTH url the OpenVPN client opens, so it has
+    # to be the address the client's browser actually reaches -- the same origin the
+    # suites use, not the loopback forward.
     php /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php \
         profile=default enabled=1 protocol=oidc provider=keycloak \
-        host=localhost:8443 timeout=180 enforce_username=0 >/dev/null 2>&1 \
+        host="${SSO_LAN_IP:-192.168.60.10}" timeout=180 enforce_username=0 >/dev/null 2>&1 \
         && echo ">>> os-sso: web-auth profile 'default' in the settings model" \
         || echo ">>> os-sso: WARNING could not write the web-auth profile"
 fi
