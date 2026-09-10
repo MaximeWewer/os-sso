@@ -8,9 +8,11 @@ the host-only address), wired to the os-sso `auth-user-pass-verify` hook. Authen
 happens in the browser through the same OIDC/SAML flow as the WebGUI.
 
 Start the server first, from `test/`:
+
 ```sh
 vagrant ssh -c 'sudo sh /home/vagrant/os-sso/test/vagrant/setup-vpn-server.sh'
 ```
+
 Server log in the VM: `/var/log/openvpn-sso.log`.
 
 ## You need a web-auth-capable client
@@ -19,8 +21,8 @@ The plain `openvpn` CLI does **not** advertise `IV_SSO=webauth`, so the hook den
 design, there would be no browser to drive. (The e2e suite forces it with
 `setenv IV_SSO webauth`, which is a test fixture, not a real client.) Use one of:
 
-- **OpenVPN Connect** (Windows/macOS/Linux GUI) - https://openvpn.net/client/
-- **OpenVPN 3 Linux** (`openvpn3`) - https://github.com/OpenVPN/openvpn3-linux
+- **OpenVPN Connect** (Windows/macOS/Linux GUI) - <https://openvpn.net/client/>
+- **OpenVPN 3 Linux** (`openvpn3`) - <https://github.com/OpenVPN/openvpn3-linux>
 
 ## Connect from the same address you browse from
 
@@ -30,11 +32,13 @@ the NAT forward (`127.0.0.1:1194`) while browsing the host-only address, or the 
 two different source IPs and the tunnel is correctly refused. Pick one path and stay on it.
 
 Pull the generated profile onto the host (run from `test/`):
+
 ```sh
 vagrant ssh -c 'sudo cat /usr/local/etc/sso/client.ovpn' > client.ovpn
 ```
 
 OpenVPN 3 Linux:
+
 ```sh
 openvpn3 session-start --config client.ovpn
 # when prompted for a username, type anything (e.g. "sso"); leave the password blank
