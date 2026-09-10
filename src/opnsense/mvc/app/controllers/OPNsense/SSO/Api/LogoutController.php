@@ -61,6 +61,6 @@ class LogoutController extends ApiControllerBase
                 // Not an SSO session -> let the core handle the local logout.
                 $this->response->redirect('/index.php?logout', true);
         }
-        return 'Logging out...';
+        return gettext('Logging out...');
     }
 }

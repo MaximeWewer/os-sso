@@ -8,14 +8,50 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-07-30 19:41+0200\n"
+"POT-Creation-Date: 2026-09-10 10:37+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/JwtController.php:51
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:59
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:122
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:59
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:104
+msgid "Already logged in."
+msgstr ""
+
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/JwtController.php:126
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:232
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:222
+msgid "Login successful, redirecting..."
+msgstr ""
+
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/JwtController.php:200
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:495
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:602
+msgid "SSO login failed. See the firewall system log for details."
+msgstr ""
+
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/LogoutController.php:64
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:355
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:353
+msgid "Logging out..."
+msgstr ""
+
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:114
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:96
+msgid "Redirecting to identity provider..."
+msgstr ""
+
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:322
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:362
+msgid "Logged out."
+msgstr ""
 
 #: src/opnsense/mvc/app/controllers/OPNsense/SSO/DiagnosticsController.php:20
 msgid "SSO Diagnostics"
@@ -1008,4 +1044,226 @@ msgstr ""
 #, php-format
 msgid ""
 "Signed in as %s. You can close this window and return to your VPN client."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:54
+msgid "required groups:"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:56
+msgid "no required groups (any IdP account may log in)"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:59
+msgid "default groups:"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:61
+msgid "auto-creates users"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:62
+msgid "strict group sync"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:63
+msgid "deprovisions on refusal"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:64
+msgid "SCIM provisioning"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:66
+msgid "session lifetime:"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:67
+msgid "no maximum session lifetime"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:69
+msgid "Base URL not set (derived from the request Host)"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:77
+msgid "No SSO authentication server is configured yet."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:88
+msgid "Test"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:106
+msgid "reachable"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:112
+msgid "Nothing is open."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:124
+msgid "idle timeout only"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:126
+msgid "End this session now."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:127
+msgid "End"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:151
+msgid "End this SSO session? The user will have to sign in again."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:160
+msgid ""
+"End every open SSO session, including your own if you signed in through SSO?"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:167
+msgid "Ended"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:167
+msgid "session(s)."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:168
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:179
+msgid "Failed."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:178
+msgid "Dropped"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:178
+msgid "cached file(s)."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:199
+msgid "Refresh"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:202
+msgid ""
+"Drop the cached discovery documents, JWKS, SAML metadata and icons so the "
+"next login refetches them."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:203
+msgid "Flush caches"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:208
+msgid "Providers"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:213
+msgid "Name"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:214
+msgid "Type"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:215
+msgid "URLs to register at the IdP, and policy"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:216
+msgid "Connectivity"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:224
+msgid "Open SSO access"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:226
+msgid "End every session os-sso opened."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:227
+msgid "End all"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:235
+msgid "User"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:236
+msgid "Access"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:237
+msgid "Provider"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:238
+msgid "IdP subject"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:239
+msgid "Signed in"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:240
+msgid "Expires"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:29
+msgid "Applied: vpn.conf rewritten."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:30
+msgid "Writing vpn.conf failed - see the system log."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:39
+msgid ""
+"One profile per OpenVPN server. Point the server at the script and name the "
+"profile as its argument:"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:41
+msgid "A server that passes no name uses the first enabled profile."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:49
+msgid "Enabled"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:50
+msgid "Profile"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:51
+msgid "Protocol"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:52
+msgid "Authentication server"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:53
+msgid "Host"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:54
+msgid "Timeout"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:55
+msgid "Commands"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:73
+msgid "Apply"
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:82
+msgid "Edit web-auth profile"
 msgstr ""

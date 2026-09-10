@@ -56,7 +56,7 @@ class SamlController extends ApiControllerBase
     {
         if ($this->session->get('Username') != null) {
             $this->response->setStatusCode(400, 'Bad Request');
-            return 'Already logged in.';
+            return gettext('Already logged in.');
         }
         // No session needed here: SamlProtocol persists in-flight state server-side
         // keyed by the AuthnRequest id (the assertion POST is cross-site, so the
@@ -93,7 +93,7 @@ class SamlController extends ApiControllerBase
             return $this->fail($e);
         }
         $this->response->redirect($begin['url'], true);
-        return 'Redirecting to identity provider...';
+        return gettext('Redirecting to identity provider...');
     }
 
     /** POST /api/sso/saml/acs */
@@ -101,7 +101,7 @@ class SamlController extends ApiControllerBase
     {
         if ($this->session->get('Username') != null) {
             $this->response->setStatusCode(400, 'Bad Request');
-            return 'Already logged in.';
+            return gettext('Already logged in.');
         }
         try {
             // Pre-auth endpoint: XML parsing and signature verification are not free.
@@ -219,7 +219,7 @@ class SamlController extends ApiControllerBase
             return $this->fail($e);
         }
         $this->response->redirect($returnUrl, true);
-        return 'Login successful, redirecting...';
+        return gettext('Login successful, redirecting...');
     }
 
     /** GET /api/sso/saml/icon?provider=<name> -- proxied IdP favicon. */
@@ -319,7 +319,7 @@ class SamlController extends ApiControllerBase
                 SessionEstablisher::destroyCurrent();
             }
             $this->response->redirect($redirect, true);
-            return 'Logged out.';
+            return gettext('Logged out.');
         }
 
         // SP-initiated logout. (Only this branch is guarded: the branch above is an
@@ -350,7 +350,7 @@ class SamlController extends ApiControllerBase
                     unset($_SESSION['Username']);
                     session_write_close();
                     $this->response->redirect($url, true);
-                    return 'Logging out...';
+                    return gettext('Logging out...');
                 }
             }
         } catch (\Throwable $e) {
@@ -359,7 +359,7 @@ class SamlController extends ApiControllerBase
         // No IdP SLO configured: local logout only.
         SessionEstablisher::destroyCurrent();
         $this->response->redirect('/', true);
-        return 'Logged out.';
+        return gettext('Logged out.');
     }
 
     /* ------------------------------------------------------------------ */
@@ -599,6 +599,6 @@ class SamlController extends ApiControllerBase
         // message (avoid reflecting internal error text).
         syslog(LOG_ERR, 'os-sso saml: ' . $e->getMessage());
         $this->response->setStatusCode(400, 'Bad Request');
-        return 'SSO login failed. See the firewall system log for details.';
+        return gettext('SSO login failed. See the firewall system log for details.');
     }
 }

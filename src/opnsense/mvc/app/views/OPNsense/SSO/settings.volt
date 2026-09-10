@@ -36,8 +36,7 @@
 <div class="content-box">
     <div style="padding: 1em;">
         <p class="text-muted">
-            {{ lang._('One profile per OpenVPN server. Point the server at the script and name the
-                       profile as its argument:') }}
+            {{ lang._('One profile per OpenVPN server. Point the server at the script and name the profile as its argument:') }}
             <code>auth-user-pass-verify "/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh &lt;profile&gt;" via-file</code>.
             {{ lang._('A server that passes no name uses the first enabled profile.') }}
         </p>

@@ -56,7 +56,7 @@ class OidcController extends ApiControllerBase
     {
         if ($this->session->get('Username') !== null) {
             $this->response->setStatusCode(400, 'Bad Request');
-            return 'Already logged in.';
+            return gettext('Already logged in.');
         }
         // OPNsense\Mvc\Session snapshots then aborts the native session, so raw
         // $_SESSION writes are dropped. Reopen the native session ourselves so the
@@ -111,7 +111,7 @@ class OidcController extends ApiControllerBase
         }
         session_write_close();
         $this->response->redirect($url, true);
-        return 'Redirecting to identity provider...';
+        return gettext('Redirecting to identity provider...');
     }
 
     /** GET|POST /api/sso/oidc/callback (POST with response_mode=form_post) */
@@ -119,7 +119,7 @@ class OidcController extends ApiControllerBase
     {
         if ($this->session->get('Username') !== null) {
             $this->response->setStatusCode(400, 'Bad Request');
-            return 'Already logged in.';
+            return gettext('Already logged in.');
         }
         $this->startSession();
         // form_post delivers the same parameters in the body instead of the query.
@@ -229,7 +229,7 @@ class OidcController extends ApiControllerBase
         }
         session_write_close();
         $this->response->redirect($returnUrl, true);
-        return 'Login successful, redirecting...';
+        return gettext('Login successful, redirecting...');
     }
 
     /** GET /api/sso/oidc/icon?provider=<name> -- proxied IdP favicon. */
@@ -352,7 +352,7 @@ class OidcController extends ApiControllerBase
 
         SessionEstablisher::destroyCurrent();
         $this->response->redirect($url !== '' ? $url : '/', true);
-        return 'Logging out...';
+        return gettext('Logging out...');
     }
 
     /* ------------------------------------------------------------------ */
@@ -492,6 +492,6 @@ class OidcController extends ApiControllerBase
         // message (avoid reflecting internal error text).
         syslog(LOG_ERR, 'os-sso oidc: ' . $e->getMessage());
         $this->response->setStatusCode(400, 'Bad Request');
-        return 'SSO login failed. See the firewall system log for details.';
+        return gettext('SSO login failed. See the firewall system log for details.');
     }
 }

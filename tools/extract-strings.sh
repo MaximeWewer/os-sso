@@ -1,18 +1,3 @@
-#!/bin/sh
-# os-sso: collect the translatable strings into lang/os-sso.pot.
-#
-# OPNsense has ONE gettext domain ("OPNsense", bound to /usr/local/share/locale by
-# authgui.inc) and the catalogues live in the opnsense/lang repository, built from the
-# core and plugin sources. A plugin therefore does not ship a catalogue of its own --
-# doing so would collide with the domain everything else uses. What it owes translators
-# is that every user-facing string is reachable by the scanner, which is what this
-# template makes checkable: run it, read the diff, and anything user-facing that is
-# missing from it is a string somebody forgot to wrap.
-#
-#   sh tools/extract-strings.sh          # rewrite lang/os-sso.pot
-#
-# Needs xgettext (devel/gettext-tools). The volt templates are scanned as PHP: their
-# {{ lang._('...') }} calls are what the WebGUI resolves at render time.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -23,20 +8,52 @@ command -v xgettext >/dev/null 2>&1 || {
     exit 1
 }
 
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
+
 mkdir -p "$ROOT/lang"
 cd "$ROOT"
 
-# Volt is not a language xgettext knows; it reads them as PHP, which is enough to find
-# lang._() and gettext() calls. Vendored libraries are somebody else's strings.
-# Model and form XML carry labels and help too; those are translated by the WebGUI's
-# own renderer at display time and xgettext cannot see inside XML, which is a limitation
-# of the toolchain rather than of this script -- core has the same one.
 find src \( -name '*.php' -o -name '*.volt' \) \
     | grep -v '/vendor/' \
-    | sort > /tmp/os-sso-potfiles.$$
+    | sort > "$STAGE/POTFILES"
 
+# Volt is not PHP. xgettext's PHP lexer only reads what sits inside <?php ... ?>,
+# so handed a template as-is it returns nothing at all, and an apostrophe in the
+# surrounding HTML is enough to swallow whatever it did reach. Stage each view as
+# its lang._() calls and nothing else, one output line per input line, so the #:
+# references still name the volt line the string came from.
+while read -r f; do
+    case "$f" in
+        *.volt) ;;
+        *) continue ;;
+    esac
+    mkdir -p "$STAGE/$(dirname "$f")"
+    awk '
+        {
+            out = ""
+            rest = $0
+            while (match(rest, /lang\._\([ \t]*("[^"]*"|'"'"'[^'"'"']*'"'"')[ \t]*\)/)) {
+                out = out substr(rest, RSTART, RLENGTH) "; "
+                rest = substr(rest, RSTART + RLENGTH)
+            }
+            if (index(rest, "lang._(") > 0) {
+                printf "%s:%d: lang._() must open and close on one line\n", FILENAME, FNR \
+                    > "/dev/stderr"
+                bad = 1
+            }
+            print (out == "" ? "" : "<?php " out "?>")
+        }
+        END { if (bad) exit 1 }
+    ' "$f" > "$STAGE/$f"
+done < "$STAGE/POTFILES"
+
+# --directory is searched in order, so a staged view shadows the real one and
+# everything else is read from the tree.
 xgettext \
-    --files-from=/tmp/os-sso-potfiles.$$ \
+    --directory="$STAGE" \
+    --directory="$ROOT" \
+    --files-from="$STAGE/POTFILES" \
     --language=PHP \
     --from-code=UTF-8 \
     --keyword=gettext \
@@ -46,7 +63,11 @@ xgettext \
     --msgid-bugs-address=https://github.com/MaximeWewer/os-sso/issues \
     --add-comments \
     --sort-by-file \
-    --output="$OUT"
+    --output="$STAGE/os-sso.pot"
 
-rm -f /tmp/os-sso-potfiles.$$
+# xgettext leaves the placeholder charset behind, which msgfmt refuses to read as
+# UTF-8 and every merge tool then guesses at.
+sed 's/charset=CHARSET/charset=UTF-8/' "$STAGE/os-sso.pot" > "$OUT"
+
+msgfmt --check-format --output-file=/dev/null "$OUT"
 echo "$OUT"

@@ -48,7 +48,7 @@ class JwtController extends ApiControllerBase
     {
         if ($this->session->get('Username') != null) {
             $this->response->setStatusCode(400, 'Bad Request');
-            return 'Already logged in.';
+            return gettext('Already logged in.');
         }
         try {
             // A forward-auth login is whatever request reaches the proxy, header and
@@ -123,7 +123,7 @@ class JwtController extends ApiControllerBase
         }
         session_write_close();
         $this->response->redirect($returnUrl, true);
-        return 'Login successful, redirecting...';
+        return gettext('Login successful, redirecting...');
     }
 
     /** GET /api/sso/jwt/icon?provider=<name> -- proxied issuer favicon (best effort). */
@@ -197,6 +197,6 @@ class JwtController extends ApiControllerBase
     {
         syslog(LOG_ERR, 'os-sso jwt: ' . $e->getMessage());
         $this->response->setStatusCode(400, 'Bad Request');
-        return 'SSO login failed. See the firewall system log for details.';
+        return gettext('SSO login failed. See the firewall system log for details.');
     }
 }
