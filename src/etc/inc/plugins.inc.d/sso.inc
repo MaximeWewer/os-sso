@@ -37,7 +37,7 @@ function sso_openvpn_sync(): void
 function sso_openvpn_bootup(): void
 {
 	sso_openvpn_sync();
-	mwexec('/usr/local/etc/rc.d/os-sso-vpn-guard onestart');
+	mwexecf('/usr/local/etc/rc.d/os-sso-vpn-guard onestart');
 }
 
 
