@@ -13,10 +13,10 @@
         <label>Profile name</label>
         <type>text</type>
         <help>
-            The name the OpenVPN server passes to the script, e.g.
-            auth-user-pass-verify "/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh staff" via-file.
-            A server that passes no name uses the first enabled profile. Letters, digits
-            and underscores only.
+            A unique identifier that binds the selected OpenVPN instances to this
+            web-auth policy. Apply passes it to the managed authentication hook
+            automatically. Only legacy manually wired servers need to reference it in
+            auth-user-pass-verify. Letters, digits and underscores only.
         </help>
     </field>
     <field>
