@@ -17,7 +17,7 @@ jobs:
     name: Check Packagist + open PR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Resolve latest stable versions on Packagist
         id: versions
@@ -40,7 +40,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "::notice::php-jwt latest $JWT, php-saml latest $SAML"
 
-      - name: Update composer.json constraints
+      - name: Update constraints and lock file
         id: update
         env:
           JWT_MM: ${{ steps.versions.outputs.jwt_mm }}
@@ -48,13 +48,20 @@ jobs:
         run: |
           set -euo pipefail
           # Bump each caret constraint to the latest major.minor (keeps the manifest
-          # current and surfaces a major bump for review; CI re-vendors at build time).
+          # current and surfaces a major bump for review. The lock update below makes
+          # the exact release payload part of the same review.
           sed -i -E "s#(\"firebase/php-jwt\": \")[^\"]+(\")#\1^${JWT_MM}\2#" "$COMPOSER_JSON"
           sed -i -E "s#(\"onelogin/php-saml\": \")[^\"]+(\")#\1^${SAML_MM}\2#" "$COMPOSER_JSON"
           grep -E 'php-jwt|php-saml' "$COMPOSER_JSON"
+          COMPOSER_DIR=$(dirname "$COMPOSER_JSON")
+          composer update --working-dir "$COMPOSER_DIR" \
+            firebase/php-jwt onelogin/php-saml --with-all-dependencies \
+            --no-interaction --no-scripts --no-plugins
+          composer validate --working-dir "$COMPOSER_DIR" --strict --no-check-publish
+          composer audit --working-dir "$COMPOSER_DIR" --locked --no-interaction
           if git diff --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::no constraint change"
+            echo "::notice::constraints and lock file are current"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git --no-pager diff --stat
@@ -62,7 +69,7 @@ jobs:
 
       - name: Create pull request
         if: steps.update.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: chore/update-vendored-libs
@@ -78,6 +85,6 @@ jobs:
             | `firebase/php-jwt` | `^${{ steps.versions.outputs.jwt_mm }}` | `${{ steps.versions.outputs.jwt }}` |
             | `onelogin/php-saml` | `^${{ steps.versions.outputs.saml_mm }}` | `${{ steps.versions.outputs.saml }}` |
 
-            CI re-vendors these at build time (`composer install`), so the actual
-            shipped version already tracks the latest within the major. Review any
-            **major** bump (possible breaking changes) before merging.
+            `composer.lock` is updated and audited in the same change, so release builds
+            install the exact reviewed versions. Review any **major** bump (possible
+            breaking changes) before merging.

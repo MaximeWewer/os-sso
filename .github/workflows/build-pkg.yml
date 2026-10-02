@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   PLUGIN_NAME: sso
@@ -30,7 +30,7 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
       do_release: ${{ steps.v.outputs.do_release }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -105,7 +105,7 @@ jobs:
         run: git clone --depth 1 https://github.com/opnsense/plugins.git "${GITHUB_WORKSPACE}/plugins"
 
       - name: Checkout os-sso into the plugins tree
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: plugins/${{ env.PLUGIN_CATEGORY }}/${{ env.PLUGIN_NAME }}
 
@@ -135,7 +135,7 @@ jobs:
           test -f vendor/autoload.php
 
       - name: Build the .pkg in a FreeBSD VM
-        uses: vmactions/freebsd-vm@v1
+        uses: vmactions/freebsd-vm@a2f9a41fa97f6848b8c3b791087dfcdaa5b473ff # v1
         env:
           OPNSENSE_REL: ${{ matrix.opnsense }}
           PLUGIN_PHP: ${{ matrix.php }}
@@ -190,7 +190,7 @@ jobs:
           ls -la "${PKGDIR}"
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}-${{ matrix.abi }}
           path: plugins/${{ env.PLUGIN_CATEGORY }}/${{ env.PLUGIN_NAME }}/work/pkg/*.pkg
@@ -201,14 +201,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare, build]
     if: needs.prepare.outputs.do_release == 'true'
+    permissions:
+      contents: write
     steps:
       - name: Checkout (full history for the changelog)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Download the built packages (all ABIs)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: os-${{ env.PLUGIN_NAME }}-${{ needs.prepare.outputs.version }}-*
           merge-multiple: true
@@ -255,7 +257,7 @@ jobs:
           cat release_notes.md
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: ${{ needs.prepare.outputs.tag }}
