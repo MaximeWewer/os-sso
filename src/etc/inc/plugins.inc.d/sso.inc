@@ -56,6 +56,21 @@ function sso_services()
 }
 
 
+function sso_xmlrpc_sync(): array
+{
+	return [[
+		'description' => gettext('Single Sign-On'),
+		'help' => gettext(
+			'Synchronize os-sso OpenVPN web-auth profiles to the other HA host. '
+			. 'Enable Authentication Servers, OpenVPN, Users and Groups, and Certificates separately when used.'
+		),
+		'section' => 'OPNsense.SSO',
+		'id' => 'sso',
+		'services' => ['sso_vpn_guard', 'openvpn'],
+	]];
+}
+
+
 function sso_syslog()
 {
 	return ['os-sso-vpn-guard' => ['facility' => ['os-sso-vpn-guard']]];
