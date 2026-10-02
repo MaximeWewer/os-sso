@@ -14,7 +14,7 @@
 -->
 <model>
     <mount>//OPNsense/SSO/settings</mount>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <description>Single Sign-On settings</description>
     <items>
         <vpn>
@@ -57,6 +57,27 @@
                         </Filters>
                         <ValidationMessage>Select a configured OIDC or SAML authentication server.</ValidationMessage>
                     </provider>
+                    <!-- Optional for backwards compatibility with profiles that were
+                         wired manually before os-sso managed OpenVPN instances. New
+                         profiles should select one or more instances: the plugin then
+                         owns their hooks, repairs them before core generates the
+                         configuration, and guards the running daemons against losing
+                         authentication. -->
+                    <openvpn_instance type="ModelRelationField">
+                        <Model>
+                            <servers>
+                                <source>OPNsense.OpenVPN.OpenVPN</source>
+                                <items>Instances.Instance</items>
+                                <display>description,vpnid</display>
+                                <display_format>%s (VPN %s)</display_format>
+                                <filters>
+                                    <role>/^server$/</role>
+                                    <enabled>/^1$/</enabled>
+                                </filters>
+                            </servers>
+                        </Model>
+                        <Multiple>Y</Multiple>
+                    </openvpn_instance>
                     <host type="TextField">
                         <Required>Y</Required>
                         <Mask>/^([a-zA-Z0-9.\-]+(:[0-9]{1,5})?)$/u</Mask>

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-09-10 10:37+0200\n"
+"POT-Creation-Date: 2026-10-02 18:30+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,6 +16,10 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: src/etc/inc/plugins.inc.d/sso.inc:47
+msgid "os-sso OpenVPN authentication guard"
+msgstr ""
 
 #: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/JwtController.php:51
 #: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:59
@@ -1046,6 +1050,25 @@ msgid ""
 "Signed in as %s. You can close this window and return to your VPN client."
 msgstr ""
 
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:48
+msgid ""
+"This OpenVPN instance is already assigned to another enabled SSO profile."
+msgstr ""
+
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:56
+msgid "A selected OpenVPN instance does not exist."
+msgstr ""
+
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:65
+msgid "Select enabled OpenVPN server instances only."
+msgstr ""
+
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:71
+msgid ""
+"Clear Authentication on every selected OpenVPN instance; os-sso supplies its "
+"authentication hook."
+msgstr ""
+
 #: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:54
 msgid "required groups:"
 msgstr ""
@@ -1214,56 +1237,57 @@ msgstr ""
 msgid "Expires"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:29
-msgid "Applied: vpn.conf rewritten."
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:26
+msgid "Applied: OpenVPN web authentication is enforced."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:30
-msgid "Writing vpn.conf failed - see the system log."
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:27
+msgid "Applying OpenVPN web authentication failed - see the system log."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:39
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:36
 msgid ""
-"One profile per OpenVPN server. Point the server at the script and name the "
-"profile as its argument:"
+"Select one or more OpenVPN server instances per profile. Apply installs the "
+"deferred web-auth hook, reconfigures every selected instance and keeps the "
+"authentication requirement in place after later OpenVPN edits or restarts."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:41
-msgid "A server that passes no name uses the first enabled profile."
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:37
+msgid "Profiles without selected instances retain the legacy manual wiring."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:49
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:45
 msgid "Enabled"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:50
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:46
 msgid "Profile"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:51
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:47
 msgid "Protocol"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:52
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:48
 msgid "Authentication server"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:53
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:49
 msgid "Host"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:54
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:50
 msgid "Timeout"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:55
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:51
 msgid "Commands"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:73
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:69
 msgid "Apply"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:82
+#: src/opnsense/mvc/app/views/OPNsense/SSO/settings.volt:78
 msgid "Edit web-auth profile"
 msgstr ""

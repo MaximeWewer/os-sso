@@ -56,22 +56,50 @@ OpenVPN 2.6+ “pending auth” lets the client authenticate in a browser:
 2. It opens the URL, logs in at the IdP (passkey/MFA there).
 3. The tunnel comes up once the login succeeds.
 
-Configure it under **System ▸ Access ▸ SSO VPN web-auth**: one **profile** per OpenVPN
-server - protocol, the authentication server (picked from the configured OIDC/SAML
-servers), the host the client's browser opens, and the web-auth timeout. *Apply* writes
-`/usr/local/etc/sso/vpn.conf` (no more editing it over SSH). Then point the OpenVPN server
-at the script, naming its profile:
+Configure it under **System ▸ Access ▸ SSO VPN web-auth**. A **profile** defines one SSO
+policy and can protect one or more OpenVPN servers: select the enabled server instances,
+protocol, the authentication server (picked from the configured OIDC/SAML servers), the
+host the client's browser opens, and the web-auth timeout. **Apply** writes
+`/usr/local/etc/sso/vpn.conf`, installs the deferred-auth directives in every selected
+instance and asks core to regenerate them. No manual custom option or SSH edit is
+required.
+
+Every selected OpenVPN instance must be an enabled **server** and its **Authentication**
+field must be empty: os-sso supplies that authentication hook. OPNsense core consequently
+requires client-certificate verification to remain enabled. That gives the connection two
+independent factors: a device certificate and the browser login (including the IdP's MFA or
+passkey). os-sso also adds `auth-user-pass-optional`, so a web-auth-capable client need not
+send a reusable password.
+
+Set **Auth Token Lifetime** on the OpenVPN instance if an established client should pass an
+OpenVPN-generated token on later TLS renegotiations instead of opening the browser again.
+The token is checked locally by OpenVPN; Keycloak logout, SCIM deactivation and the os-sso
+maximum session lifetime can still terminate the recorded tunnel. In an HA pair, use the
+same **Auth Token secret** on both nodes if tokens must survive a failover.
+
+### Existing manually wired profiles
+
+Profiles created before managed instances were introduced keep their instance field empty
+and continue to use their existing manual directive:
 
 ```text
 auth-user-pass-verify "/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh staff" via-file
 ```
 
-A server that names no profile uses the first enabled one, so a single-VPN setup can keep
-the plain form:
+Select an instance and apply the profile to move it under plugin management. The plugin
+then owns that directive and `auth-user-pass-optional`; disabling, deleting or moving the
+profile removes both from the old instance without touching its other options.
 
-```text
-auth-user-pass-verify /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh via-file
-```
+### Fail-closed guard
+
+OPNsense's OpenVPN form only knows its built-in option list, so saving an instance can
+discard plugin-owned directives. os-sso repairs them immediately before every normal
+OpenVPN **Apply**, and its supervised guard checks both `config.xml` and the generated
+runtime file once per second. If a running managed instance lacks exactly one expected
+auth hook, has another password hook alongside it, or loses `auth-user-pass-optional`, the
+guard stops it, repairs the saved configuration, and only then lets core configure it
+again. If repair fails, the affected instance stays stopped and the failure is written to
+the system log.
 
 > **Mind the username.** OpenVPN takes it from the client and never revisits it on a
 > deferred-auth path: the browser login decides *whether* the tunnel comes up, not *whose*

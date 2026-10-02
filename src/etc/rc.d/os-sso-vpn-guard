@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# PROVIDE: os_sso_vpn_guard
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name=os_sso_vpn_guard
+rcvar=os_sso_vpn_guard_enable
+pidfile=/var/run/os-sso-vpn-guard.pid
+command=/usr/sbin/daemon
+command_args="-f -r -P ${pidfile} -T os-sso-vpn-guard /usr/local/bin/python3 /usr/local/opnsense/scripts/OPNsense/SSO/vpn_guard.py"
+
+load_rc_config ${name}
+: ${os_sso_vpn_guard_enable:="YES"}
+
+run_rc_command "$1"

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# Build the guard manifest before the service starts. A new installation has no
+# managed profile yet; an upgrade resumes protection without waiting for a reboot.
+/usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php >/dev/null 2>&1 || true
+/usr/local/etc/rc.d/os-sso-vpn-guard onestart >/dev/null 2>&1 || true

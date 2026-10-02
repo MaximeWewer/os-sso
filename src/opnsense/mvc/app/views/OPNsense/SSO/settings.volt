@@ -7,9 +7,6 @@
     'use strict';
 
     $(document).ready(function () {
-        // No updateServiceControlUI() here: os-sso runs no daemon of its own, and
-        // asking for a service status that does not exist pops "Endpoint not found"
-        // over the grid.
         $('#grid-profiles').UIBootgrid({
             search: '/api/sso/settings/searchProfile',
             get: '/api/sso/settings/getProfile/',
@@ -19,15 +16,15 @@
             toggle: '/api/sso/settings/toggleProfile/'
         });
 
-        // Saving a row only stores it; writing vpn.conf is the apply step, and it is
-        // the file every VPN connection attempt reads.
+        // Saving a row only stores it. Apply renders vpn.conf, installs the managed
+        // directives, reconfigures OpenVPN and starts the authentication guard.
         $('#apply').click(function () {
             var $button = $(this).prop('disabled', true);
             ajaxCall('/api/sso/settings/reconfigure', {}, function (data) {
                 $button.prop('disabled', false);
                 $('#apply-result').text(data && data.status === 'ok'
-                    ? '{{ lang._("Applied: vpn.conf rewritten.") }}'
-                    : '{{ lang._("Writing vpn.conf failed - see the system log.") }}');
+                    ? '{{ lang._("Applied: OpenVPN web authentication is enforced.") }}'
+                    : '{{ lang._("Applying OpenVPN web authentication failed - see the system log.") }}');
             });
         });
     });
@@ -36,9 +33,8 @@
 <div class="content-box">
     <div style="padding: 1em;">
         <p class="text-muted">
-            {{ lang._('One profile per OpenVPN server. Point the server at the script and name the profile as its argument:') }}
-            <code>auth-user-pass-verify "/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh &lt;profile&gt;" via-file</code>.
-            {{ lang._('A server that passes no name uses the first enabled profile.') }}
+            {{ lang._('Select one or more OpenVPN server instances per profile. Apply installs the deferred web-auth hook, reconfigures every selected instance and keeps the authentication requirement in place after later OpenVPN edits or restarts.') }}
+            {{ lang._('Profiles without selected instances retain the legacy manual wiring.') }}
         </p>
     </div>
 

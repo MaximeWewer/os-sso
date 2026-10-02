@@ -35,6 +35,16 @@
         </help>
     </field>
     <field>
+        <id>profile.openvpn_instance</id>
+        <label>OpenVPN server instances</label>
+        <type>select_multiple</type>
+        <help>
+            The enabled OpenVPN servers this profile protects. Apply automatically
+            installs and guards the deferred web-auth directives on every selected
+            instance. Leave empty only for legacy servers that are still wired manually.
+        </help>
+    </field>
+    <field>
         <id>profile.host</id>
         <label>Firewall host[:port]</label>
         <type>text</type>

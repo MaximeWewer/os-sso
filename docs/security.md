@@ -98,5 +98,12 @@ credentials (LDAP bind passwords and the like) and are never written to logs.
 The local password (+ native TOTP) always stays active as a **break-glass** path: keep at
 least one local admin.
 
+For a managed OpenVPN profile, os-sso owns the instance's deferred-auth directive and a
+supervised guard verifies the saved and generated configuration continuously. A managed
+instance is stopped if the directive disappears or another password verifier appears
+alongside it; it is restarted only after reconciliation succeeds. New VPN logins fail when
+the IdP is unavailable. Existing tunnels can continue with a still-valid OpenVPN auth token
+until their recorded os-sso session is revoked or reaches its configured maximum lifetime.
+
 [SCIM](scim.md) needs a bearer token **and** a source-address allowlist, and refuses on the
 same principles as the login path.
