@@ -12,7 +12,7 @@ only what is easy to get wrong, and shared by all three types.
 | **Required groups** | Empty lets in *every* account the IdP authenticates - WebGUI, portal and VPN alike. |
 | **Automatic user creation** | Off by default; on, it writes users into `config.xml` with no local password. |
 | **Strict account binding** | On for a newly added server. Turn it off only when two servers front the *same* directory - see [Account binding](security.md#account-binding). |
-| **Group mapping** | An explicit mapping may target `admins`; the 1:1 name fallback refuses privileged groups. |
+| **Group mapping** | An explicit mapping may target ACL-bearing groups (including `admins`); the 1:1 name fallback refuses every group carrying firewall privileges. |
 | **Strict group sync** | Off = additive. On, revokes only what os-sso granted, never the last privileged member. |
 | **Deprovision on refused login** | Disables the account behind a refused login, and re-enables it when the IdP allows that account again. Does nothing without *Required groups*. |
 | **Maximum session lifetime** | The WebGUI timeout is *idle*-only. Applies to the portal client and the VPN tunnel too (capped at 24 h there) - see [Sessions](security.md#sessions). |

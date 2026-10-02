@@ -131,8 +131,8 @@ class ScimController extends ApiControllerBase
     public function groupsAction($id = null)
     {
         return $this->run(function () use ($id) {
-            $this->authenticate();
-            $groups = new ScimGroups($this->baseUrl());
+            $provider = $this->authenticate();
+            $groups = new ScimGroups($provider, $this->baseUrl());
             $id = (string)($id ?? '');
 
             switch ($this->method()) {

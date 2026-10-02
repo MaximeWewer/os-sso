@@ -109,9 +109,12 @@ final class GroupMapper
             // group name matched 1:1 -- the IdP group name is attacker-influenced
             // (often self-service). defaultGroups and explicit operator maps are
             // trusted and may target privileged groups on purpose.
-            if ($targets[$groupName] === 'idp' && Privilege::isPrivilegedGroup($group)) {
+            if (
+                $targets[$groupName] === 'idp'
+                && !Privilege::acceptsImplicitDirectoryMembership($group)
+            ) {
                 syslog(LOG_WARNING, sprintf(
-                    "os-sso: ignoring unmapped IdP group '%s' -> privileged OPNsense group '%s' " .
+                    "os-sso: ignoring unmapped IdP group '%s' -> ACL-bearing OPNsense group '%s' " .
                     "(configure an explicit mapping or default group to allow)",
                     $groupName,
                     (string)$group->name

@@ -43,6 +43,7 @@ $root = Tree::build([
     ['name' => 'ssologin', 'uid' => '2101', 'scrambled_password' => '1', 'sso_subject' => 'kc|abc'],
     ['name' => 'scimmade', 'uid' => '2102', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext1'],
     ['name' => 'ssomade', 'uid' => '2103', 'scrambled_password' => '1', 'sso_owned' => '1'],
+    ['name' => 'scim-no-id', 'uid' => '2108', 'scrambled_password' => '1', 'scim_provider' => 'kc'],
     ['name' => 'human', 'uid' => '2104', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
     ['name' => 'locked', 'uid' => '2105', 'password' => '*'],
     ['name' => 'banged', 'uid' => '2106', 'password' => '!locked'],
@@ -53,6 +54,7 @@ falsy($writer->isSsoManaged(Tree::user($root, 'ldapadmin')), 'a scrambled passwo
 truthy($writer->isSsoManaged(Tree::user($root, 'ssologin')), 'an sso_subject stamp is ownership');
 truthy($writer->isSsoManaged(Tree::user($root, 'scimmade')), 'a scim_ref stamp is ownership');
 truthy($writer->isSsoManaged(Tree::user($root, 'ssomade')), 'the sso_owned marker is ownership');
+truthy($writer->isSsoManaged(Tree::user($root, 'scim-no-id')), 'a SCIM provider stamp is ownership');
 falsy($writer->isSsoManaged(Tree::user($root, 'human')), 'a password account is not ours');
 
 T::group('LocalAccountWriter: which accounts can be bound at all');

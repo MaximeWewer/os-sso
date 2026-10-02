@@ -27,13 +27,30 @@ final class Privilege
      * Not an exhaustive list of dangerous pages -- it is the set from which everything
      * else can be granted. page-all is unrestricted access, user-shell-access is a shell,
      * and page-system-usermanager lets its holder put themselves in any group, including
-     * the ones this list protects.
+     * the ones this list protects. Restoring config.xml can grant any of those privileges
+     * and is therefore equivalent to already holding them.
      */
     public const ESCALATION_PRIVS = [
         'page-all',
+        'page-diagnostics-backup-restore',
         'user-shell-access',
         'page-system-usermanager',
     ];
+
+    /**
+     * Whether directory input may manage this group's membership without an explicit
+     * operator mapping.
+     *
+     * Every OPNsense ACL is security-relevant, even when it is not a route to full
+     * administration. IdP group names are commonly self-service and SCIM is controlled
+     * by the remote directory, so implicit 1:1 mapping and SCIM may only fill groups
+     * that carry no firewall privileges. Default groups and explicit group mappings are
+     * separate operator decisions and are allowed to target ACL-bearing groups.
+     */
+    public static function acceptsImplicitDirectoryMembership(\SimpleXMLElement $group): bool
+    {
+        return strtolower((string)$group->name) !== 'admins' && !self::hasAnyPrivilege($group);
+    }
 
     /**
      * A group whose membership must stay an operator decision: `admins`, or one carrying
@@ -89,10 +106,17 @@ final class Privilege
             return false;
         }
         foreach ((Config::getInstance()->object()->system->group ?? []) as $group) {
-            if (strtolower((string)$group->name) !== 'admins') {
-                continue;
+            if (self::isPrivilegedGroup($group) && GroupMembers::contains($group, $uid)) {
+                return true;
             }
-            if (GroupMembers::contains($group, $uid)) {
+        }
+        return false;
+    }
+
+    private static function hasAnyPrivilege(\SimpleXMLElement $node): bool
+    {
+        foreach ($node->priv as $priv) {
+            if (array_filter(array_map('trim', explode(',', (string)$priv))) !== []) {
                 return true;
             }
         }

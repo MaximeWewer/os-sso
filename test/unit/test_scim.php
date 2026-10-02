@@ -21,7 +21,7 @@ if (!stateDirUsable()) {
 
 $base = 'https://fw.example/api/sso/scim';
 $users = fn(string $provider = 'kc') => new ScimUsers($provider, $base);
-$groups = fn() => new ScimGroups($base);
+$groups = fn(string $provider = 'kc') => new ScimGroups($provider, $base);
 
 T::group('ScimUsers: only accounts os-sso owns are visible');
 
@@ -46,6 +46,26 @@ eq(true, $res['active'] ?? null, 'and its active state');
 
 $list = $users()->search('', 1, 100);
 eq(1, $list['totalResults'], 'search only lists accounts we own');
+
+// The bearer token selects one provider. An account managed by os-sso is not enough:
+// it must also carry a durable binding for this provider.
+$root = Tree::build([
+    ['name' => 'kc-user', 'uid' => '2100', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext-kc'],
+    ['name' => 'other-user', 'uid' => '2101', 'scrambled_password' => '1', 'scim_ref' => 'other|ext-other'],
+    ['name' => 'unbound', 'uid' => '2102', 'scrambled_password' => '1', 'sso_owned' => '1'],
+]);
+eq(1, $users('kc')->search('', 1, 100)['totalResults'], 'provider kc only lists its account');
+eq(1, $users('other')->search('', 1, 100)['totalResults'], 'provider other only lists its account');
+throws(fn() => $users('kc')->get('2101'), 'not found', 'provider kc cannot read provider other');
+throws(fn() => $users('other')->get('2100'), 'not found', 'provider other cannot read provider kc');
+throws(fn() => $users('kc')->get('2102'), 'not found', 'an unbound owned account fails closed');
+
+$root = Tree::build([
+    ['name' => 'root', 'uid' => '0', 'scope' => 'system'],
+    ['name' => 'human', 'uid' => '2100', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
+    ['name' => 'ldapish', 'uid' => '2101', 'scrambled_password' => '1'],
+    ['name' => 'ours', 'uid' => '2102', 'scrambled_password' => '1', 'scim_ref' => 'kc|ext-1'],
+]);
 
 T::group('ScimUsers: filters');
 
@@ -87,8 +107,8 @@ throws(fn() => $users()->get('2101'), 'not found', 'a password account is not ev
 
 // Cross-provider: enabling SCIM on one authentication server must not hand it another's
 // accounts. Both bindings answer the question, scim_ref and sso_subject alike.
-throws(fn() => $users()->deactivate('2102'), 'belongs to another provider', 'another SCIM provider\'s account');
-throws(fn() => $users()->deactivate('2103'), 'belongs to another provider', 'another provider\'s login account');
+throws(fn() => $users()->deactivate('2102'), 'not found', 'another SCIM provider\'s account is not addressable');
+throws(fn() => $users()->deactivate('2103'), 'not found', 'another provider\'s login account is not addressable');
 nothrow(fn() => $users('other')->deactivate('2102'), 'its own provider may deactivate it');
 eq('1', (string)Tree::user($root, 'theirs')->disabled, 'and it is disabled, not removed');
 
@@ -97,6 +117,7 @@ T::group('ScimUsers: create adopts or creates');
 $root = Tree::build([
     ['name' => 'preexisting', 'uid' => '2100', 'scrambled_password' => '1'],
     ['name' => 'human', 'uid' => '2101', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
+    ['name' => 'pre-no-id', 'uid' => '2102', 'scrambled_password' => '1'],
 ]);
 
 // createdNew() reports on the last create() of THIS instance, which is how the
@@ -106,10 +127,21 @@ $made = $writer->create(['userName' => 'fresh', 'externalId' => 'ext-fresh', 'ac
 truthy($writer->createdNew(), 'a genuinely new account reports created');
 eq('fresh', $made['userName'], 'the resource comes back');
 truthy(Tree::user($root, 'fresh') !== null, 'and the account is in config.xml');
+eq('kc', (string)Tree::user($root, 'fresh')->scim_provider, 'and records the provider independently');
 
 $writer->create(['userName' => 'preexisting', 'externalId' => 'ext-pre']);
 falsy($writer->createdNew(), 'adopting an existing account does not report created');
 eq('kc|ext-pre', (string)Tree::user($root, 'preexisting')->scim_ref, 'the adopted account is stamped');
+eq('kc', (string)Tree::user($root, 'preexisting')->scim_provider, 'the adopted account records its provider');
+
+$users()->create(['userName' => 'pre-no-id']);
+eq('kc', (string)Tree::user($root, 'pre-no-id')->scim_provider, 'adoption without externalId records its provider');
+eq('pre-no-id', $users()->get('2102')['userName'], 'and the adopted account remains addressable');
+
+$withoutExternalId = $users()->create(['userName' => 'without-external-id']);
+eq('without-external-id', $withoutExternalId['userName'], 'externalId remains optional');
+eq('kc', (string)Tree::user($root, 'without-external-id')->scim_provider, 'provider ownership is still durable');
+eq(4, $users()->search('', 1, 100)['totalResults'], 'accounts without externalId remain discoverable');
 
 throws(
     fn() => $users()->create(['userName' => 'another', 'externalId' => 'ext-fresh']),
@@ -207,14 +239,17 @@ $root = Tree::build([
     ['name' => 'ours', 'uid' => '2100', 'scrambled_password' => '1', 'scim_ref' => 'kc|e1'],
     ['name' => 'alsoours', 'uid' => '2101', 'scrambled_password' => '1', 'scim_ref' => 'kc|e2'],
     ['name' => 'handmade', 'uid' => '2102', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
+    ['name' => 'theirs', 'uid' => '2103', 'scrambled_password' => '1', 'scim_ref' => 'other|e3'],
 ], [
     ['name' => 'admins', 'gid' => '1999', 'member' => '2102'],
     ['name' => 'shellers', 'gid' => '2001', 'priv' => ['user-shell-access']],
     ['name' => 'staff', 'gid' => '2002', 'member' => '2102'],
+    ['name' => 'dashboard', 'gid' => '2003', 'priv' => ['page-dashboard-all']],
 ]);
 
-throws(fn() => $groups()->patch('1999', []), 'administrative privileges', 'admins takes no membership');
-throws(fn() => $groups()->patch('2001', []), 'administrative privileges', 'nor does a shell-access group');
+throws(fn() => $groups()->patch('1999', []), 'ACL privileges', 'admins takes no membership');
+throws(fn() => $groups()->patch('2001', []), 'ACL privileges', 'nor does a shell-access group');
+throws(fn() => $groups()->patch('2003', []), 'ACL privileges', 'nor does any other ACL-bearing group');
 throws(fn() => $groups()->get('9999'), 'not found', 'an unknown group is not found');
 
 // A directory may only move the accounts it provisioned. Adding an arbitrary local
@@ -229,10 +264,19 @@ eq(['2102', '2100'], Tree::members($root, 'staff'), 'a hand-assigned member cann
 $groups()->patch('2002', [['op' => 'remove', 'path' => 'members[value eq "2100"]']]);
 eq(['2102'], Tree::members($root, 'staff'), 'our own member can be removed');
 
+// Provider isolation applies to /Groups too. A token may neither see another
+// provider's members nor add/remove them through a shared local group.
+$groups('other')->patch('2002', [['op' => 'add', 'path' => 'members', 'value' => [['value' => '2103']]]]);
+eq(['2102', '2103'], Tree::members($root, 'staff'), 'the owning provider can add its account');
+$kcResource = $groups('kc')->get('2002');
+eq([], array_column($kcResource['members'], 'value'), 'provider kc does not see provider other membership');
+$groups('kc')->patch('2002', [['op' => 'remove', 'path' => 'members[value eq "2103"]']]);
+eq(['2102', '2103'], Tree::members($root, 'staff'), 'provider kc cannot remove provider other membership');
+
 // replace means "replace my members", not "replace the members".
 $groups()->patch('2002', [['op' => 'replace', 'path' => 'members',
                            'value' => [['value' => '2101'], ['value' => '2102']]]]);
-eq(['2102', '2101'], Tree::members($root, 'staff'), 'replace keeps unowned members and sets ours');
+eq(['2102', '2103', '2101'], Tree::members($root, 'staff'), 'replace keeps unowned members and sets ours');
 
 $resource = $groups()->get('2002');
 eq('staff', $resource['displayName'], 'the group resource names the group');
