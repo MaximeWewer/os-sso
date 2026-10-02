@@ -85,7 +85,7 @@ PROFILE_default_PROVIDER='keycloak'
 PROFILE_default_PROVIDER_ENC='keycloak'
 PROFILE_default_HOST='localhost:8443'
 PROFILE_default_TIMEOUT='180'
-PROFILE_default_ENFORCE_USERNAME='0'
+PROFILE_default_ENFORCE_USERNAME='1'
 DEFAULT_PROFILE='default'
 CONF
 fi
@@ -123,7 +123,7 @@ if [ -f /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php ]; then
     # suites use, not the loopback forward.
     php /home/vagrant/os-sso/test/vagrant/set_vpn_settings.php \
         profile=default enabled=1 protocol=oidc provider=keycloak \
-        host="${SSO_LAN_IP:-192.168.60.10}" timeout=180 enforce_username=0 >/dev/null 2>&1 \
+        host="${SSO_LAN_IP:-192.168.60.10}" timeout=180 enforce_username=1 >/dev/null 2>&1 \
         && echo ">>> os-sso: web-auth profile 'default' in the settings model" \
         || echo ">>> os-sso: WARNING could not write the web-auth profile"
 fi

@@ -63,10 +63,10 @@
             account that just signed in through the IdP. OpenVPN keeps using the name
             the client asked for - it drives username-as-common-name, client-config-dir
             and per-user rules - and the browser login otherwise only decides whether
-            the tunnel comes up, not whose it is. Leave off if your clients send a
-            throwaway username (the usual web-auth setup, where anything is typed at the
-            prompt); turn it on if the username is load-bearing on the server side. A
-            client that sends no username at all is never refused by this.
+            the tunnel comes up, not whose it is. This is enabled by default and also
+            refuses an empty username. Turn it off only when the server never uses the
+            username for identity, policy, addressing or revocation and the clients send
+            a deliberate throwaway value.
         </help>
     </field>
     <field>

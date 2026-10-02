@@ -89,7 +89,7 @@
                          username-as-common-name, a client-config-dir or per-user rules, because
                          those all key off the name the client asked for. -->
                     <enforce_username type="BooleanField">
-                        <default>0</default>
+                        <default>1</default>
                         <Required>Y</Required>
                     </enforce_username>
                     <timeout type="IntegerField">

@@ -103,10 +103,11 @@ the system log.
 
 > **Mind the username.** OpenVPN takes it from the client and never revisits it on a
 > deferred-auth path: the browser login decides *whether* the tunnel comes up, not *whose*
-> it is. Both names are logged on the firewall, so a mismatch is visible. Turn on
-> **Require the username to match** if the name is load-bearing on the server side
-> (`username-as-common-name`, a `client-config-dir`, per-user rules); leave it off for the
-> usual setup where the client sends a throwaway username.
+> it is. **Require the username to match** is therefore enabled by default and refuses
+> an empty username as well as a mismatch. Turn it off only when the server never uses
+> the username for `username-as-common-name`, a `client-config-dir`, per-user rules,
+> addressing or revocation, and clients intentionally send a throwaway value. Both names
+> are logged on the firewall when that compatibility mode is used.
 
 Use a web-auth-capable client (OpenVPN Connect, OpenVPN 3 Linux) - see
 [`test/vpn-client/README.md`](../test/vpn-client/README.md). With web-auth disabled the

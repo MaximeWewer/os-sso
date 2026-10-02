@@ -1,6 +1,19 @@
 #!/bin/sh
 
+set -u
+
 # Build the guard manifest before the service starts. A new installation has no
 # managed profile yet; an upgrade resumes protection without waiting for a reboot.
-/usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php >/dev/null 2>&1 || true
-/usr/local/etc/rc.d/os-sso-vpn-guard onestart >/dev/null 2>&1 || true
+SYNC=/usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php
+GUARD=/usr/local/etc/rc.d/os-sso-vpn-guard
+
+if ! "$SYNC"; then
+    echo "os-sso: installation failed to synchronize managed OpenVPN instances; stopping them" >&2
+    "$SYNC" --stop-managed || echo "os-sso: one or more managed OpenVPN instances could not be stopped" >&2
+    exit 1
+fi
+if ! "$GUARD" onestart; then
+    echo "os-sso: installation failed to start the OpenVPN fail-closed guard; stopping managed instances" >&2
+    "$SYNC" --stop-managed || echo "os-sso: one or more managed OpenVPN instances could not be stopped" >&2
+    exit 1
+fi

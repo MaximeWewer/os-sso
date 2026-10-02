@@ -48,7 +48,7 @@ rm -f "$WORK"   # single use
 # written before profiles existed names none, and then there is nothing to look up.
 case "$PROFILE" in
     ''|*[!A-Za-z0-9_]*) ENFORCE_USERNAME=0 ;;
-    *) eval "ENFORCE_USERNAME=\"\${PROFILE_${PROFILE}_ENFORCE_USERNAME:-0}\"" ;;
+    *) eval "ENFORCE_USERNAME=\"\${PROFILE_${PROFILE}_ENFORCE_USERNAME:-1}\"" ;;
 esac
 
 case "$CONTROL" in
@@ -69,15 +69,18 @@ fi
 # and per-user rules is whatever the client asked for, while the browser login only
 # decided WHETHER the tunnel comes up. The two names land in two different logs and
 # nothing joins them, so log both here, and refuse the mismatch when the operator
-# turned that on. A client that sent no username has nothing to spoof.
+# turned that on. Enforcement also requires both names to be present: an empty client
+# username is not a safe identity for username-as-common-name, a client-config-dir or
+# per-user rules, and an empty authenticated username must never approve anything.
+if [ "$ENFORCE_USERNAME" = "1" ] && \
+    { [ -z "$CLAIMED_USER" ] || [ -z "$AUTH_USER" ] || [ "$CLAIMED_USER" != "$AUTH_USER" ]; }; then
+    printf '0' > "$CONTROL"
+    logger -t os-sso -p auth.warning \
+        "vpn: refused username binding, client='$CLAIMED_USER' authenticated='$AUTH_USER'"
+    echo "username mismatch"
+    exit 1
+fi
 if [ -n "$CLAIMED_USER" ] && [ "$CLAIMED_USER" != "$AUTH_USER" ]; then
-    if [ "$ENFORCE_USERNAME" = "1" ]; then
-        printf '0' > "$CONTROL"
-        logger -t os-sso -p auth.warning \
-            "vpn: refused, client asked for '$CLAIMED_USER' but '$AUTH_USER' signed in"
-        echo "username mismatch"
-        exit 1
-    fi
     logger -t os-sso -p auth.notice \
         "vpn: client asked for '$CLAIMED_USER', '$AUTH_USER' signed in (not enforced)"
 fi

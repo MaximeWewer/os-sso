@@ -33,7 +33,9 @@ class M1_0_1 extends BaseModelMigration
             $profile->protocol = (string)($vpn->protocol ?? 'oidc');
             $profile->provider = (string)$vpn->provider;
             $profile->host = (string)($vpn->host ?? '');
-            $profile->enforce_username = (string)($vpn->enforce_username ?? '0') === '1' ? '1' : '0';
+            $profile->enforce_username = isset($vpn->enforce_username)
+                ? ((string)$vpn->enforce_username === '1' ? '1' : '0')
+                : '1';
             $timeout = (int)($vpn->timeout ?? 180);
             $profile->timeout = (string)($timeout >= 30 && $timeout <= 900 ? $timeout : 180);
         }
