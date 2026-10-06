@@ -79,7 +79,13 @@ grep -q 'http://example.com/welcome' "$W/done.html" 2>/dev/null \
 # Match this zone specifically rather than the last authorization in a log every
 # other suite also writes to. grep -av COMMAND: sudo logs our own probe into the
 # very file we are reading.
-HITS=$(vm "grep -a os-sso /var/log/system/system_*.log | grep -av COMMAND | grep -ac \"in zone $ZONE from\"")
+# syslog-ng writes asynchronously, so the line can land a moment after the confirmation
+# page: give it a few seconds before calling it missing.
+for _ in 1 2 3 4 5; do
+    HITS=$(vm "grep -a os-sso /var/log/system/system_*.log | grep -av COMMAND | grep -ac \"in zone $ZONE from\"")
+    [ "${HITS:-0}" -gt 0 ] 2>/dev/null && break
+    sleep 1
+done
 [ "${HITS:-0}" -gt 0 ] 2>/dev/null \
     && ok "the firewall logged the authorization for zone $ZONE" \
     || ko "no authorization for zone $ZONE in the log (hits=$HITS)"

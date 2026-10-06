@@ -13,6 +13,7 @@ require_once('util.inc');
 require_once('script/load_phalcon.php');
 
 use OPNsense\Core\Config;
+use OPNsense\SSO\GroupMembers;
 
 $names = array_filter(array_map('trim', explode(',', getenv('RESET_USERS')
     ?: 'jwtuser,grpprobe,kctest,cptester,akadmin')));
@@ -26,15 +27,13 @@ for ($i = count($cfg->system->user) - 1; $i >= 0; $i--) {
         unset($cfg->system->user[$i]);
     }
 }
+// GroupMembers, not a bare array_filter(explode(...)): that one drops "0" as falsy,
+// and "0" is root -- every reset used to throw root out of admins.
 foreach ($cfg->system->group as $g) {
-    $keep = array_values(array_filter(
-        array_filter(explode(',', (string)$g->member)),
+    GroupMembers::set($g, array_values(array_filter(
+        GroupMembers::uids($g),
         fn($m) => !isset($uids[$m])
-    ));
-    unset($g->member);
-    if ($keep) {
-        $g->addChild('member', implode(',', $keep));
-    }
+    )));
 }
 Config::getInstance()->save();
 echo 'reset users: ' . (empty($uids) ? '(none)' : implode(',', array_keys($uids))) . "\n";
