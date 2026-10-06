@@ -1,6 +1,7 @@
 {
   "name": "opnsense/os-sso",
   "description": "Runtime libraries vendored into the os-sso plugin.",
+  "license": "BSD-2-Clause",
   "require": {
     "php": ">=8.3",
     "firebase/php-jwt": "^7.2",
