@@ -8,9 +8,9 @@
 namespace OPNsense\SSO\Protocol;
 
 use Firebase\JWT\JWT;
-use Firebase\JWT\JWK;
 use OPNsense\SSO\ClaimPath;
 use OPNsense\SSO\ClientAuth;
+use OPNsense\SSO\JwkSet;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
@@ -872,7 +872,8 @@ final class OidcProtocol implements ProtocolInterface
             $raw = $this->httpGetJson((string)$disco['jwks_uri']);
             $this->cacheSet($cacheKey, $raw);
         }
-        return JWK::parseKeySet($raw);
+        $advertised = $disco['id_token_signing_alg_values_supported'] ?? [];
+        return JwkSet::parse($raw, is_array($advertised) ? $advertised : []);
     }
 
     /* ---- small on-disk cache for discovery + JWKS (TTL, www-owned) ----- */

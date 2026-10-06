@@ -8,9 +8,9 @@
 namespace OPNsense\SSO\Protocol;
 
 use Firebase\JWT\JWT;
-use Firebase\JWT\JWK;
 use Firebase\JWT\Key;
 use OPNsense\SSO\ClaimPath;
+use OPNsense\SSO\JwkSet;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
 
@@ -194,8 +194,9 @@ final class JwtProtocol
                 $raw = $this->httpGetJson($this->jwksUrl);
                 $this->cacheSet($cacheKey, $raw);
             }
-            // Default alg for JWKS entries that omit "alg" (still asymmetric per check).
-            return JWK::parseKeySet($raw, $this->algorithms[0]);
+            // JWKS entries that omit "alg" get one inferred from their key type,
+            // preferring the configured (asymmetric-only) algorithms.
+            return JwkSet::parse($raw, $this->algorithms);
         }
         // Static PEM public key: a single Key, so decode() does not require a "kid".
         // The first configured algorithm must match the key type.
