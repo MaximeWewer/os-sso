@@ -646,6 +646,7 @@ final class OidcProtocol implements ProtocolInterface
         if (!isset($claims->iss) || $claims->iss !== $disco['issuer']) {
             throw new \RuntimeException('OIDC: issuer mismatch');
         }
+        $this->assertSubject($claims);
         $aud = (array)($claims->aud ?? []);
         if (!in_array($this->clientId, $aud, true)) {
             throw new \RuntimeException('OIDC: audience does not contain client_id');
@@ -690,6 +691,18 @@ final class OidcProtocol implements ProtocolInterface
         $this->assertAtHash($idToken, $claims, $accessToken);
 
         return $claims;
+    }
+
+    /** OIDC Core requires a stable, non-empty subject of at most 255 ASCII bytes. */
+    private function assertSubject(object $claims): void
+    {
+        if (
+            !isset($claims->sub)
+            || !is_string($claims->sub)
+            || !preg_match('/^[\x20-\x7e]{1,255}$/D', $claims->sub)
+        ) {
+            throw new \RuntimeException('OIDC: ID token has no valid sub claim');
+        }
     }
 
     /**

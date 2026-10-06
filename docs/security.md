@@ -46,16 +46,19 @@ stamp resolves either way.
 
 ## Groups
 
-A **privileged** group (`admins`, or any carrying full-GUI / shell / user-manager rights)
-only ever gains members through an explicit operator mapping; the 1:1 name fallback
-refuses them. **Strict group sync** revokes only what os-sso granted, never a
-hand-assigned group, never the last privileged member. Off, it is purely additive.
+An OPNsense group carrying **any ACL privilege** only ever gains members through an
+explicit operator mapping or default group; the 1:1 name fallback and SCIM refuse it.
+That avoids treating a presently narrow page privilege as harmless directory data and
+silently widening access later when OPNsense changes the ACL. **Strict group sync**
+revokes only what os-sso granted, never a hand-assigned group, never the last member of
+an escalation-equivalent group. Off, it is purely additive.
 
 ## Protocols
 
-OIDC validates `iss`/`aud`/`azp`/`nonce`/`exp`/`iat`, binds `at_hash` to the access token
-and requires an asymmetric signature; SAML verifies the assertion signature and is
-replay-protected (single-use request id plus a consumed-assertion cache).
+OIDC validates `iss`/`sub`/`aud`/`azp`/`nonce`/`exp`/`iat`, requires the stable `sub` to
+be a non-empty OIDC identifier, binds `at_hash` to the access token and requires an
+asymmetric signature; SAML verifies the assertion signature and is replay-protected
+(single-use request id plus a consumed-assertion cache).
 
 What the IdP is *asked* for is also *checked* on return - `max_age` against `auth_time`
 (SAML: `AuthnInstant`), the required `acr` against the returned one - because requesting an

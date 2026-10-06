@@ -30,10 +30,12 @@ use OPNsense\SSO\Privilege;
 final class ScimGroups
 {
     private LocalAccountWriter $accounts;
+    private string $provider;
     private string $base;
 
-    public function __construct(string $base, ?LocalAccountWriter $accounts = null)
+    public function __construct(string $provider, string $base, ?LocalAccountWriter $accounts = null)
     {
+        $this->provider = $provider;
         $this->base = $base;
         $this->accounts = $accounts ?? new LocalAccountWriter();
     }
@@ -120,7 +122,7 @@ final class ScimGroups
             $user = $this->accounts->findByUid($uid);
             // Only accounts os-sso manages are reported: the directory has no business
             // learning the firewall's own local accounts from a group listing.
-            if ($user !== null && $this->accounts->isSsoManaged($user)) {
+            if ($user !== null && $this->isManageable($uid)) {
                 $members[] = ['value' => $uid, 'display' => (string)$user->name];
             }
         }
@@ -161,9 +163,9 @@ final class ScimGroups
 
     private function assertMayTouch(\SimpleXMLElement $group): void
     {
-        if (Privilege::isPrivilegedGroup($group)) {
+        if (!Privilege::acceptsImplicitDirectoryMembership($group)) {
             throw new ScimError(403, sprintf(
-                "'%s' grants administrative privileges; its membership is not managed over SCIM",
+                "'%s' carries firewall ACL privileges; its membership is not managed over SCIM",
                 (string)$group->name
             ));
         }
@@ -197,7 +199,9 @@ final class ScimGroups
             return false;
         }
         $user = $this->accounts->findByUid($uid);
-        return $user !== null && $this->accounts->isSsoManaged($user);
+        return $user !== null
+            && $this->accounts->isSsoManaged($user)
+            && $this->accounts->isClaimedBy($user, $this->provider);
     }
 
     private function addMember(\SimpleXMLElement $group, string $uid): bool

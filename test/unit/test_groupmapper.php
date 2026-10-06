@@ -37,13 +37,14 @@ function syncGroups(array $asserted, array $defaults, array $map = [], bool $rec
             ['name' => 'staff', 'gid' => '2001'],
             ['name' => 'vpn', 'gid' => '2002'],
             ['name' => 'MixedCase', 'gid' => '2003'],
+            ['name' => 'dashboard', 'gid' => '2004', 'priv' => ['page-dashboard-all']],
         ]
     );
     $identity = new NormalizedIdentity('kc');
     $identity->groups = $asserted;
     $changed = (new GroupMapper($map, $reconcile))->sync(Tree::user($root, 'alice'), $identity, $defaults);
     $out = [];
-    foreach (['admins', 'shellers', 'staff', 'vpn', 'MixedCase'] as $name) {
+    foreach (['admins', 'shellers', 'staff', 'vpn', 'MixedCase', 'dashboard'] as $name) {
         if (in_array('2100', Tree::members($root, $name), true)) {
             $out[] = $name;
         }
@@ -59,11 +60,17 @@ eq(['MixedCase'], syncGroups(['mixedcase'], [])['groups'], 'matching is case-ins
 // privileged group -- only an explicit operator decision can.
 eq([], syncGroups(['admins'], [])['groups'], 'an unmapped IdP group named admins is refused');
 eq([], syncGroups(['shellers'], [])['groups'], 'an unmapped IdP group with shell access is refused');
+eq([], syncGroups(['dashboard'], [])['groups'], 'an unmapped IdP group carrying any ACL is refused');
 eq(['admins'], syncGroups([], ['admins'])['groups'], 'a default group may be privileged');
 eq(
     ['admins'],
     syncGroups(['idp-admins'], [], ['idp-admins' => 'admins'])['groups'],
     'an explicitly mapped group may be privileged'
+);
+eq(
+    ['dashboard'],
+    syncGroups(['idp-dashboard'], [], ['idp-dashboard' => 'dashboard'])['groups'],
+    'an explicit map may target an ordinary ACL group'
 );
 eq([], syncGroups(['unknown-group'], [])['groups'], 'an IdP group with no counterpart grants nothing');
 eq([], syncGroups([], [])['groups'], 'nothing asserted grants nothing');

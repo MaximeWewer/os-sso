@@ -113,7 +113,8 @@ final class ScimUsers
                 // An account with that name is already here. Adopt it only if os-sso
                 // may -- otherwise this is someone's real local account.
                 $this->assertMayTouch($existing);
-                $changed = $this->accounts->stampOnce($existing, 'scim_ref', $ref);
+                $changed = $this->accounts->stampOnce($existing, 'scim_provider', $this->provider);
+                $changed = $this->accounts->stampOnce($existing, 'scim_ref', $ref) || $changed;
                 $changed = $this->applyAttributes($existing, $payload) || $changed;
                 // A POST states the whole resource, so its "active" applies here as much
                 // as it does on a fresh create -- and re-creating a user is how several
@@ -135,6 +136,7 @@ final class ScimUsers
                 'descr' => $this->displayName($payload),
                 'email' => $this->email($payload),
                 'comment' => 'Provisioned over SCIM (' . $this->provider . ')',
+                'scim_provider' => $this->provider,
                 'scim_ref' => $ref,
                 'disabled' => !$this->activeFlag($payload, true),
             ]);
@@ -354,7 +356,8 @@ final class ScimUsers
      */
     private function isOurs(\SimpleXMLElement $node): bool
     {
-        return $this->accounts->isSsoManaged($node);
+        return $this->accounts->isSsoManaged($node)
+            && $this->accounts->isClaimedBy($node, $this->provider);
     }
 
     /**
@@ -373,25 +376,15 @@ final class ScimUsers
      */
     private function assertNotClaimedElsewhere(\SimpleXMLElement $node): void
     {
-        $prefix = $this->provider . '|';
-        $foreign = [];
-        foreach (['scim_ref', 'sso_subject'] as $field) {
-            foreach ($node->{$field} as $binding) {
-                $ref = trim((string)$binding);
-                if ($ref === '') {
-                    continue;
-                }
-                if (str_starts_with($ref, $prefix)) {
-                    return; // one of them is ours
-                }
-                $foreign[explode('|', $ref)[0]] = true;
-            }
+        $providers = $this->accounts->claimingProviders($node);
+        if (in_array($this->provider, $providers, true)) {
+            return;
         }
-        if ($foreign !== []) {
+        if ($providers !== []) {
             throw ScimError::conflict(sprintf(
                 "'%s' belongs to another provider (%s)",
                 (string)$node->name,
-                implode(', ', array_keys($foreign))
+                implode(', ', $providers)
             ));
         }
     }

@@ -118,7 +118,19 @@ final class LocalAccountWriter
                 }
             }
         }
+        foreach ($node->scim_provider as $binding) {
+            $provider = trim((string)$binding);
+            if ($provider !== '' && !in_array($provider, $out, true)) {
+                $out[] = $provider;
+            }
+        }
         return $out;
+    }
+
+    /** Whether this account carries any durable binding for one provider. */
+    public function isClaimedBy(\SimpleXMLElement $node, string $provider): bool
+    {
+        return $provider !== '' && in_array($provider, $this->claimingProviders($node), true);
     }
 
     /** The account carrying this exact binding, or null. */
@@ -226,7 +238,8 @@ final class LocalAccountWriter
     {
         return (string)($node->{self::OWNED_FIELD} ?? '') === '1'
             || (string)($node->sso_subject ?? '') !== ''
-            || (string)($node->scim_ref ?? '') !== '';
+            || (string)($node->scim_ref ?? '') !== ''
+            || (string)($node->scim_provider ?? '') !== '';
     }
 
     /** Set on every account create(): "os-sso made this one". */
@@ -250,7 +263,8 @@ final class LocalAccountWriter
      * Create a local user node. No usable local password: the only way in is the IdP.
      *
      * @param array $attrs name (required), descr, email, comment, and any extra
-     *                     scalar children to stamp (sso_subject, scim_ref, ...)
+     *                     scalar children to stamp (sso_subject, scim_ref,
+     *                     scim_provider, ...)
      */
     public function create(array $attrs): \SimpleXMLElement
     {
@@ -274,7 +288,7 @@ final class LocalAccountWriter
         // carrying no `sub`, has no stamp to speak of but is still ours.
         $node->addChild(self::OWNED_FIELD, '1');
         $node->addChild('uid', (string)$this->nextUid($cnf));
-        foreach (['sso_subject', 'scim_ref'] as $stamp) {
+        foreach (['sso_subject', 'scim_ref', 'scim_provider'] as $stamp) {
             if (!empty($attrs[$stamp])) {
                 $node->addChild($stamp, $this->xml((string)$attrs[$stamp]));
             }
