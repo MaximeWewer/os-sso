@@ -39,7 +39,7 @@ break-glass path.
 - **SCIM 2.0 provisioning** - the IdP pushes account lifecycle, so a revoked user is
   disabled when the directory says so, not at their next login attempt. → [docs](docs/scim.md)
 - **HA configuration sync** - exposes the plugin's profiles to OPNsense XMLRPC sync and
-  reconfigures the guard and OpenVPN on the backup. → [docs](docs/high-availability.md)
+  reconfigures OpenVPN on the backup. → [docs](docs/high-availability.md)
 
 ## Screenshots
 

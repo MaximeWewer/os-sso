@@ -90,16 +90,15 @@ Select an instance and apply the profile to move it under plugin management. The
 then owns that directive and `auth-user-pass-optional`; disabling, deleting or moving the
 profile removes both from the old instance without touching its other options.
 
-### Fail-closed guard
+### Managed hook reconciliation
 
 OPNsense's OpenVPN form only knows its built-in option list, so saving an instance can
 discard plugin-owned directives. os-sso repairs them immediately before every normal
-OpenVPN **Apply**, and its supervised guard checks both `config.xml` and the generated
-runtime file once per second. If a running managed instance lacks exactly one expected
-auth hook, has another password hook alongside it, or loses `auth-user-pass-optional`, the
-guard stops it, repairs the saved configuration, and only then lets core configure it
-again. If repair fails, the affected instance stays stopped and the failure is written to
-the system log.
+OpenVPN **Apply** through the existing core configure hook. Applying an os-sso profile
+also reconciles the selected instances and asks core to regenerate OpenVPN configuration
+only when a managed directive changed. Invalid or conflicting selections are reported,
+left untouched and logged without preventing independent valid instances from being
+reconciled.
 
 > **Mind the username.** OpenVPN takes it from the client and never revisits it on a
 > deferred-auth path: the browser login decides *whether* the tunnel comes up, not *whose*

@@ -23,13 +23,13 @@ function sso_openvpn_sync(): void
 		if ($result['changed']) {
 			syslog(LOG_NOTICE, 'os-sso: restored managed OpenVPN web-auth directives');
 		}
+		foreach ($result['errors'] as $error) {
+			$detail = str_replace(["\r", "\n"], ' ', $error);
+			syslog(LOG_ERR, 'os-sso: OpenVPN integration skipped an invalid selection: ' . $detail);
+		}
 	} catch (\Throwable $exception) {
-		/*
-		 * Never abort core's CRL hook. The guard manifest is written before the
-		 * config save, so the supervisor stops any selected instance whose saved
-		 * or generated configuration cannot be proven safe.
-		 */
 		syslog(LOG_ERR, 'os-sso: OpenVPN integration failed: ' . $exception->getMessage());
+		throw $exception;
 	}
 }
 
@@ -37,22 +37,6 @@ function sso_openvpn_sync(): void
 function sso_openvpn_bootup(): void
 {
 	sso_openvpn_sync();
-	mwexecf('/usr/local/etc/rc.d/os-sso-vpn-guard onestart');
-}
-
-
-function sso_services()
-{
-	return [[
-		'description' => gettext('os-sso OpenVPN authentication guard'),
-		'pidfile' => '/var/run/os-sso-vpn-guard.pid',
-		'configd' => [
-			'start' => ['sso guard_start'],
-			'stop' => ['sso guard_stop'],
-			'restart' => ['sso guard_restart'],
-		],
-		'name' => 'sso_vpn_guard',
-	]];
 }
 
 
@@ -66,12 +50,6 @@ function sso_xmlrpc_sync(): array
 		),
 		'section' => 'OPNsense.SSO',
 		'id' => 'sso',
-		'services' => ['sso_vpn_guard', 'openvpn'],
+		'services' => ['openvpn'],
 	]];
-}
-
-
-function sso_syslog()
-{
-	return ['os-sso-vpn-guard' => ['facility' => ['os-sso-vpn-guard']]];
 }

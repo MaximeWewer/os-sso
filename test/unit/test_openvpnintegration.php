@@ -91,12 +91,8 @@ eq(
 	vpnFlags($tree, VPN_UUID_A),
 	'it preserves native flags and appends the two managed directives',
 );
-eq('staff', $result['instances'][VPN_UUID_A]['profile'], 'the guard manifest names the profile');
-eq(
-	'/var/etc/openvpn/instance-' . VPN_UUID_A . '.conf',
-	$result['instances'][VPN_UUID_A]['config_file'],
-	'the guard manifest names the generated config',
-);
+eq('staff', $result['instances'][VPN_UUID_A]['profile'], 'the result names the managed profile');
+eq([], $result['errors'], 'a valid selection has no reconciliation errors');
 
 $second = OpenVpnIntegration::reconcile($tree);
 falsy($second['changed'], 'reconciliation is idempotent');
@@ -134,7 +130,7 @@ eq(
 $tree = vpnTree([vpnProfile('staff', VPN_UUID_A, '0')], [vpnInstance(VPN_UUID_A, $owned)]);
 $result = OpenVpnIntegration::reconcile($tree);
 eq([], vpnFlags($tree, VPN_UUID_A), 'disabling a profile removes the managed directives');
-eq([], $result['instances'], 'a disabled profile is absent from the guard manifest');
+eq([], $result['instances'], 'a disabled profile is absent from the managed instance list');
 
 T::group('OpenVpnIntegration: refusing ambiguous or unsafe ownership');
 
@@ -142,11 +138,12 @@ $tree = vpnTree(
 	[vpnProfile('staff'), vpnProfile('contractors')],
 	[vpnInstance(VPN_UUID_A)],
 );
-throws(
-	fn() => OpenVpnIntegration::reconcile($tree),
-	'selected by both',
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(
+	str_contains(implode('\n', $result['errors']), 'selected by both'),
 	'one OpenVPN instance cannot belong to two enabled profiles',
 );
+eq(['float'], vpnFlags($tree, VPN_UUID_A), 'an ambiguous instance is left untouched');
 
 $tree = vpnTree(
 	[
@@ -155,37 +152,48 @@ $tree = vpnTree(
 	],
 	[vpnInstance(VPN_UUID_A), vpnInstance(VPN_UUID_B)],
 );
-throws(
-	fn() => OpenVpnIntegration::reconcile($tree),
-	'selected by both',
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(
+	str_contains(implode('\n', $result['errors']), 'selected by both'),
 	'an instance in a multi-selection cannot belong to a second enabled profile',
 );
+eq(3, count(vpnFlags($tree, VPN_UUID_A)), 'the independent valid instance is still reconciled');
+eq(['float'], vpnFlags($tree, VPN_UUID_B), 'only the ambiguous instance is skipped');
 
 $tree = vpnTree([vpnProfile('staff')], [vpnInstance(VPN_UUID_A, 'float', 'Local Database')]);
-throws(
-	fn() => OpenVpnIntegration::reconcile($tree),
-	'already has Authentication configured',
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(
+	str_contains(implode('\n', $result['errors']), 'already has Authentication configured'),
 	'core password authentication cannot run alongside web-auth',
 );
 
 $tree = vpnTree([vpnProfile('staff')], [vpnInstance(VPN_UUID_A, 'float', '', '0')]);
-throws(
-	fn() => OpenVpnIntegration::reconcile($tree),
-	'is disabled',
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(
+	str_contains(implode('\n', $result['errors']), 'is disabled'),
 	'a disabled instance cannot be managed',
 );
 
+$tree = vpnTree(
+	[vpnProfile('staff'), vpnProfile('contractors', VPN_UUID_B)],
+	[vpnInstance(VPN_UUID_A, 'float', '', '0'), vpnInstance(VPN_UUID_B)],
+);
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(str_contains(implode('\n', $result['errors']), 'is disabled'), 'the disabled instance is reported');
+eq(['float'], vpnFlags($tree, VPN_UUID_A), 'the disabled instance is left untouched');
+eq(3, count(vpnFlags($tree, VPN_UUID_B)), 'a disabled instance does not block another profile');
+
 $tree = vpnTree([vpnProfile('staff')], [vpnInstance(VPN_UUID_A, 'float', '', '1', 'client')]);
-throws(
-	fn() => OpenVpnIntegration::reconcile($tree),
-	'is not a server',
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(
+	str_contains(implode('\n', $result['errors']), 'is not a server'),
 	'an OpenVPN client instance cannot be managed',
 );
 
 $tree = vpnTree([vpnProfile('staff', VPN_UUID_B)], [vpnInstance(VPN_UUID_A)]);
-throws(
-	fn() => OpenVpnIntegration::reconcile($tree),
-	'does not exist',
+$result = OpenVpnIntegration::reconcile($tree);
+truthy(
+	str_contains(implode('\n', $result['errors']), 'does not exist'),
 	'a missing selected instance is refused',
 );
 

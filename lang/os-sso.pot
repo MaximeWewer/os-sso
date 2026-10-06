@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-10-02 18:30+0200\n"
+"POT-Creation-Date: 2026-10-06 19:19+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,8 +17,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/etc/inc/plugins.inc.d/sso.inc:47
-msgid "os-sso OpenVPN authentication guard"
+#: src/etc/inc/plugins.inc.d/sso.inc:46
+msgid "Single Sign-On"
+msgstr ""
+
+#: src/etc/inc/plugins.inc.d/sso.inc:48
+msgid ""
+"Synchronize os-sso OpenVPN web-auth profiles to the other HA host. Enable "
+"Authentication Servers, OpenVPN, Users and Groups, and Certificates "
+"separately when used."
 msgstr ""
 
 #: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/JwtController.php:51
@@ -1050,20 +1057,20 @@ msgid ""
 "Signed in as %s. You can close this window and return to your VPN client."
 msgstr ""
 
-#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:48
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:47
 msgid ""
 "This OpenVPN instance is already assigned to another enabled SSO profile."
 msgstr ""
 
-#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:56
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:55
 msgid "A selected OpenVPN instance does not exist."
 msgstr ""
 
-#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:65
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:64
 msgid "Select enabled OpenVPN server instances only."
 msgstr ""
 
-#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:71
+#: src/opnsense/mvc/app/models/OPNsense/SSO/Settings.php:70
 msgid ""
 "Clear Authentication on every selected OpenVPN instance; os-sso supplies its "
 "authentication hook."

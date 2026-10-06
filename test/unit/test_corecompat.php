@@ -38,9 +38,3 @@ foreach ($files as $file) {
 }
 
 eq([], $deprecatedCalls, 'does not call command helpers removed in OPNsense 26.4');
-
-$pluginSource = (string) file_get_contents($sourceRoot . '/etc/inc/plugins.inc.d/sso.inc');
-truthy(
-	preg_match('/\\bmwexecf\\s*\\(/', $pluginSource),
-	'uses the safe command wrapper available from OPNsense 25.7 through 26.4',
-);

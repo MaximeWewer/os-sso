@@ -17,7 +17,7 @@
         });
 
         // Saving a row only stores it. Apply renders vpn.conf, installs the managed
-        // directives, reconfigures OpenVPN and starts the authentication guard.
+        // directives and reconfigures OpenVPN when those directives changed.
         $('#apply').click(function () {
             var $button = $(this).prop('disabled', true);
             ajaxCall('/api/sso/settings/reconfigure', {}, function (data) {

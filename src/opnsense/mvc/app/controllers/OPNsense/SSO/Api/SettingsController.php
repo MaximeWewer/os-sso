@@ -15,7 +15,7 @@ use OPNsense\Core\Backend;
 /**
  * Settings API for the OpenVPN web-auth profiles. The CRUD actions are the base class's
  * grid helpers; applying writes vpn.conf, reconciles managed OpenVPN instances, lets
- * core regenerate their runtime configuration, and starts the fail-closed guard.
+ * core regenerate its runtime configuration when the managed directives changed.
  */
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -76,12 +76,14 @@ class SettingsController extends ApiMutableModelControllerBase
         }
 
         $syncOutput = trim((string)$backend->configdRun('sso sync_openvpn'));
-        if (!str_starts_with($syncOutput, 'OK:')) {
+        if (preg_match('/^(OK|PARTIAL): changed=([01]) managed=\d+(?:; .*)?$/D', $syncOutput, $sync) !== 1) {
             return ['status' => 'failed', 'output' => $syncOutput];
         }
 
-        $backend->configdRun('openvpn configure');
-        $backend->configdRun('sso guard_start');
-        return ['status' => 'ok', 'output' => $syncOutput];
+        if ($sync[2] === '1') {
+            $backend->configdRun('openvpn configure');
+        }
+
+        return ['status' => $sync[1] === 'OK' ? 'ok' : 'failed', 'output' => $syncOutput];
     }
 }

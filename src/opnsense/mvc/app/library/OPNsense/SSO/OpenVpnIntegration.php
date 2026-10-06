@@ -23,27 +23,20 @@ use SimpleXMLElement;
  */
 final class OpenVpnIntegration
 {
-	public const MANIFEST = '/usr/local/etc/sso/openvpn-instances.json';
 	public const HOOK = '/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh';
 
 	private const OPTIONAL_DIRECTIVE = 'auth-user-pass-optional';
 
 
 	/**
-	 * Reconcile config.xml and write the guard manifest under the same lock.
+	 * Reconcile config.xml under the configuration lock.
 	 *
-	 * @return array{changed: bool, instances: array<string, array<string, string>>}
+	 * @return array{changed: bool, instances: array<string, array{profile: string}>, errors: string[]}
 	 */
-	public static function synchronize(string $manifestPath = self::MANIFEST): array
+	public static function synchronize(): array
 	{
-		return ConfigLock::with(function () use ($manifestPath): array {
+		return ConfigLock::with(function (): array {
 			$config = Config::getInstance();
-			/*
-			 * Publish the desired instances before validating their OpenVPN side. If
-			 * validation fails (for example, core Authentication was enabled later),
-			 * the guard still knows which running instance must be stopped.
-			 */
-			self::writeManifest(self::manifest(self::desiredInstances($config->object())), $manifestPath);
 			$result = self::reconcile($config->object());
 			if ($result['changed'] && $config->save() === false) {
 				throw new RuntimeException('OpenVPN integration could not save config.xml');
@@ -58,35 +51,51 @@ final class OpenVpnIntegration
 	 * Apply the desired os-sso profiles to an in-memory config.xml tree.
 	 *
 	 * Public as a test seam: production callers should use synchronize(), which also
-	 * serializes concurrent writes and updates the guard manifest.
+	 * serializes concurrent writes.
 	 *
-	 * @return array{changed: bool, instances: array<string, array<string, string>>}
+	 * Invalid selections are reported and left untouched, while independent valid
+	 * instances are still reconciled.
+	 *
+	 * @return array{changed: bool, instances: array<string, array{profile: string}>, errors: string[]}
 	 */
 	public static function reconcile(SimpleXMLElement $config): array
 	{
-		$desired = self::desiredInstances($config);
+		[$desired, $blocked, $errors] = self::desiredInstances($config);
 		$instances = self::openVpnInstances($config);
 
 		foreach ($desired as $uuid => $profile) {
 			if (!isset($instances[$uuid])) {
-				throw new RuntimeException("OpenVPN instance '{$uuid}' selected by profile '{$profile}' does not exist");
+				$errors[] = "OpenVPN instance '{$uuid}' selected by profile '{$profile}' does not exist";
+				$blocked[$uuid] = $profile;
+				unset($desired[$uuid]);
+				continue;
 			}
 			$instance = $instances[$uuid];
 			if ((string)($instance->enabled ?? '') !== '1') {
-				throw new RuntimeException("OpenVPN instance '{$uuid}' selected by profile '{$profile}' is disabled");
+				$errors[] = "OpenVPN instance '{$uuid}' selected by profile '{$profile}' is disabled";
+				$blocked[$uuid] = $profile;
+				unset($desired[$uuid]);
+				continue;
 			}
 			if ((string)($instance->role ?? '') !== 'server') {
-				throw new RuntimeException("OpenVPN instance '{$uuid}' selected by profile '{$profile}' is not a server");
+				$errors[] = "OpenVPN instance '{$uuid}' selected by profile '{$profile}' is not a server";
+				$blocked[$uuid] = $profile;
+				unset($desired[$uuid]);
+				continue;
 			}
 			if (trim((string)($instance->authmode ?? '')) !== '') {
-				throw new RuntimeException(
-					"OpenVPN instance '{$uuid}' already has Authentication configured; clear it before enabling profile '{$profile}'"
-				);
+				$errors[] = "OpenVPN instance '{$uuid}' already has Authentication configured; "
+					. "clear it before enabling profile '{$profile}'";
+				$blocked[$uuid] = $profile;
+				unset($desired[$uuid]);
 			}
 		}
 
 		$changed = false;
 		foreach ($instances as $uuid => $instance) {
+			if (isset($blocked[$uuid])) {
+				continue;
+			}
 			$original = self::flags($instance);
 			$hadOwnedHook = false;
 			$flags = [];
@@ -116,7 +125,11 @@ final class OpenVpnIntegration
 			}
 		}
 
-		return ['changed' => $changed, 'instances' => self::manifest($desired)];
+		return [
+			'changed' => $changed,
+			'instances' => self::manifest($desired),
+			'errors' => array_values(array_unique($errors)),
+		];
 	}
 
 
@@ -128,19 +141,13 @@ final class OpenVpnIntegration
 
 	/**
 	 * @param array<string, string> $desired
-	 * @return array<string, array<string, string>>
+	 * @return array<string, array{profile: string}>
 	 */
 	private static function manifest(array $desired): array
 	{
 		$result = [];
 		foreach ($desired as $uuid => $profile) {
-			$result[$uuid] = [
-				'profile' => $profile,
-				'auth_directive' => self::hookDirective($profile),
-				'optional_directive' => self::OPTIONAL_DIRECTIVE,
-				'config_file' => "/var/etc/openvpn/instance-{$uuid}.conf",
-				'pid_file' => "/var/run/ovpn-instance-{$uuid}.pid",
-			];
+			$result[$uuid] = ['profile' => $profile];
 		}
 
 		return $result;
@@ -154,10 +161,15 @@ final class OpenVpnIntegration
 	}
 
 
-	/** @return array<string, string> instance UUID => profile name */
+	/**
+	 * @return array{array<string, string>, array<string, string>, string[]}
+	 *     desired instances, blocked instances and validation errors
+	 */
 	private static function desiredInstances(SimpleXMLElement $config): array
 	{
 		$desired = [];
+		$blocked = [];
+		$errors = [];
 		$profiles = $config->xpath('/opnsense/OPNsense/SSO/settings/vpn/profiles/profile') ?: [];
 		foreach ($profiles as $profile) {
 			if ((string)($profile->enabled ?? '') !== '1') {
@@ -171,23 +183,31 @@ final class OpenVpnIntegration
 			if ($uuids === []) {
 				continue;
 			}
-			if (preg_match('/^[A-Za-z0-9_]{1,32}$/D', $name) !== 1) {
-				throw new RuntimeException("Invalid os-sso OpenVPN profile name '{$name}'");
-			}
 			foreach ($uuids as $uuid) {
 				if (preg_match('/^[0-9a-f-]{36}$/D', $uuid) !== 1) {
-					throw new RuntimeException("Invalid OpenVPN instance UUID '{$uuid}' in profile '{$name}'");
+					$errors[] = "Invalid OpenVPN instance UUID '{$uuid}' in profile '{$name}'";
+					continue;
 				}
-				if (isset($desired[$uuid])) {
-					throw new RuntimeException(
-						"OpenVPN instance '{$uuid}' is selected by both '{$desired[$uuid]}' and '{$name}'"
+				if (preg_match('/^[A-Za-z0-9_]{1,32}$/D', $name) !== 1) {
+					$errors[] = "Invalid os-sso OpenVPN profile name '{$name}'";
+					$blocked[$uuid] = $name;
+					unset($desired[$uuid]);
+					continue;
+				}
+				if (isset($desired[$uuid]) || isset($blocked[$uuid])) {
+					$owner = $desired[$uuid] ?? $blocked[$uuid];
+					$errors[] = sprintf(
+						"OpenVPN instance '{$uuid}' is selected by both '{$owner}' and '{$name}'"
 					);
+					$blocked[$uuid] = $owner;
+					unset($desired[$uuid]);
+					continue;
 				}
 				$desired[$uuid] = $name;
 			}
 		}
 
-		return $desired;
+		return [$desired, $blocked, array_values(array_unique($errors))];
 	}
 
 
@@ -230,27 +250,4 @@ final class OpenVpnIntegration
 		}
 	}
 
-
-	/** @param array<string, array<string, string>> $instances */
-	private static function writeManifest(array $instances, string $path): void
-	{
-		$directory = dirname($path);
-		// @ - another process may create the directory between both checks.
-		if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
-			throw new RuntimeException("Cannot create OpenVPN integration directory '{$directory}'");
-		}
-		$data = json_encode(['version' => 1, 'instances' => $instances], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-		if ($data === false) {
-			throw new RuntimeException('Cannot encode the OpenVPN integration manifest');
-		}
-		$temporary = $path . '.' . getmypid() . '.tmp';
-		if (file_put_contents($temporary, $data . "\n", LOCK_EX) === false) {
-			throw new RuntimeException("Cannot write OpenVPN integration manifest '{$temporary}'");
-		}
-		chmod($temporary, 0600);
-		if (!rename($temporary, $path)) {
-			@unlink($temporary); // @ - best-effort cleanup after a failed rename
-			throw new RuntimeException("Cannot replace OpenVPN integration manifest '{$path}'");
-		}
-	}
 }

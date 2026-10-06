@@ -32,10 +32,11 @@ or their assignments. They return when a compatible package is installed again, 
 same data is included in a normal OPNsense configuration backup.
 
 The code and authentication endpoints are unavailable while the package is missing.
-Before removal, the package stops the OpenVPN fail-closed guard and every managed
-OpenVPN instance; their saved directives deliberately remain so a manual restart cannot
-silently fall back to certificate-only access. Files below `/var/db/os-sso*` are runtime
-sessions, caches and locks, not durable configuration, and may be recreated or lost.
+Managed directives deliberately remain in OpenVPN configuration, so new authentication
+fails instead of silently falling back to certificate-only access. Reinstalling the
+plugin restores the endpoint without taking managed instances down during the package
+upgrade. Files below `/var/db/os-sso*` are runtime sessions, caches and locks, not durable
+configuration, and may be recreated or lost.
 
 ## From source
 

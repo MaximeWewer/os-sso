@@ -60,9 +60,8 @@
                     <!-- Optional for backwards compatibility with profiles that were
                          wired manually before os-sso managed OpenVPN instances. New
                          profiles should select one or more instances: the plugin then
-                         owns their hooks, repairs them before core generates the
-                         configuration, and guards the running daemons against losing
-                         authentication. -->
+                         owns their hooks and repairs them before core generates the
+                         configuration. -->
                     <openvpn_instance type="ModelRelationField">
                         <Model>
                             <servers>

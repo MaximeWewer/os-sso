@@ -38,7 +38,7 @@ revocation delay. For immediate revocation on both nodes, configure the IdP to p
 both node-specific SCIM endpoints if it supports multiple targets. The shared CARP endpoint
 alone reaches only the node that is active at that moment.
 
-The generated `vpn.conf` and guard manifest are not copied. OPNsense reloads templates
-and services on the backup after synchronization, so each node derives these files from
-its synchronized configuration. If a profile or dependent section is missing, os-sso
-refuses VPN authentication instead of falling back to certificate-only access.
+The generated `vpn.conf` is not copied. OPNsense reloads templates and services on the
+backup after synchronization, so each node derives it from synchronized configuration.
+If a profile or dependent section is missing, os-sso refuses VPN authentication instead
+of falling back to certificate-only access.
