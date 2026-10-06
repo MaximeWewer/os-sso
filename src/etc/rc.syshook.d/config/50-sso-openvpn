@@ -1,0 +1,28 @@
+#!/bin/sh
+# os-sso: put the managed OpenVPN web-auth directives back after every config.xml save.
+#
+# The OpenVPN instance form only knows its own various_flags options, so saving an
+# instance drops the auth-user-pass-verify hook from config.xml. The crl hook restores
+# it on Apply, but `openvpn start|restart <uuid>` (the Services page and the dashboard
+# widget) regenerates the instance config without running crl -- an instance saved but
+# not applied would then come back up without SSO, accepting a client certificate alone.
+# Reconciling here, right after the save, closes that window.
+#
+# sync_openvpn.php only saves when something changed, so the config event its own save
+# raises finds nothing to do: no loop.
+
+OUT=$(/usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php 2>&1)
+case "$OUT" in
+    *changed=1*)
+        logger -t os-sso -p daemon.notice \
+            "restored managed OpenVPN web-auth directives after a configuration change"
+        ;;
+esac
+case "$OUT" in
+    PARTIAL:*|ERROR:*)
+        logger -t os-sso -p daemon.err "OpenVPN integration: $(printf '%s' "$OUT" | tr '\n' ' ')"
+        ;;
+esac
+
+# A config hook must never fail the event chain; problems are in the log above.
+exit 0

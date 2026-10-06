@@ -96,13 +96,25 @@ cp "$SVC_SRC/scripts/OPNsense/SSO/auth-user-pass-verify.sh" /usr/local/opnsense/
 cp "$SVC_SRC/scripts/OPNsense/SSO/build_cp_template.sh" /usr/local/opnsense/scripts/OPNsense/SSO/
 cp "$SVC_SRC/scripts/OPNsense/SSO/expire_sessions.php" /usr/local/opnsense/scripts/OPNsense/SSO/
 cp "$SVC_SRC/scripts/OPNsense/SSO/vpn_kill.py" /usr/local/opnsense/scripts/OPNsense/SSO/
+cp "$SVC_SRC/scripts/OPNsense/SSO/sync_openvpn.php" /usr/local/opnsense/scripts/OPNsense/SSO/
 cp -R "$SVC_SRC/scripts/OPNsense/SSO/cp-portal" /usr/local/opnsense/scripts/OPNsense/SSO/
 chmod 0755 /usr/local/opnsense/scripts/OPNsense/SSO/vpn_verdict.sh \
            /usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh \
            /usr/local/opnsense/scripts/OPNsense/SSO/build_cp_template.sh \
            /usr/local/opnsense/scripts/OPNsense/SSO/expire_sessions.php \
-           /usr/local/opnsense/scripts/OPNsense/SSO/vpn_kill.py
+           /usr/local/opnsense/scripts/OPNsense/SSO/vpn_kill.py \
+           /usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php
 cp "$SVC_SRC/service/conf/actions.d/actions_sso.conf" /usr/local/opnsense/service/conf/actions.d/
+
+# Managed OpenVPN instances: the plugin hooks (crl + bootup restore the web-auth
+# directives before core generates an instance) and the config syshook (restores them
+# right after a save, so a later start/restart -- which skips crl -- still has them).
+# Everything above is copied file by file, so a new hook that is not listed here simply
+# never runs in the lab.
+ETC_SRC=/home/vagrant/os-sso/src/etc
+install -m 0644 "$ETC_SRC/inc/plugins.inc.d/sso.inc" /usr/local/etc/inc/plugins.inc.d/sso.inc
+mkdir -p /usr/local/etc/rc.syshook.d/config
+install -m 0755 "$ETC_SRC/rc.syshook.d/config/50-sso-openvpn" /usr/local/etc/rc.syshook.d/config/
 service configd restart >/dev/null 2>&1 || true
 
 echo ">>> os-sso: restarting the WebGUI to pick up new classes"
