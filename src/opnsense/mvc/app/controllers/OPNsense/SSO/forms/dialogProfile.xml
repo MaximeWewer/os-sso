@@ -13,10 +13,10 @@
         <label>Profile name</label>
         <type>text</type>
         <help>
-            The name the OpenVPN server passes to the script, e.g.
-            auth-user-pass-verify "/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh staff" via-file.
-            A server that passes no name uses the first enabled profile. Letters, digits
-            and underscores only.
+            A unique identifier that binds the selected OpenVPN instances to this
+            web-auth policy. Apply passes it to the managed authentication hook
+            automatically. Only legacy manually wired servers need to reference it in
+            auth-user-pass-verify. Letters, digits and underscores only.
         </help>
     </field>
     <field>
@@ -32,6 +32,16 @@
         <help>
             Which SSO authentication server drives this VPN login. The list holds the
             OIDC and SAML servers configured under System - Access - Servers.
+        </help>
+    </field>
+    <field>
+        <id>profile.openvpn_instance</id>
+        <label>OpenVPN server instances</label>
+        <type>select_multiple</type>
+        <help>
+            The enabled OpenVPN servers this profile protects. Apply automatically
+            installs and guards the deferred web-auth directives on every selected
+            instance. Leave empty only for legacy servers that are still wired manually.
         </help>
     </field>
     <field>
@@ -53,10 +63,10 @@
             account that just signed in through the IdP. OpenVPN keeps using the name
             the client asked for - it drives username-as-common-name, client-config-dir
             and per-user rules - and the browser login otherwise only decides whether
-            the tunnel comes up, not whose it is. Leave off if your clients send a
-            throwaway username (the usual web-auth setup, where anything is typed at the
-            prompt); turn it on if the username is load-bearing on the server side. A
-            client that sends no username at all is never refused by this.
+            the tunnel comes up, not whose it is. This is enabled by default and also
+            refuses an empty username. Turn it off only when the server never uses the
+            username for identity, policy, addressing or revocation and the clients send
+            a deliberate throwaway value.
         </help>
     </field>
     <field>

@@ -41,12 +41,12 @@ OpenVPN 3 Linux:
 
 ```sh
 openvpn3 session-start --config client.ovpn
-# when prompted for a username, type anything (e.g. "sso"); leave the password blank
+# enter the same username you will use at the IdP; leave the password blank
 # openvpn3 prints / opens a WEB_AUTH url -> authenticate in the browser
 ```
 
-OpenVPN Connect: import `client.ovpn`, connect, enter any username. The app opens the IdP
-login in a browser.
+OpenVPN Connect: import `client.ovpn`, connect, enter the same username you will use at
+the IdP. The app opens the IdP login in a browser.
 
 ## What happens
 
@@ -74,8 +74,9 @@ Fields: `protocol` (`oidc`|`saml`), `provider` (an OIDC/SAML auth server name), 
 **About the username.** OpenVPN keeps using the name the client typed - it never asks again
 on a deferred path - so it, not the authenticated account, is what drives
 `username-as-common-name`, a `client-config-dir` and per-user rules. Both names are logged
-on the firewall. Set `enforce_username=1` to refuse the tunnel when they differ; leave it
-off for the throwaway-username flow above.
+on the firewall. `enforce_username=1` is the default and refuses a missing or different
+name. Set it to `0` only for a compatibility profile whose server-side policy never uses
+the client username and whose clients deliberately send a throwaway value.
 
 ## Browser cert warnings
 

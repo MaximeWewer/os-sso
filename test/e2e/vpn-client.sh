@@ -91,7 +91,7 @@ VPN_REMOTE=${VPN_REMOTE:-$(printf '%s' "$GUI" | sed -e 's#^https\?://##' -e 's#[
     printf '\nsetenv IV_SSO webauth\nauth-user-pass %s/creds\nauth-retry none\n' "$W"
 } > "$W/client-webauth.ovpn"
 echo "    connecting to $VPN_REMOTE (same path as the browser)"
-printf 'sso\nsso\n' > "$W/creds"
+printf '%s\nunused\n' "$IDP_USER" > "$W/creds"
 
 vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
 

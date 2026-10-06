@@ -11,7 +11,7 @@ break-glass path.
 **[Documentation](docs/)** - [install](docs/install.md) ·
 [configuration](docs/configuration.md) · [OIDC](docs/oidc.md) · [SAML](docs/saml.md) ·
 [JWT](docs/jwt.md) · [portal & VPN](docs/services.md) · [SCIM](docs/scim.md) ·
-[security](docs/security.md)
+[high availability](docs/high-availability.md) · [security](docs/security.md)
 
 ## Features
 
@@ -38,6 +38,8 @@ break-glass path.
   tunnel. → [docs](docs/security.md#revocation-reaches-all-three-doors)
 - **SCIM 2.0 provisioning** - the IdP pushes account lifecycle, so a revoked user is
   disabled when the directory says so, not at their next login attempt. → [docs](docs/scim.md)
+- **HA configuration sync** - exposes the plugin's profiles to OPNsense XMLRPC sync and
+  reconfigures OpenVPN on the backup. → [docs](docs/high-availability.md)
 
 ## Screenshots
 

@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+/*
+ * Copyright (C) 2026 Maxime Wewer
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+function sso_configure()
+{
+	return [
+		'bootup' => ['sso_openvpn_bootup'],
+		'crl' => ['sso_openvpn_sync:0'],
+	];
+}
+
+
+function sso_openvpn_sync(): void
+{
+	try {
+		$result = \OPNsense\SSO\OpenVpnIntegration::synchronize();
+		if ($result['changed']) {
+			syslog(LOG_NOTICE, 'os-sso: restored managed OpenVPN web-auth directives');
+		}
+		foreach ($result['errors'] as $error) {
+			$detail = str_replace(["\r", "\n"], ' ', $error);
+			syslog(LOG_ERR, 'os-sso: OpenVPN integration skipped an invalid selection: ' . $detail);
+		}
+	} catch (\Throwable $exception) {
+		syslog(LOG_ERR, 'os-sso: OpenVPN integration failed: ' . $exception->getMessage());
+		throw $exception;
+	}
+}
+
+
+function sso_openvpn_bootup(): void
+{
+	sso_openvpn_sync();
+}
+
+
+function sso_xmlrpc_sync(): array
+{
+	return [[
+		'description' => gettext('Single Sign-On'),
+		'help' => gettext(
+			'Synchronize os-sso OpenVPN web-auth profiles to the other HA host. '
+			. 'Enable Authentication Servers, OpenVPN, Users and Groups, and Certificates separately when used.'
+		),
+		'section' => 'OPNsense.SSO',
+		'id' => 'sso',
+		'services' => ['openvpn'],
+	]];
+}

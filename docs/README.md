@@ -4,6 +4,7 @@
 |---|---|
 | [Install](install.md) | Requirements, packages per ABI, building from source |
 | [Configuration](configuration.md) | The options shared by all server types, and what they decide |
+| [High availability](high-availability.md) | XMLRPC sections, dependent services and failover boundaries |
 | [OpenID Connect](oidc.md) | Client authentication, hardening, groups claim, Entra ID overage |
 | [SAML 2.0](saml.md) | Metadata, SP endpoints, assertion requirements, options |
 | [JWT forward-auth](jwt.md) | Trusted proxies, replay window |

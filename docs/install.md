@@ -5,7 +5,9 @@
 - **OPNsense 25.7 or newer** - the login-page SSO button hook (`ISSOContainer` /
   `listSSOproviders`) landed in core in 25.7.
 - For OpenVPN login: **OpenVPN 2.6+** on the firewall and a web-auth-capable client
-  (OpenVPN Connect, OpenVPN 3 Linux, Windows 2.6+).
+  (OpenVPN Connect, OpenVPN 3 Linux, Windows 2.6+). Managed OpenVPN instances use
+  client-certificate verification plus browser authentication; leave the instance's
+  core **Authentication** field empty.
 - An Identity Provider you control or use (Keycloak, Authentik, Entra ID, Zitadel, …).
 
 ## From a release
@@ -20,6 +22,21 @@ pkg add os-sso-devel-*-FreeBSD-14.pkg   # pick the file matching your ABI
 
 Then reload the WebGUI (or reboot). The new server types appear under
 **System ▸ Access ▸ Servers**.
+
+## Firmware upgrades and removal
+
+The durable plugin configuration lives under `OPNsense/SSO` in `/conf/config.xml`.
+OPNsense package removal deletes the plugin files, not that configuration branch, so a
+firmware upgrade that temporarily drops the package does not erase providers, profiles
+or their assignments. They return when a compatible package is installed again, and the
+same data is included in a normal OPNsense configuration backup.
+
+The code and authentication endpoints are unavailable while the package is missing.
+Managed directives deliberately remain in OpenVPN configuration, so new authentication
+fails instead of silently falling back to certificate-only access. Reinstalling the
+plugin restores the endpoint without taking managed instances down during the package
+upgrade. Files below `/var/db/os-sso*` are runtime sessions, caches and locks, not durable
+configuration, and may be recreated or lost.
 
 ## From source
 

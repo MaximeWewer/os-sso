@@ -41,7 +41,7 @@ fi
 # Resolve PROFILE_<name>_* into the plain names the rest of the script uses. eval
 # rather than ${!var}: this is /bin/sh, and the name has already been reduced to
 # letters, digits and underscores above.
-for field in PROTOCOL PROVIDER PROVIDER_ENC HOST TIMEOUT; do
+for field in PROTOCOL PROVIDER PROVIDER_ENC HOST TIMEOUT ENFORCE_USERNAME; do
     eval "$field=\"\${PROFILE_${PROFILE}_${field}:-}\""
 done
 PROTOCOL="${PROTOCOL:-oidc}"   # oidc | saml
@@ -49,6 +49,7 @@ PROTOCOL="${PROTOCOL:-oidc}"   # oidc | saml
 # vpn.conf written by an older build still works (rewritten on the next save).
 PROVIDER_ENC="${PROVIDER_ENC:-$PROVIDER}"
 TIMEOUT="${TIMEOUT:-180}"
+ENFORCE_USERNAME="${ENFORCE_USERNAME:-1}"
 # Root-owned tree, not the world-writable /var/tmp: the per-session file holds the
 # auth-control path a positive verdict gets written to.
 STATE_DIR=/var/db/os-sso-vpn
@@ -66,6 +67,20 @@ esac
 
 if [ -z "$PROVIDER" ] || [ -z "$HOST" ]; then
     echo "os-sso vpn: profile '$PROFILE' has no provider/host in $CONF" >&2
+    exit 1
+fi
+
+case "$ENFORCE_USERNAME" in
+    0|1) ;;
+    *) echo "os-sso vpn: invalid ENFORCE_USERNAME '$ENFORCE_USERNAME' (0|1)" >&2; exit 1 ;;
+esac
+
+# Capture the client-supplied name before sending anyone through the browser. With
+# identity binding enabled, an empty name can never become a safe OpenVPN common name,
+# and discovering that only after MFA wastes the login and obscures the real error.
+CLAIMED_USER=$(printf '%s' "${username:-}" | tr -d '\r\n' | tr -cd '\40-\176')
+if [ "$ENFORCE_USERNAME" = "1" ] && [ -z "$CLAIMED_USER" ]; then
+    echo "os-sso vpn: username binding is enabled but the client sent no username" >&2
     exit 1
 fi
 
@@ -107,7 +122,6 @@ CLIENT_IP="${untrusted_ip:-${trusted_ip:-}}"
 # it on a deferred path, so vpn_verdict.sh logs it next to the account that really
 # authenticated and can refuse a mismatch when the operator asked it to. Reduced to
 # printable ASCII on one line: it is about to become a line in a state file.
-CLAIMED_USER=$(printf '%s' "${username:-}" | tr -d '\r\n' | tr -cd '\40-\176')
 {
     printf '%s\n' "$auth_control_file"
     printf '%s\n' "$CLIENT_IP"

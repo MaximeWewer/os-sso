@@ -14,7 +14,7 @@ trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
 mkdir -p "$ROOT/lang"
 cd "$ROOT"
 
-find src \( -name '*.php' -o -name '*.volt' \) \
+find src \( -name '*.php' -o -name '*.inc' -o -name '*.volt' \) \
     | grep -v '/vendor/' \
     | sort > "$STAGE/POTFILES"
 

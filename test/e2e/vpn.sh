@@ -15,7 +15,7 @@ rm -rf "$W"; mkdir -p "$W"
 : > "$W/pending"; : > "$W/control"
 
 echo ">>> case 1: a web-auth capable client is deferred"
-env IV_SSO=webauth,crtext auth_pending_file="$W/pending" auth_control_file="$W/control" \
+env IV_SSO=webauth,crtext username=real.alice auth_pending_file="$W/pending" auth_control_file="$W/control" \
     untrusted_ip=203.0.113.7 sh "$HOOK" >"$W/out" 2>&1
 rc=$?
 [ "$rc" = "2" ] && ok "hook exits 2 (deferred)" || ko "hook exit $rc ($(cat "$W/out"))"
@@ -33,7 +33,7 @@ MODE=$(stat -f '%Lp' "$STATE" 2>/dev/null)
 
 echo ">>> case 3: a client without web-auth support is refused, not hung"
 : > "$W/pending2"
-env IV_SSO=crtext auth_pending_file="$W/pending2" auth_control_file="$W/control" \
+env IV_SSO=crtext username=real.alice auth_pending_file="$W/pending2" auth_control_file="$W/control" \
     untrusted_ip=203.0.113.7 sh "$HOOK" >"$W/out2" 2>&1
 rc=$?
 [ "$rc" = "1" ] && ok "hook exits 1 (deny)" || ko "hook exit $rc"
@@ -52,10 +52,10 @@ grep -q 'unknown vpn session' "$W/v2" && ok "consumed session id cannot be reuse
 
 echo ">>> case 6: a matching browser IP releases the tunnel"
 : > "$W/pending3"; : > "$W/control3"
-env IV_SSO=webauth auth_pending_file="$W/pending3" auth_control_file="$W/control3" \
+env IV_SSO=webauth username=real.alice auth_pending_file="$W/pending3" auth_control_file="$W/control3" \
     untrusted_ip=203.0.113.7 sh "$HOOK" >/dev/null 2>&1
 SID2=$(sed -n 's/.*&vpn=//p' "$W/pending3")
-"$VERDICT" "$SID2" 1 203.0.113.7 >"$W/v3" 2>&1
+"$VERDICT" "$SID2" 1 203.0.113.7 'real.alice' >"$W/v3" 2>&1
 case "$(cat "$W/v3")" in ok*) ok "verdict accepted" ;; *) ko "verdict said '$(cat "$W/v3")'" ;; esac
 [ "$(cat "$W/control3")" = "1" ] && ok "the tunnel was authorized (control file = 1)" \
     || ko "control file holds '$(cat "$W/control3")'"
@@ -122,14 +122,17 @@ case "$(cat "$W/v7")" in ok*) ok "a matching username is accepted" ;; \
 [ "$(cat "$W/control6")" = "1" ] && ok "and the tunnel was authorized" \
     || ko "control file holds '$(cat "$W/control6")'"
 
-echo ">>> case 12: a client that sent no username has nothing to spoof"
-SID6=$(defer '' "$W/pending7" "$W/control7")
-: > "$W/control7"
-"$VERDICT" "$SID6" 1 203.0.113.7 'real.alice' >"$W/v8" 2>&1
-case "$(cat "$W/v8")" in ok*) ok "an empty claimed username is not refused" ;; \
-    *) ko "verdict said '$(cat "$W/v8")'" ;; esac
+echo ">>> case 12: enforcement refuses a client that sent no username"
+: > "$W/pending7"; : > "$W/control7"
+env IV_SSO=webauth username='' auth_pending_file="$W/pending7" auth_control_file="$W/control7" \
+    untrusted_ip=203.0.113.7 sh "$HOOK" >"$W/v8" 2>&1
+rc=$?
+[ "$rc" = "1" ] && ok "the hook refuses an empty username before browser login" \
+    || ko "empty username returned $rc ($(cat "$W/v8"))"
+grep -q 'sent no username' "$W/v8" && ok "the refusal explains the missing username" \
+    || ko "missing username was not explained ($(cat "$W/v8"))"
 
-echo ">>> case 12b: the verdict names the tunnel's common name"
+echo ">>> case 12b: compatibility mode returns the tunnel's common name"
 set_enforce 0   # case 10 left enforcement on, and this case is about the echo
 SID7=$(defer 'claimed.carol' "$W/pending9" "$W/control9")
 : > "$W/control9"
