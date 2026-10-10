@@ -273,6 +273,7 @@ final class LocalAccountWriter
 
         $cnf = Config::getInstance()->object();
         $node = $cnf->system->addChild('user');
+        self::ensureUuid($node);
         $node->addChild('name', $this->xml($username));
         $node->addChild('descr', $this->xml((string)($attrs['descr'] ?? '') ?: $username));
         if (!empty($attrs['email'])) {
@@ -294,6 +295,36 @@ final class LocalAccountWriter
             }
         }
         return $node;
+    }
+
+    /**
+     * Give a <user> node the persistent uuid attribute core's user model keys on.
+     *
+     * Users live in an MVC model since OPNsense 25.x, and an entry without a uuid gets
+     * a fresh one invented on every load: the user list shows the account, but the
+     * edit form asks for an id that no longer exists and comes back empty, and delete
+     * cannot find it either -- until something saves the whole model and the invented
+     * id finally sticks (issue #8). Same format as core's BaseField::generateUUID().
+     *
+     * @return bool whether a uuid was added (an existing one is never replaced)
+     */
+    public static function ensureUuid(\SimpleXMLElement $node): bool
+    {
+        if ((string)($node->attributes()['uuid'] ?? '') !== '') {
+            return false;
+        }
+        $node->addAttribute('uuid', sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            random_int(0, 0x0fff) | 0x4000,
+            random_int(0, 0x3fff) | 0x8000,
+            random_int(0, 0xffff),
+            random_int(0, 0xffff),
+            random_int(0, 0xffff)
+        ));
+        return true;
     }
 
     /** Set a scalar child, adding it when absent. Returns whether anything changed. */

@@ -114,6 +114,20 @@ class CaptivePortal
     }
 }
 
+namespace OPNsense\Base;
+
+/**
+ * Core's migration base class, reduced to what os-sso's migrations call: run() is the
+ * hook a migration overrides, and the parent's own run() (which applies model
+ * defaults) has nothing to do here.
+ */
+class BaseModelMigration
+{
+    public function run($model)
+    {
+    }
+}
+
 namespace OPNsense\SSO\Test;
 
 /**

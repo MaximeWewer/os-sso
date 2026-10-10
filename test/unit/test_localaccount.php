@@ -98,6 +98,46 @@ eq('1', (string)$disabled->disabled, 'create() can make a disabled account');
 
 throws(fn() => $writer->create(['name' => 'bad name!']), 'not a valid local', 'create() validates the name');
 
+// Core's user model keys every account on a uuid attribute. Without one it invents a
+// new id on each load, and the account can be listed but not opened or deleted (#8).
+$uuidV4 = '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D';
+truthy(
+    preg_match($uuidV4, (string)$node->attributes()['uuid']) === 1,
+    'create() gives the account a persistent v4 uuid'
+);
+truthy(
+    (string)$node->attributes()['uuid'] !== (string)$bare->attributes()['uuid'],
+    'each account gets its own uuid'
+);
+
+T::group('LocalAccountWriter: ensureUuid() repairs, never replaces');
+
+$root = Tree::build([['name' => 'old', 'uid' => '2000']]);
+$old = Tree::user($root, 'old');
+truthy(LocalAccountWriter::ensureUuid($old), 'a uuid is added where there was none');
+$kept = (string)$old->attributes()['uuid'];
+falsy(LocalAccountWriter::ensureUuid($old), 'a second call reports nothing to do');
+eq($kept, (string)$old->attributes()['uuid'], 'and the existing uuid is kept');
+
+T::group('Migration 1.0.4: os-sso accounts created without a uuid get one');
+
+require_once dirname(__DIR__, 2) . '/src/opnsense/mvc/app/models/OPNsense/SSO/Migrations/M1_0_4.php';
+$root = Tree::build([
+    ['name' => 'ssouser', 'uid' => '2000', 'sso_owned' => '1'],
+    ['name' => 'scimuser', 'uid' => '2001', 'scim_ref' => 'kc|ext-1'],
+    ['name' => 'localadmin', 'uid' => '2002', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
+]);
+(new \OPNsense\SSO\Migrations\M1_0_4())->run(null);
+truthy(
+    preg_match($uuidV4, (string)Tree::user($root, 'ssouser')->attributes()['uuid']) === 1,
+    'an account os-sso created gets a uuid'
+);
+truthy(
+    preg_match($uuidV4, (string)Tree::user($root, 'scimuser')->attributes()['uuid']) === 1,
+    'so does one SCIM provisioned'
+);
+eq('', (string)(Tree::user($root, 'localadmin')->attributes()['uuid'] ?? ''), 'a local account is left alone');
+
 T::group('LocalAccountWriter: field writes');
 
 $root = Tree::build([['name' => 'alice', 'uid' => '2100', 'email' => 'old@example.com']]);
