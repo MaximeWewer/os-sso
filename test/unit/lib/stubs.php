@@ -114,6 +114,57 @@ class CaptivePortal
     }
 }
 
+namespace OPNsense\Cron;
+
+/**
+ * The slice of core's Cron model SessionSweeperJob uses, including the one thing it
+ * got wrong once: serializeToConfig() refuses an origin outside core's mask, which is
+ * how the first sweeper migration silently created nothing (issue #12).
+ */
+class Cron
+{
+    /** Core's Cron.xml origin mask. */
+    public const ORIGIN_MASK = '/^([a-z,A-Z,1-9]){0,30}$/';
+
+    /** @var array<string,\stdClass> uuid => job, shared across instances like config.xml */
+    public static array $store = [];
+    public object $jobs;
+
+    public function __construct()
+    {
+        $this->jobs = new \stdClass();
+        $this->jobs->job = new class {
+            public function iterateItems(): \Generator
+            {
+                yield from Cron::$store;
+            }
+        };
+    }
+
+    public function newDailyJob($origin, $command, $description, $weekdays = '*', $enabled = '0')
+    {
+        $uuid = 'job-' . count(self::$store);
+        self::$store[$uuid] = (object)compact('origin', 'command', 'description', 'weekdays', 'enabled');
+        return $uuid;
+    }
+
+    public function getNodeByReference(string $ref)
+    {
+        return self::$store[substr($ref, strlen('jobs.job.'))] ?? null;
+    }
+
+    public function serializeToConfig()
+    {
+        foreach (self::$store as $uuid => $job) {
+            if (preg_match(self::ORIGIN_MASK, (string)$job->origin) !== 1) {
+                unset(self::$store[$uuid]);
+                throw new \RuntimeException("[OPNsense\\Cron\\Cron:jobs.job.$uuid.origin] Origin should be regular text of max 30 characters.");
+            }
+        }
+        return true;
+    }
+}
+
 namespace OPNsense\Base;
 
 /**
