@@ -10,6 +10,7 @@
  * is a refusal.
  */
 
+use OPNsense\SSO\AccountStamps;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\IdentityMapper;
 use OPNsense\SSO\NormalizedIdentity;
@@ -63,7 +64,7 @@ eq(
     mapper()->resolve(identity(['subject' => 'sub-alice', 'username' => 'alice']), false, []),
     'a passwordless account is bound by username'
 );
-eq('kc|sub-alice', (string)Tree::user($root, 'alice')->sso_subject, 'and gets stamped for next time');
+eq('kc|sub-alice', AccountStamps::value(Tree::user($root, 'alice'), 'sso_subject'), 'and gets stamped for next time');
 
 T::group('IdentityMapper: an account bound to another subject is refused');
 
@@ -78,7 +79,7 @@ throws(
     "already bound to another subject of provider 'kc'",
     'a different subject of the same provider cannot take over the account'
 );
-eq('kc|sub-alice', (string)Tree::user($root, 'alice')->sso_subject, 'the original binding is untouched');
+eq('kc|sub-alice', AccountStamps::value(Tree::user($root, 'alice'), 'sso_subject'), 'the original binding is untouched');
 
 // No subject asserted at all cannot be pinned, so it may not claim a bound account.
 throws(
@@ -105,7 +106,7 @@ eq(
     'a second provider binds to the same account'
 );
 $bindings = [];
-foreach (Tree::user($root, 'kctest')->sso_subject as $b) {
+foreach (AccountStamps::values(Tree::user($root, 'kctest'), 'sso_subject') as $b) {
     $bindings[] = (string)$b;
 }
 eq(['kc|sub-oidc', 'kc-saml|nameid-saml'], $bindings, 'both bindings are recorded, one per provider');
@@ -154,7 +155,7 @@ throws(
     'a second provider cannot join an account another one holds'
 );
 $bindings = [];
-foreach (Tree::user($root, 'kctest')->sso_subject as $b) {
+foreach (AccountStamps::values(Tree::user($root, 'kctest'), 'sso_subject') as $b) {
     $bindings[] = (string)$b;
 }
 eq(['kc|sub-oidc'], $bindings, 'and nothing was stamped on the way to the refusal');
@@ -329,7 +330,7 @@ eq(
     'an account os-sso deprovisioned is re-enabled and logs in'
 );
 eq('0', (string)Tree::user($root, 'alice')->disabled, 'the disabled flag is cleared');
-eq('', (string)Tree::user($root, 'alice')->sso_deprovisioned, 'and so is the stamp');
+eq('', AccountStamps::value(Tree::user($root, 'alice'), 'sso_deprovisioned'), 'and so is the stamp');
 
 // The operator's own lever is NOT ours to undo: no stamp, no revival.
 $root = Tree::build([
@@ -354,7 +355,7 @@ eq(
     mapper()->resolve(identity(['subject' => 'sub-carol', 'username' => 'carol']), false, []),
     'an enabled account with a stale stamp logs in'
 );
-eq('', (string)Tree::user($root, 'carol')->sso_deprovisioned, 'and the stale stamp is dropped');
+eq('', AccountStamps::value(Tree::user($root, 'carol'), 'sso_deprovisioned'), 'and the stale stamp is dropped');
 
 // <expires> is a date the operator set, not a refusal os-sso issued -- reviving the
 // disabled flag must not smuggle an expired account back in.
@@ -391,8 +392,8 @@ eq(
 );
 $new = Tree::user($root, 'newbie');
 truthy($new !== null, 'the account exists in config.xml');
-eq('kc|sub-new', (string)$new->sso_subject, 'it carries the subject stamp');
-eq('1', (string)$new->sso_owned, 'and the ownership marker');
+eq('kc|sub-new', AccountStamps::value($new, 'sso_subject'), 'it carries the subject stamp');
+eq('1', AccountStamps::value($new, 'sso_owned'), 'and the ownership marker');
 eq(['2000'], Tree::members($root, 'staff'), 'the asserted group was granted');
 
 // A username the local account rules reject must never be provisioned.

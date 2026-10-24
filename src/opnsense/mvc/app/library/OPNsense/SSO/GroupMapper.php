@@ -33,7 +33,7 @@ final class GroupMapper
     /** when true, strip previously-granted memberships the IdP no longer asserts */
     private bool $reconcile;
 
-    /** config.xml child on the user node recording the groups os-sso last granted */
+    /** The stamp recording the groups os-sso last granted (kept in AccountStamps) */
     private const PROVENANCE_FIELD = 'sso_groups';
 
     /**
@@ -305,7 +305,7 @@ final class GroupMapper
      */
     private function readProvenance(\SimpleXMLElement $userNode): array
     {
-        $raw = (string)($userNode->{self::PROVENANCE_FIELD} ?? '');
+        $raw = AccountStamps::value($userNode, self::PROVENANCE_FIELD);
         $out = [];
         foreach (array_filter(array_map('trim', explode(',', $raw))) as $name) {
             $out[strtolower($name)] = true;
@@ -320,11 +320,6 @@ final class GroupMapper
         $names = array_values(array_unique(array_map('strtolower', $grantedNames)));
         sort($names);
         $new = implode(',', $names);
-        if ((string)($userNode->{self::PROVENANCE_FIELD} ?? '') === $new) {
-            return false;
-        }
-        unset($userNode->{self::PROVENANCE_FIELD});
-        $userNode->addChild(self::PROVENANCE_FIELD, htmlspecialchars($new, ENT_XML1));
-        return true;
+        return AccountStamps::set($userNode, self::PROVENANCE_FIELD, $new);
     }
 }

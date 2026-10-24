@@ -82,14 +82,7 @@ final class LocalAccountWriter
      */
     public function subjectBindings(\SimpleXMLElement $node): array
     {
-        $out = [];
-        foreach ($node->sso_subject as $binding) {
-            $value = trim((string)$binding);
-            if ($value !== '') {
-                $out[] = $value;
-            }
-        }
-        return $out;
+        return AccountStamps::values($node, 'sso_subject');
     }
 
     /**
@@ -107,20 +100,15 @@ final class LocalAccountWriter
     {
         $out = [];
         foreach (['sso_subject', 'scim_ref'] as $field) {
-            foreach ($node->{$field} as $binding) {
-                $ref = trim((string)$binding);
-                if ($ref === '') {
-                    continue;
-                }
+            foreach (AccountStamps::values($node, $field) as $ref) {
                 $provider = explode('|', $ref, 2)[0];
                 if ($provider !== '' && !in_array($provider, $out, true)) {
                     $out[] = $provider;
                 }
             }
         }
-        foreach ($node->scim_provider as $binding) {
-            $provider = trim((string)$binding);
-            if ($provider !== '' && !in_array($provider, $out, true)) {
+        foreach (AccountStamps::values($node, 'scim_provider') as $provider) {
+            if (!in_array($provider, $out, true)) {
                 $out[] = $provider;
             }
         }
@@ -173,7 +161,7 @@ final class LocalAccountWriter
         if ($subjectKey === '' || $provider === '' || $this->bindingFor($node, $provider) !== '') {
             return false;
         }
-        $node->addChild('sso_subject', $this->xml($subjectKey));
+        AccountStamps::add($node, 'sso_subject', $subjectKey);
         return true;
     }
 
@@ -183,7 +171,7 @@ final class LocalAccountWriter
             return null;
         }
         foreach ($this->users() as $user) {
-            $stamp = (string)($user->{$field} ?? '');
+            $stamp = $this->stamp($user, $field);
             if ($stamp !== '' && hash_equals($stamp, $value)) {
                 return $user;
             }
@@ -236,10 +224,10 @@ final class LocalAccountWriter
      */
     public function isSsoManaged(\SimpleXMLElement $node): bool
     {
-        return (string)($node->{self::OWNED_FIELD} ?? '') === '1'
-            || (string)($node->sso_subject ?? '') !== ''
-            || (string)($node->scim_ref ?? '') !== ''
-            || (string)($node->scim_provider ?? '') !== '';
+        return AccountStamps::value($node, self::OWNED_FIELD) === '1'
+            || AccountStamps::value($node, 'sso_subject') !== ''
+            || AccountStamps::value($node, 'scim_ref') !== ''
+            || AccountStamps::value($node, 'scim_provider') !== '';
     }
 
     /** Set on every account create(): "os-sso made this one". */
@@ -284,14 +272,16 @@ final class LocalAccountWriter
         $node->addChild('disabled', empty($attrs['disabled']) ? '0' : '1');
         $node->addChild('password', '*');
         $node->addChild('scrambled_password', '1');
-        // Ownership marker, independent of the optional binding stamps below: an
-        // account provisioned over SCIM without an externalId, or from an identity
-        // carrying no `sub`, has no stamp to speak of but is still ours.
-        $node->addChild(self::OWNED_FIELD, '1');
         $node->addChild('uid', (string)$this->nextUid($cnf));
+        // Stamps after the uid: they are kept against it, not on the node (see
+        // AccountStamps for why core would erase them there). The ownership marker
+        // first, independent of the optional binding stamps below: an account
+        // provisioned over SCIM without an externalId, or from an identity carrying no
+        // `sub`, has no stamp to speak of but is still ours.
+        AccountStamps::set($node, self::OWNED_FIELD, '1');
         foreach (['sso_subject', 'scim_ref', 'scim_provider'] as $stamp) {
             if (!empty($attrs[$stamp])) {
-                $node->addChild($stamp, $this->xml((string)$attrs[$stamp]));
+                AccountStamps::set($node, $stamp, (string)$attrs[$stamp]);
             }
         }
         return $node;
@@ -327,9 +317,18 @@ final class LocalAccountWriter
         return true;
     }
 
+    /** One os-sso stamp of an account ('' when absent); see AccountStamps. */
+    public function stamp(\SimpleXMLElement $node, string $field): string
+    {
+        return AccountStamps::value($node, $field);
+    }
+
     /** Set a scalar child, adding it when absent. Returns whether anything changed. */
     public function setField(\SimpleXMLElement $node, string $field, string $value): bool
     {
+        if (AccountStamps::isStamp($field)) {
+            return AccountStamps::set($node, $field, $value);
+        }
         if ((string)($node->{$field} ?? '') === $value) {
             return false;
         }
@@ -343,6 +342,10 @@ final class LocalAccountWriter
     /** Stamp an external identifier once; never overwrite an existing one. */
     public function stampOnce(\SimpleXMLElement $node, string $field, string $value): bool
     {
+        if (AccountStamps::isStamp($field)) {
+            return $value !== '' && AccountStamps::value($node, $field) === ''
+                && AccountStamps::set($node, $field, $value);
+        }
         if ($value === '' || (string)($node->{$field} ?? '') !== '') {
             return false;
         }
@@ -403,6 +406,12 @@ final class LocalAccountWriter
      */
     private function xml(string $value): string
     {
+        return htmlspecialchars(self::xmlText($value), ENT_XML1);
+    }
+
+    /** The XML-safe text of a value, before escaping (see xml() for what goes). */
+    public static function xmlText(string $value): string
+    {
         if (!mb_check_encoding($value, 'UTF-8')) {
             // Drop the offending bytes rather than let mbstring substitute its "?" --
             // a stamp we match on later must not gain characters it never had.
@@ -416,6 +425,6 @@ final class LocalAccountWriter
             '',
             $value
         );
-        return htmlspecialchars($clean ?? '', ENT_XML1);
+        return $clean ?? '';
     }
 }

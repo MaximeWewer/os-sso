@@ -21,18 +21,21 @@ $cfg = Config::getInstance()->object();
 // AS_REPLACE=1 drops an existing server of that name first, so a lab script can repair
 // a registration made with the wrong values rather than silently leaving it in place --
 // which is how an empty signing certificate survived and took the SAML suite with it.
+// By position, counting down: a SimpleXML foreach key is the element NAME
+// ("authserver"), so unsetting by it removed nothing and every replace added a
+// duplicate -- one the suites configured while logins used the other. All of them go,
+// which also clears duplicates an earlier replace left behind.
 $replace = getenv('AS_REPLACE') === '1';
-foreach ($cfg->system->authserver as $index => $existing) {
-    if ((string)$existing->name !== $name) {
+for ($i = count($cfg->system->authserver) - 1; $i >= 0; $i--) {
+    if ((string)$cfg->system->authserver[$i]->name !== $name) {
         continue;
     }
     if (!$replace) {
         fwrite(STDERR, "authserver '$name' already present; leaving as-is\n");
         exit(0);
     }
-    unset($cfg->system->authserver[$index]);
+    unset($cfg->system->authserver[$i]);
     fwrite(STDERR, "authserver '$name' replaced\n");
-    break;
 }
 
 $as = $cfg->system->addChild('authserver');

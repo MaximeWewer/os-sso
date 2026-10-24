@@ -266,7 +266,7 @@ final class ScimUsers
         // accounts it owns. A client that reconciles by lastModified was told nothing
         // at all before, and had to re-read every resource on every run.
         foreach (['created' => 'scim_created', 'lastModified' => 'scim_modified'] as $key => $field) {
-            $stamp = (int)((string)($node->{$field} ?? ''));
+            $stamp = (int)$this->accounts->stamp($node, $field);
             if ($stamp > 0) {
                 $meta[$key] = gmdate('Y-m-d\TH:i:s\Z', $stamp);
             }
@@ -432,7 +432,7 @@ final class ScimUsers
 
     private function externalIdOf(\SimpleXMLElement $node): string
     {
-        $ref = (string)($node->scim_ref ?? '');
+        $ref = $this->accounts->stamp($node, 'scim_ref');
         $prefix = $this->provider . '|';
         return str_starts_with($ref, $prefix) ? substr($ref, strlen($prefix)) : '';
     }

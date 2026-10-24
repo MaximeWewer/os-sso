@@ -8,6 +8,7 @@
  * request, so what lands here is what the user can do.
  */
 
+use OPNsense\SSO\AccountStamps;
 use OPNsense\SSO\GroupMapper;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\Test\Tree;
@@ -109,7 +110,7 @@ $identity->groups = ['staff'];
 (new GroupMapper([], true))->sync(Tree::user($root, 'alice'), $identity, []);
 eq([], Tree::members($root, 'vpn'), 'a previously granted group the IdP dropped is revoked');
 eq(['2100'], Tree::members($root, 'staff'), 'a hand-assigned group is not revoked');
-eq('staff', (string)Tree::user($root, 'alice')->sso_groups, 'provenance is rewritten to what was granted');
+eq('staff', AccountStamps::value(Tree::user($root, 'alice'), 'sso_groups'), 'provenance is rewritten to what was granted');
 
 T::group('GroupMapper: the last member of a privileged group is kept');
 

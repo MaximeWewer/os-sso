@@ -8,6 +8,7 @@
  * account database. What it refuses matters more than what it does.
  */
 
+use OPNsense\SSO\AccountStamps;
 use OPNsense\Core\Backend;
 use OPNsense\SSO\Scim\ScimGroups;
 use OPNsense\SSO\Scim\ScimUsers;
@@ -127,20 +128,20 @@ $made = $writer->create(['userName' => 'fresh', 'externalId' => 'ext-fresh', 'ac
 truthy($writer->createdNew(), 'a genuinely new account reports created');
 eq('fresh', $made['userName'], 'the resource comes back');
 truthy(Tree::user($root, 'fresh') !== null, 'and the account is in config.xml');
-eq('kc', (string)Tree::user($root, 'fresh')->scim_provider, 'and records the provider independently');
+eq('kc', AccountStamps::value(Tree::user($root, 'fresh'), 'scim_provider'), 'and records the provider independently');
 
 $writer->create(['userName' => 'preexisting', 'externalId' => 'ext-pre']);
 falsy($writer->createdNew(), 'adopting an existing account does not report created');
-eq('kc|ext-pre', (string)Tree::user($root, 'preexisting')->scim_ref, 'the adopted account is stamped');
-eq('kc', (string)Tree::user($root, 'preexisting')->scim_provider, 'the adopted account records its provider');
+eq('kc|ext-pre', AccountStamps::value(Tree::user($root, 'preexisting'), 'scim_ref'), 'the adopted account is stamped');
+eq('kc', AccountStamps::value(Tree::user($root, 'preexisting'), 'scim_provider'), 'the adopted account records its provider');
 
 $users()->create(['userName' => 'pre-no-id']);
-eq('kc', (string)Tree::user($root, 'pre-no-id')->scim_provider, 'adoption without externalId records its provider');
+eq('kc', AccountStamps::value(Tree::user($root, 'pre-no-id'), 'scim_provider'), 'adoption without externalId records its provider');
 eq('pre-no-id', $users()->get('2102')['userName'], 'and the adopted account remains addressable');
 
 $withoutExternalId = $users()->create(['userName' => 'without-external-id']);
 eq('without-external-id', $withoutExternalId['userName'], 'externalId remains optional');
-eq('kc', (string)Tree::user($root, 'without-external-id')->scim_provider, 'provider ownership is still durable');
+eq('kc', AccountStamps::value(Tree::user($root, 'without-external-id'), 'scim_provider'), 'provider ownership is still durable');
 eq(4, $users()->search('', 1, 100)['totalResults'], 'accounts without externalId remain discoverable');
 
 throws(

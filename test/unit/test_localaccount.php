@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+use OPNsense\SSO\AccountStamps;
 use OPNsense\SSO\LocalAccount;
 use OPNsense\SSO\LocalAccountWriter;
 use OPNsense\SSO\Test\Tree;
@@ -79,7 +80,7 @@ eq('newbie', (string)$node->name, 'the name is set');
 eq('New Bie', (string)$node->descr, 'the description is set');
 eq('*', (string)$node->password, 'the password is locked out');
 eq('1', (string)$node->scrambled_password, 'local database login is prevented');
-eq('1', (string)$node->sso_owned, 'the ownership marker is written');
+eq('1', AccountStamps::value($node, 'sso_owned'), 'the ownership marker is written');
 eq('0', (string)$node->disabled, 'the account is enabled');
 eq('user', (string)$node->scope, 'the scope is user, never system');
 eq('2000', (string)$node->uid, 'the uid comes from nextuid');
@@ -89,7 +90,7 @@ truthy($writer->isSsoManaged($node), 'a freshly created account is ours');
 // Even with no stamp to record -- an identity carrying no subject, or SCIM with no
 // externalId -- the account must still come out owned, or it drops off /Users entirely.
 $bare = $writer->create(['name' => 'stampless']);
-eq('1', (string)$bare->sso_owned, 'an account with no stamp is still marked owned');
+eq('1', AccountStamps::value($bare, 'sso_owned'), 'an account with no stamp is still marked owned');
 truthy($writer->isSsoManaged($bare), 'and still reads as ours');
 eq('stampless', (string)$bare->descr, 'the description falls back to the username');
 
@@ -151,9 +152,9 @@ eq('', (string)($alice->email ?? ''), 'the field is gone');
 
 // stampOnce is what makes a binding permanent: it must never overwrite.
 truthy($writer->stampOnce($alice, 'sso_subject', 'kc|first'), 'the first stamp is written');
-eq('kc|first', (string)$alice->sso_subject, 'and holds the value');
+eq('kc|first', AccountStamps::value($alice, 'sso_subject'), 'and holds the value');
 falsy($writer->stampOnce($alice, 'sso_subject', 'kc|second'), 'a second stamp is refused');
-eq('kc|first', (string)$alice->sso_subject, 'the original stamp survives');
+eq('kc|first', AccountStamps::value($alice, 'sso_subject'), 'the original stamp survives');
 falsy($writer->stampOnce($alice, 'scim_ref', ''), 'an empty stamp is a no-op');
 
 truthy($writer->setDisabled($alice, true), 'disabling reports a change');
@@ -181,7 +182,7 @@ $descr = (string)$node->descr;
 falsy(preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', $descr), 'no control character survives in the display name');
 truthy(mb_check_encoding($descr, 'UTF-8'), 'and what is left is valid UTF-8');
 eq('ab@example.com', (string)$node->email, 'control characters are dropped from the email');
-eq('kc|sub-1', (string)$node->sso_subject, 'and from the subject stamp');
+eq('kc|sub-1', AccountStamps::value($node, 'sso_subject'), 'and from the subject stamp');
 
 truthy($writer->setField($node, 'descr', "line\tone\nline two"), 'a change is still reported');
 eq("line\tone\nline two", (string)$node->descr, 'tab and newline are valid XML characters and survive');

@@ -81,8 +81,7 @@ final class Deprovisioner
                 unset($node->disabled);
                 $node->addChild('disabled', '1');
                 // Ours, so a later successful login may undo it (see reviveNode()).
-                unset($node->{self::DEPROVISIONED_FIELD});
-                $node->addChild(self::DEPROVISIONED_FIELD, '1');
+                AccountStamps::set($node, self::DEPROVISIONED_FIELD, '1');
                 Config::getInstance()->save();
                 (new Backend())->configdpRun('auth user changed', [$username]);
 
@@ -108,7 +107,7 @@ final class Deprovisioner
     /** Does this account carry the "os-sso disabled it" stamp? */
     public static function isDeprovisioned(\SimpleXMLElement $node): bool
     {
-        return (string)($node->{self::DEPROVISIONED_FIELD} ?? '') === '1';
+        return AccountStamps::value($node, self::DEPROVISIONED_FIELD) === '1';
     }
 
     /**
@@ -155,8 +154,8 @@ final class Deprovisioner
             return null;
         }
         foreach ($cnf->system->user as $user) {
-            foreach ($user->sso_subject as $binding) {
-                if (hash_equals(trim((string)$binding), $subjectKey)) {
+            foreach (AccountStamps::values($user, 'sso_subject') as $binding) {
+                if (hash_equals($binding, $subjectKey)) {
                     return $user;
                 }
             }
