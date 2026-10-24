@@ -318,6 +318,15 @@ class SamlController extends ApiControllerBase
             if ($mine) {
                 SessionEstablisher::destroyCurrent();
             }
+            // The IdP's answer to OUR LogoutRequest ends on the WebGUI login: go there
+            // through the no-referrer page, or core's HTTP_REFERER check refuses the
+            // request that still names the IdP (issue #10). An IdP-initiated request
+            // is different: $redirect carries our LogoutResponse back to the IdP.
+            $isResponse = !empty($_POST['SAMLResponse']) || !empty($_GET['SAMLResponse']);
+            if ($isResponse) {
+                $this->html('', false, ['Referrer-Policy' => 'no-referrer']);
+                return HtmlPage::signedOut($redirect);
+            }
             $this->response->redirect($redirect, true);
             return gettext('Logged out.');
         }

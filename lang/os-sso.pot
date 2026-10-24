@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-10-06 19:19+0200\n"
+"POT-Creation-Date: 2026-10-24 17:28+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,11 +17,11 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/etc/inc/plugins.inc.d/sso.inc:46
+#: src/etc/inc/plugins.inc.d/sso.inc:52
 msgid "Single Sign-On"
 msgstr ""
 
-#: src/etc/inc/plugins.inc.d/sso.inc:48
+#: src/etc/inc/plugins.inc.d/sso.inc:54
 msgid ""
 "Synchronize os-sso OpenVPN web-auth profiles to the other HA host. Enable "
 "Authentication Servers, OpenVPN, Users and Groups, and Certificates "
@@ -43,14 +43,14 @@ msgid "Login successful, redirecting..."
 msgstr ""
 
 #: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/JwtController.php:200
-#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:495
-#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:602
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:512
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:611
 msgid "SSO login failed. See the firewall system log for details."
 msgstr ""
 
 #: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/LogoutController.php:64
-#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:355
-#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:353
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/OidcController.php:356
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:362
 msgid "Logging out..."
 msgstr ""
 
@@ -59,8 +59,8 @@ msgstr ""
 msgid "Redirecting to identity provider..."
 msgstr ""
 
-#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:322
-#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:362
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:331
+#: src/opnsense/mvc/app/controllers/OPNsense/SSO/Api/SamlController.php:371
 msgid "Logged out."
 msgstr ""
 
@@ -1025,6 +1025,18 @@ msgstr ""
 #: src/opnsense/mvc/app/library/OPNsense/SSO/CaptivePortalAuthorizer.php:303
 #, php-format
 msgid "Signed in as %s. You now have network access."
+msgstr ""
+
+#: src/opnsense/mvc/app/library/OPNsense/SSO/HtmlPage.php:67
+msgid "Signed out"
+msgstr ""
+
+#: src/opnsense/mvc/app/library/OPNsense/SSO/HtmlPage.php:68
+msgid "You have been signed out."
+msgstr ""
+
+#: src/opnsense/mvc/app/library/OPNsense/SSO/HtmlPage.php:69
+msgid "Back to the login page"
 msgstr ""
 
 #: src/opnsense/mvc/app/library/OPNsense/SSO/LogoutGuard.php:76

@@ -9,8 +9,9 @@ namespace OPNsense\SSO;
 
 /**
  * Response headers for the handful of HTML pages this plugin renders itself: the
- * "you are connected" and "VPN authorized" pages, the sign-out confirmation, and the
- * self-submitting form that carries a SAML AuthnRequest over the HTTP-POST binding.
+ * "you are connected" and "VPN authorized" pages, the sign-out confirmation and the
+ * signed-out page after it, and the self-submitting form that carries a SAML
+ * AuthnRequest over the HTTP-POST binding.
  *
  * They are served from the firewall's own origin, at moments that matter -- one asks
  * for a click that ends a session, another bounces off-site, the third posts to the
@@ -43,6 +44,36 @@ final class HtmlPage
             'Cache-Control' => 'no-store',
             'Content-Security-Policy' => implode('; ', $policy),
         ];
+    }
+
+    /**
+     * The page a browser lands on after logging out at the IdP: it moves on to the
+     * WebGUI login without carrying the IdP's address along.
+     *
+     * Coming straight back from the IdP, the request for the login page carries the
+     * IdP as its Referer, and core refuses a session-less request whose Referer is
+     * not one of the firewall's own hostnames ("The HTTP_REFERER ... does not match
+     * the predefined settings", issue #10). One hop through this page, served and
+     * marked no-referrer, makes the next request arrive with no Referer at all,
+     * which that check lets through -- without anyone turning it off.
+     *
+     * Serve it with headers('') plus `Referrer-Policy: no-referrer`.
+     *
+     * @param string $to where to go next; reduced to a same-site path
+     */
+    public static function signedOut(string $to = '/'): string
+    {
+        $to = htmlspecialchars(ReturnUrl::sanitize($to), ENT_QUOTES);
+        $title = htmlspecialchars(gettext('Signed out'), ENT_QUOTES);
+        $body = htmlspecialchars(gettext('You have been signed out.'), ENT_QUOTES);
+        $link = htmlspecialchars(gettext('Back to the login page'), ENT_QUOTES);
+        return "<!doctype html><html><head><meta charset='utf-8'><title>{$title}</title>"
+            . "<meta name='referrer' content='no-referrer'>"
+            . "<meta http-equiv='refresh' content='0;url={$to}'>"
+            . "<style>body{font-family:sans-serif;text-align:center;margin-top:4em}</style>"
+            . "</head><body><h2>{$title}</h2><p>{$body}</p>"
+            . "<p><a rel='noreferrer' href='{$to}'>{$link}</a></p>"
+            . "</body></html>";
     }
 
     /** The origin a URL belongs to, for a form-action policy ('' when unusable). */

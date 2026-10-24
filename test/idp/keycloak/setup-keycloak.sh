@@ -27,10 +27,13 @@ if [ -z "$CID" ]; then
     -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" \
     -s 'webOrigins=["+"]' -i 2>/dev/null | tr -d '\r')
 fi
-# Re-apply the redirect URI every run: SP_BASE may have changed since the client was
-# created, and a stale redirect_uri is refused by Keycloak at login time.
+# Re-apply the redirect URIs every run: SP_BASE may have changed since the client was
+# created, and a stale redirect_uri is refused by Keycloak at login time. The
+# post-logout one is where RP-initiated logout comes back to (the no-referrer page,
+# not '/': see OidcController::loggedoutAction).
 "${KC[@]}" update "clients/$CID" -r "$R" \
-  -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" -s 'webOrigins=["+"]' 2>/dev/null || true
+  -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" -s 'webOrigins=["+"]' \
+  -s "attributes.\"post.logout.redirect.uris\"=$SP_BASE/api/sso/oidc/loggedout" 2>/dev/null || true
 SECRET=$("${KC[@]}" get "clients/$CID/client-secret" -r "$R" 2>/dev/null | grep -o '"value"[^,]*' | cut -d'"' -f4)
 echo "oidc_client_uuid=$CID"
 echo "oidc_client_secret=$SECRET"

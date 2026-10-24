@@ -126,8 +126,36 @@ curl -sk -b "$W/jar" -H 'Sec-Fetch-Site: cross-site' -o "$W/logout.html" \
     -w '' "$GUI/api/sso/logout"
 grep -q 'logout_token' "$W/logout.html" && ok "cross-site logout asks for confirmation" \
     || ko "cross-site logout was not intercepted"
-check "same-origin logout proceeds" 302 \
-    "$(curl -sk -b "$W/jar" -H 'Sec-Fetch-Site: same-origin' -o /dev/null -w '%{http_code}' "$GUI/api/sso/logout")"
+LOGOUT=$(curl -sk -b "$W/jar" -H 'Sec-Fetch-Site: same-origin' -o /dev/null \
+    -w '%{http_code} %{redirect_url}' "$GUI/api/sso/logout")
+check "same-origin logout proceeds" 302 "${LOGOUT%% *}"
+# /api/sso/logout only dispatches to the protocol's own logout; that one ends the
+# session and sends the browser on to the IdP's end_session_endpoint.
+END_SESSION=$(curl -sk -b "$W/jar" -H 'Sec-Fetch-Site: same-origin' -o /dev/null \
+    -w '%{redirect_url}' "${LOGOUT#* }")
+
+# --- 5c. back from the IdP's logout without tripping the HTTP_REFERER check ----
+# Straight from the IdP, the login page would carry the IdP as Referer and core would
+# refuse it (issue #10). The IdP must come back to our no-referrer page instead.
+echo ">>> case 5c: the return from the IdP logout reaches the login page"
+LOGGED_OUT="$GUI/api/sso/oidc/loggedout"
+ENC=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$LOGGED_OUT")
+case "$END_SESSION$LOGOUT" in
+    *"post_logout_redirect_uri=$ENC"*) ok "the IdP is asked to come back to the signed-out page" ;;
+    *) ko "post_logout_redirect_uri is not the signed-out page ($END_SESSION)" ;;
+esac
+curl -sk -D "$W/lo.h" -o "$W/lo.html" "$LOGGED_OUT" >/dev/null
+grep -qi '^referrer-policy: no-referrer' "$W/lo.h" && ok "the signed-out page is served no-referrer" \
+    || ko "no Referrer-Policy on the signed-out page"
+grep -q "content='0;url=/'" "$W/lo.html" && ok "and moves straight on to the login page" \
+    || ko "the signed-out page does not continue to /"
+# Why the hop matters: core refuses a session-less request referred by another host.
+curl -sk -H 'Referer: https://login.live.com/' -o "$W/ref.html" "$GUI/"
+grep -q 'HTTP_REFERER' "$W/ref.html" && ok "core still refuses a login page referred by the IdP" \
+    || ko "the HTTP_REFERER check did not fire (is it disabled on the lab?)"
+curl -sk -o "$W/noref.html" "$GUI/"
+grep -q 'HTTP_REFERER' "$W/noref.html" && ko "the login page refused a request with no Referer" \
+    || ok "the login page is served once the Referer is gone"
 
 # --- 5b. pushed authorization requests -----------------------------------------
 # PAR moves the request off the browser entirely, so what changes is the shape of the

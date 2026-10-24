@@ -127,8 +127,21 @@ The WebGUI **Logout** button performs Single Logout: it ends the IdP session for
 (`end_session_endpoint`) and SAML, and falls back to the normal local logout for password
 sessions. Register at your IdP:
 
-- OIDC post-logout redirect: `https://<opnsense>/`
+- OIDC post-logout redirect: `https://<opnsense>/api/sso/oidc/loggedout`
 - SAML logout service: `https://<opnsense>/api/sso/saml/slo?provider=<name>`
+
+Both bring the browser back through a short "signed out" page that sends no `Referer`,
+then on to the login page. Coming straight from the IdP, the login page would be
+refused by OPNsense's HTTP_REFERER check (*The HTTP_REFERER "https://login.live.com/"
+does not match the predefined settings*), which this keeps on without listing the IdP
+under alternate hostnames.
+
+**Upgrading from 2026.10.2 or earlier:** the OIDC post-logout redirect used to be
+`https://<opnsense>/`. Register `https://<opnsense>/api/sso/oidc/loggedout` at the IdP
+(Entra ID: add it to the app's redirect URIs; Keycloak: *Valid post logout redirect
+URIs*). Until then the IdP refuses the redirect after logout: the firewall session is
+already ended, but the IdP may show an error and keep its own session. The SAML side
+needs no change.
 
 **Back-channel logout (OIDC).** Register
 `https://<opnsense>/api/sso/oidc/backchannel?provider=<name>` as the client's back-channel
