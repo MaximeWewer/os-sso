@@ -97,14 +97,14 @@ final class JwtProtocol
         // decode() enforces signature + exp/nbf and rejects alg:none. Each key carries
         // its own algorithm, so the token cannot downgrade to a different alg.
         try {
-            $claims = JWT::decode($jwt, $this->keys(false));
+            $claims = JWT::decode($jwt, $this->keys(false, $jwt));
         } catch (\UnexpectedValueException $e) {
             // Unknown kid => the proxy likely rotated keys: refetch JWKS once. Only
             // meaningful for the JWKS case; a static key has no kid to miss.
             if ($this->jwksUrl === '' || stripos($e->getMessage(), 'kid') === false) {
                 throw $e;
             }
-            $claims = JWT::decode($jwt, $this->keys(true));
+            $claims = JWT::decode($jwt, $this->keys(true, $jwt));
         }
 
         if (!isset($claims->iss) || !hash_equals($this->issuer, (string)$claims->iss)) {
@@ -185,8 +185,9 @@ final class JwtProtocol
      * @return \Firebase\JWT\Key|\Firebase\JWT\Key[] a keyset (JWKS, looked up by kid)
      *         or a single Key (static PEM, which needs no kid in the token header)
      */
-    private function keys(bool $force)
+    private function keys(bool $force, string $jwt)
     {
+        $algorithm = JwkSet::algorithm($jwt, $this->algorithms);
         if ($this->jwksUrl !== '') {
             $cacheKey = 'jwks_' . $this->jwksUrl;
             $raw = $force ? null : $this->cacheGet($cacheKey);
@@ -195,12 +196,12 @@ final class JwtProtocol
                 $this->cacheSet($cacheKey, $raw);
             }
             // JWKS entries that omit "alg" get one inferred from their key type,
-            // preferring the configured (asymmetric-only) algorithms.
-            return JwkSet::parse($raw, $this->algorithms);
+            // using the token algorithm after enforcing the configured allowlist.
+            return JwkSet::parse($raw, $this->algorithms, $jwt);
         }
         // Static PEM public key: a single Key, so decode() does not require a "kid".
-        // The first configured algorithm must match the key type.
-        return new Key($this->publicKey, $this->algorithms[0]);
+        // The configured allowlist has already approved this algorithm.
+        return new Key($this->publicKey, $algorithm);
     }
 
     private function toIdentity(array $claims): NormalizedIdentity
