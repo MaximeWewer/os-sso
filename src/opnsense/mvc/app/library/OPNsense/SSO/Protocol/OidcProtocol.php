@@ -30,6 +30,7 @@ use OPNsense\SSO\StateDir;
  */
 final class OidcProtocol implements ProtocolInterface
 {
+    public const POST_LOGOUT_PATH = '/api/sso/oidc/loggedout';
     private const HTTP_TIMEOUT = 8;       // seconds, short on purpose
     private const MAX_BODY = 1048576;     // 1 MiB cap on IdP responses
     private const LEEWAY = 60;            // max clock skew
