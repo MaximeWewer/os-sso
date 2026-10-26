@@ -169,6 +169,7 @@ namespace OPNsense\Base;
 
 class ApiControllerBase
 {
+    public object $request;
 }
 
 /**
