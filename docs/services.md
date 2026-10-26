@@ -90,15 +90,23 @@ Select an instance and apply the profile to move it under plugin management. The
 then owns that directive and `auth-user-pass-optional`; disabling, deleting or moving the
 profile removes both from the old instance without touching its other options.
 
-### Managed hook reconciliation
+### Managed hooks and runtime guard
 
-OPNsense's OpenVPN form only knows its built-in option list, so saving an instance can
-discard plugin-owned directives. os-sso repairs them immediately before every normal
-OpenVPN **Apply** through the existing core configure hook. Applying an os-sso profile
-also reconciles the selected instances and asks core to regenerate OpenVPN configuration
-only when a managed directive changed. Invalid or conflicting selections are reported,
-left untouched and logged without preventing independent valid instances from being
-reconciled.
+OPNsense's OpenVPN form can discard plugin-owned directives. The configuration event
+repairs the saved directives asynchronously, and the normal OpenVPN Apply hook repairs
+them before core generates runtime files. Invalid selections are reported without
+preventing independent valid instances from being reconciled.
+
+The supervised guard also checks the saved and generated configuration once per second.
+Repairing `config.xml` alone does not make an already running daemon safe: if its runtime
+file lacks the expected authentication hook, the guard stops the instance, reconciles the
+saved settings, and restarts only instances whose authentication can be validated.
+Conflicting selections or failed repairs remain stopped; unrelated instances are not
+restarted. Package installation starts the guard and upgrades restart it to load new code.
+
+Detection is periodic, not a synchronous pre-start barrier. A restart racing a configuration
+event can run until the next guard check; the guard prevents that configuration from
+remaining active unnoticed. Keep client-certificate verification enabled.
 
 > **Mind the username.** OpenVPN takes it from the client and never revisits it on a
 > deferred-auth path: the browser login decides *whether* the tunnel comes up, not *whose*

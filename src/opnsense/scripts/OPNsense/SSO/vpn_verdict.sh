@@ -17,6 +17,8 @@ AUTH_USER=$(printf '%s' "${4:-}" | tr -d '\r\n' | tr -cd '\40-\176')
 # Same file the hook reads, for ENFORCE_USERNAME. Which profile's, though, is only
 # known once the session mapping below has been read -- so the lookup happens there.
 CONF=/usr/local/etc/sso/vpn.conf
+# Generated root-owned configuration; the path is fixed above.
+# shellcheck disable=SC1090
 [ -r "$CONF" ] && . "$CONF"
 
 # Root-owned tree (/var/db is 0755 root:wheel), not the world-writable /var/tmp:

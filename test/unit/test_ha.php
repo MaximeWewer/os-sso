@@ -14,9 +14,9 @@ eq('sso', $area['id'] ?? null, 'uses a stable synchronization identifier');
 eq('Single Sign-On', $area['description'] ?? null, 'exposes a recognizable HA option');
 eq('OPNsense.SSO', $area['section'] ?? null, 'synchronizes the complete plugin model root');
 eq(
-	['openvpn'],
+	['sso_vpn_guard', 'openvpn'],
 	$area['services'] ?? null,
-	'reconfigures OpenVPN after synchronization',
+	'reconfigures the guard and OpenVPN after synchronization',
 );
 truthy(
 	str_contains((string) ($area['help'] ?? ''), 'Authentication Servers'),

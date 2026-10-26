@@ -101,16 +101,14 @@ credentials (LDAP bind passwords and the like) and are never written to logs.
 The local password (+ native TOTP) always stays active as a **break-glass** path: keep at
 least one local admin.
 
-For a managed OpenVPN profile, os-sso owns the instance's deferred-auth directive. Saving
-the instance in the OpenVPN form drops it from `config.xml` (the form only knows its own
-options), so os-sso puts it back right after every configuration save, and again in the
-OpenVPN configure hook before core generates runtime configuration. The first one matters:
-a start/restart from the Services page skips the configure hook, and would otherwise bring
-an instance saved but not applied back up on its client certificate alone. Apply reports
-invalid or conflicting selections instead of silently weakening authentication.
-New VPN logins fail when the plugin or IdP is unavailable. Existing tunnels can continue
-with a still-valid OpenVPN auth token until their recorded os-sso session is revoked or
-reaches its configured maximum lifetime.
+For a managed OpenVPN profile, os-sso owns the instance's deferred-auth directive and a
+supervised guard verifies the saved and generated configuration once per second. A managed
+instance is stopped if the directive disappears or another password verifier appears
+alongside it; it is restarted only after its own authentication settings validate. The configuration
+event is asynchronous, so the guard is a periodic mitigation, not a synchronous pre-start
+barrier. New VPN logins fail when
+the IdP is unavailable. Existing tunnels can continue with a still-valid OpenVPN auth token
+until their recorded os-sso session is revoked or reaches its configured maximum lifetime.
 
 [SCIM](scim.md) needs a bearer token **and** a source-address allowlist, and refuses on the
 same principles as the login path.

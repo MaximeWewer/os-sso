@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-10-24 17:28+0200\n"
+"POT-Creation-Date: 2026-10-26 17:33+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,11 +17,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/etc/inc/plugins.inc.d/sso.inc:52
+#: src/etc/inc/plugins.inc.d/sso.inc:47
+msgid "os-sso OpenVPN authentication guard"
+msgstr ""
+
+#: src/etc/inc/plugins.inc.d/sso.inc:62
 msgid "Single Sign-On"
 msgstr ""
 
-#: src/etc/inc/plugins.inc.d/sso.inc:54
+#: src/etc/inc/plugins.inc.d/sso.inc:64
 msgid ""
 "Synchronize os-sso OpenVPN web-auth profiles to the other HA host. Enable "
 "Authentication Servers, OpenVPN, Users and Groups, and Certificates "

@@ -18,6 +18,8 @@ set -eu
 umask 077
 
 CONF=/usr/local/etc/sso/vpn.conf
+# Generated root-owned configuration; the path is fixed above.
+# shellcheck disable=SC1090
 [ -r "$CONF" ] && . "$CONF"
 
 # Which profile this OpenVPN server uses. It is our first argument -- OpenVPN appends

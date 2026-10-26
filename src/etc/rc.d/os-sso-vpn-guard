@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# PROVIDE: os_sso_vpn_guard
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+# shellcheck source=/dev/null
+. /etc/rc.subr
+
+# rc.subr consumes these globals after load_rc_config; ShellCheck cannot see through
+# the sourced framework in a non-FreeBSD test environment.
+# shellcheck disable=SC2034
+name=os_sso_vpn_guard
+# shellcheck disable=SC2034
+rcvar=os_sso_vpn_guard_enable
+pidfile=/var/run/os-sso-vpn-guard.pid
+# shellcheck disable=SC2034
+command=/usr/sbin/daemon
+# shellcheck disable=SC2034
+command_args="-f -r -P ${pidfile} -T os-sso-vpn-guard /usr/local/bin/python3 /usr/local/opnsense/scripts/OPNsense/SSO/vpn_guard.py"
+
+load_rc_config ${name}
+: "${os_sso_vpn_guard_enable:=YES}"
+
+run_rc_command "$1"

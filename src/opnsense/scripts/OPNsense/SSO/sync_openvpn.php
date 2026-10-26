@@ -12,6 +12,20 @@ require_once('script/load_phalcon.php');
 
 use OPNsense\SSO\OpenVpnIntegration;
 
+if (($argv[1] ?? '') === '--stop-managed') {
+	// @ - the manifest is absent before the first managed profile is applied.
+	$manifest = json_decode((string)@file_get_contents(OpenVpnIntegration::MANIFEST), true);
+	$instances = is_array($manifest['instances'] ?? null) ? $manifest['instances'] : [];
+	$backend = new OPNsense\Core\Backend();
+	foreach (array_keys($instances) as $uuid) {
+		if (is_string($uuid) && preg_match('/^[0-9a-f-]{36}$/D', $uuid) === 1) {
+			$backend->configdpRun('openvpn stop', [$uuid]);
+			printf("stopped managed OpenVPN instance %s\n", $uuid);
+		}
+	}
+	exit(0);
+}
+
 try {
 	$result = OpenVpnIntegration::synchronize();
 	$errors = array_map(
