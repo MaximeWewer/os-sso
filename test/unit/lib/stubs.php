@@ -167,6 +167,11 @@ class Cron
 
 namespace OPNsense\Base;
 
+class ApiControllerBase
+{
+    public object $request;
+}
+
 /**
  * Core's migration base class, reduced to what os-sso's migrations call: run() is the
  * hook a migration overrides, and the parent's own run() (which applies model
