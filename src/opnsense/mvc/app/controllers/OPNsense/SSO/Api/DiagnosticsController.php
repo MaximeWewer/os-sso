@@ -282,7 +282,7 @@ class DiagnosticsController extends ApiControllerBase
                 $urls = [
                     'Redirect / callback' => $base . '/api/sso/oidc/callback',
                     'Back-channel logout' => $base . '/api/sso/oidc/backchannel' . $q,
-                    'Post-logout redirect' => $base . '/',
+                    'Post-logout redirect' => $base . OidcProtocol::POST_LOGOUT_PATH,
                     // Only of interest with private_key_jwt, but cheap to always show:
                     // it is where the IdP reads our client public key from.
                     'Client JWKS' => $base . '/api/sso/oidc/jwks' . $q,
