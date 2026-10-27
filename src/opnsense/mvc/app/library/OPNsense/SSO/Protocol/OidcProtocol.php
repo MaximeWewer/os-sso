@@ -30,6 +30,7 @@ use OPNsense\SSO\StateDir;
  */
 final class OidcProtocol implements ProtocolInterface
 {
+    public const POST_LOGOUT_PATH = '/api/sso/oidc/loggedout';
     private const HTTP_TIMEOUT = 8;       // seconds, short on purpose
     private const MAX_BODY = 1048576;     // 1 MiB cap on IdP responses
     private const LEEWAY = 60;            // max clock skew
@@ -553,12 +554,12 @@ final class OidcProtocol implements ProtocolInterface
         $disco = $this->discover();
         $this->assertAsymmetricAlg($jwt);
         try {
-            $claims = JWT::decode($jwt, $this->jwks($disco, false));
+            $claims = JWT::decode($jwt, $this->jwks($disco, false, $jwt));
         } catch (\UnexpectedValueException $e) {
             if (stripos($e->getMessage(), 'kid') === false) {
                 throw $e;
             }
-            $claims = JWT::decode($jwt, $this->jwks($disco, true));
+            $claims = JWT::decode($jwt, $this->jwks($disco, true, $jwt));
         }
 
         if (!isset($claims->iss) || $claims->iss !== $disco['issuer']) {
@@ -632,7 +633,7 @@ final class OidcProtocol implements ProtocolInterface
         // set carries each key's algorithm, so a JWKS public key can never be
         // abused as an HMAC secret (alg-confusion) -- we never pass a string key.
         try {
-            $claims = JWT::decode($idToken, $this->jwks($disco, false));
+            $claims = JWT::decode($idToken, $this->jwks($disco, false, $idToken));
         } catch (\UnexpectedValueException $e) {
             // An unknown "kid" means the IdP likely rotated keys: refetch the JWKS
             // once, bypassing the cache, and retry. Signature failures (a different
@@ -640,7 +641,7 @@ final class OidcProtocol implements ProtocolInterface
             if (stripos($e->getMessage(), 'kid') === false) {
                 throw $e;
             }
-            $claims = JWT::decode($idToken, $this->jwks($disco, true));
+            $claims = JWT::decode($idToken, $this->jwks($disco, true, $idToken));
         }
 
         if (!isset($claims->iss) || $claims->iss !== $disco['issuer']) {
@@ -874,7 +875,7 @@ final class OidcProtocol implements ProtocolInterface
      * cache (used once on an unknown kid to pick up a key rotation).
      * @return \Firebase\JWT\Key[]
      */
-    private function jwks(array $disco, bool $force): array
+    private function jwks(array $disco, bool $force, string $jwt = '', string $algorithmField = 'id_token_signing_alg_values_supported'): array
     {
         if (empty($disco['jwks_uri'])) {
             throw new \RuntimeException('OIDC: discovery has no jwks_uri');
@@ -885,8 +886,8 @@ final class OidcProtocol implements ProtocolInterface
             $raw = $this->httpGetJson((string)$disco['jwks_uri']);
             $this->cacheSet($cacheKey, $raw);
         }
-        $advertised = $disco['id_token_signing_alg_values_supported'] ?? [];
-        return JwkSet::parse($raw, is_array($advertised) ? $advertised : []);
+        $advertised = $disco[$algorithmField] ?? [];
+        return JwkSet::parse($raw, is_array($advertised) ? $advertised : [], $jwt);
     }
 
     /* ---- small on-disk cache for discovery + JWKS (TTL, www-owned) ----- */
@@ -1044,12 +1045,12 @@ final class OidcProtocol implements ProtocolInterface
         }
         $this->assertAsymmetricAlg($jwt, 'userinfo response');
         try {
-            $claims = JWT::decode($jwt, $this->jwks($disco, false));
+            $claims = JWT::decode($jwt, $this->jwks($disco, false, $jwt, 'userinfo_signing_alg_values_supported'));
         } catch (\UnexpectedValueException $e) {
             if (stripos($e->getMessage(), 'kid') === false) {
                 throw $e;
             }
-            $claims = JWT::decode($jwt, $this->jwks($disco, true));
+            $claims = JWT::decode($jwt, $this->jwks($disco, true, $jwt, 'userinfo_signing_alg_values_supported'));
         }
         if (isset($claims->iss) && $claims->iss !== $disco['issuer']) {
             throw new \RuntimeException('signed userinfo: issuer mismatch');

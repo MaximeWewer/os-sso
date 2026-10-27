@@ -28,6 +28,8 @@ use OPNsense\SSO\Protocol\OidcProtocol;
  */
 class DiagnosticsController extends ApiControllerBase
 {
+    private const MAX_HTTP_BODY = 1048576;
+
     /** GET /api/sso/diagnostics/providers -- configured providers and their URLs. */
     public function providersAction()
     {
@@ -254,6 +256,9 @@ class DiagnosticsController extends ApiControllerBase
             CURLOPT_CONNECTTIMEOUT => 8,
             CURLOPT_TIMEOUT => 8,
             CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_NOPROGRESS => false,
+            CURLOPT_PROGRESSFUNCTION => fn($c, $dt, $dn) => $dn > self::MAX_HTTP_BODY ? 1 : 0,
         ]);
         $body = curl_exec($ch);
         $err = curl_error($ch);
@@ -277,7 +282,7 @@ class DiagnosticsController extends ApiControllerBase
                 $urls = [
                     'Redirect / callback' => $base . '/api/sso/oidc/callback',
                     'Back-channel logout' => $base . '/api/sso/oidc/backchannel' . $q,
-                    'Post-logout redirect' => $base . '/',
+                    'Post-logout redirect' => $base . OidcProtocol::POST_LOGOUT_PATH,
                     // Only of interest with private_key_jwt, but cheap to always show:
                     // it is where the IdP reads our client public key from.
                     'Client JWKS' => $base . '/api/sso/oidc/jwks' . $q,

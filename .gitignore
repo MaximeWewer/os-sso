@@ -15,6 +15,3 @@ test/idp/.env
 test/idp/*/.env
 test/idp/certs/
 test/client.ovpn
-
-__pycache__/
-*.py[cod]

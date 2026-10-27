@@ -23,28 +23,20 @@ use SimpleXMLElement;
  */
 final class OpenVpnIntegration
 {
-	public const MANIFEST = '/usr/local/etc/sso/openvpn-instances.json';
 	public const HOOK = '/usr/local/opnsense/scripts/OPNsense/SSO/auth-user-pass-verify.sh';
 
 	private const OPTIONAL_DIRECTIVE = 'auth-user-pass-optional';
 
 
 	/**
-	 * Reconcile config.xml and publish the runtime guard manifest under the same lock.
+	 * Reconcile config.xml under the configuration lock.
 	 *
-	 * @return array{changed: bool, instances: array<string, array<string, string>>, errors: string[]}
+	 * @return array{changed: bool, instances: array<string, array{profile: string}>, errors: string[]}
 	 */
-	public static function synchronize(string $manifestPath = self::MANIFEST): array
+	public static function synchronize(): array
 	{
-		return ConfigLock::with(function () use ($manifestPath): array {
+		return ConfigLock::with(function (): array {
 			$config = Config::getInstance();
-			[$desired, $blocked] = self::desiredInstances($config->object());
-			$manifest = self::manifest($desired + $blocked);
-			foreach ($blocked as $uuid => $profile) {
-				$manifest[$uuid]['blocked'] = '1';
-			}
-			// Publish every selected instance before reconciliation can fail.
-			self::writeManifest($manifest, $manifestPath);
 			$result = self::reconcile($config->object());
 			if ($result['changed'] && $config->save() === false) {
 				throw new RuntimeException('OpenVPN integration could not save config.xml');
@@ -59,12 +51,12 @@ final class OpenVpnIntegration
 	 * Apply the desired os-sso profiles to an in-memory config.xml tree.
 	 *
 	 * Public as a test seam: production callers should use synchronize(), which also
-	 * serializes concurrent writes and updates the guard manifest.
+	 * serializes concurrent writes.
 	 *
 	 * Invalid selections are reported and left untouched, while independent valid
 	 * instances are still reconciled.
 	 *
-	 * @return array{changed: bool, instances: array<string, array<string, string>>, errors: string[]}
+	 * @return array{changed: bool, instances: array<string, array{profile: string}>, errors: string[]}
 	 */
 	public static function reconcile(SimpleXMLElement $config): array
 	{
@@ -149,19 +141,13 @@ final class OpenVpnIntegration
 
 	/**
 	 * @param array<string, string> $desired
-	 * @return array<string, array<string, string>>
+	 * @return array<string, array{profile: string}>
 	 */
 	private static function manifest(array $desired): array
 	{
 		$result = [];
 		foreach ($desired as $uuid => $profile) {
-			$result[$uuid] = [
-				'profile' => $profile,
-				'auth_directive' => self::hookDirective($profile),
-				'optional_directive' => self::OPTIONAL_DIRECTIVE,
-				'config_file' => "/var/etc/openvpn/instance-{$uuid}.conf",
-				'pid_file' => "/var/run/ovpn-instance-{$uuid}.pid",
-			];
+			$result[$uuid] = ['profile' => $profile];
 		}
 
 		return $result;
@@ -264,31 +250,4 @@ final class OpenVpnIntegration
 		}
 	}
 
-
-
-	/** @param array<string, array<string, string>> $instances */
-	private static function writeManifest(array $instances, string $path): void
-	{
-		$directory = dirname($path);
-		// @ - another process may create the directory between both checks.
-		if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
-			throw new RuntimeException("Cannot create OpenVPN integration directory '{$directory}'");
-		}
-		$data = json_encode(
-			['version' => 1, 'instances' => (object)$instances],
-			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
-		);
-		if ($data === false) {
-			throw new RuntimeException('Cannot encode the OpenVPN integration manifest');
-		}
-		$temporary = $path . '.' . getmypid() . '.tmp';
-		if (file_put_contents($temporary, $data . "\n", LOCK_EX) === false) {
-			throw new RuntimeException("Cannot write OpenVPN integration manifest '{$temporary}'");
-		}
-		chmod($temporary, 0600);
-		if (!rename($temporary, $path)) {
-			@unlink($temporary); // @ - best-effort cleanup after a failed rename
-			throw new RuntimeException("Cannot replace OpenVPN integration manifest '{$path}'");
-		}
-	}
 }

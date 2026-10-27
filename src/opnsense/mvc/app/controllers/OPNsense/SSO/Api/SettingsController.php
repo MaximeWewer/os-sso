@@ -84,7 +84,6 @@ class SettingsController extends ApiMutableModelControllerBase
             $backend->configdRun('openvpn configure');
         }
 
-        $backend->configdRun('sso guard_start');
         return ['status' => $sync[1] === 'OK' ? 'ok' : 'failed', 'output' => $syncOutput];
     }
 }

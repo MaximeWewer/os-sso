@@ -2,9 +2,7 @@
 
 os-sso registers **Single Sign-On** as an OPNsense XMLRPC synchronization area. It
 contains the plugin-owned `OPNsense.SSO` model: OpenVPN web-auth profiles, their provider
-selection, assigned OpenVPN instance UUIDs, public host and timeout, plus durable
-SSO account bindings. Synchronize Users and Groups as well so those bindings refer to
-the same local accounts on both nodes.
+selection, assigned OpenVPN instance UUIDs, public host and timeout.
 
 Install the same os-sso version on both firewalls before synchronizing. Configure XMLRPC
 only on the primary node under **System - High Availability - Settings** and select:
@@ -40,7 +38,7 @@ revocation delay. For immediate revocation on both nodes, configure the IdP to p
 both node-specific SCIM endpoints if it supports multiple targets. The shared CARP endpoint
 alone reaches only the node that is active at that moment.
 
-The generated `vpn.conf` and guard manifest are not copied. OPNsense reloads templates
-and services on the backup after synchronization, so each node derives these files from
-its synchronized configuration. If a profile or dependent section is missing, os-sso
-refuses VPN authentication instead of falling back to certificate-only access.
+The generated `vpn.conf` is not copied. OPNsense reloads templates and services on the
+backup after synchronization, so each node derives it from synchronized configuration.
+If a profile or dependent section is missing, os-sso refuses VPN authentication instead
+of falling back to certificate-only access.

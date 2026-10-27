@@ -37,15 +37,6 @@ jobs:
       - name: Check PHP syntax
         run: find src test -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      - name: Check OpenVPN lifecycle scripts
-        run: |
-          sh -n ./+POST_INSTALL.post ./+PRE_DEINSTALL.post test/package_scripts.sh
-          shellcheck -x ./+POST_INSTALL.post ./+PRE_DEINSTALL.post \
-            test/package_scripts.sh src/opnsense/scripts/OPNsense/SSO/*.sh \
-            src/etc/rc.d/os-sso-vpn-guard src/etc/rc.syshook.d/config/50-sso-openvpn
-          sh test/package_scripts.sh
-          python3 test/unit/test_vpn_guard.py
-
       - name: Run unit suite without skipped state tests
         run: |
           sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" /var/db/os-sso

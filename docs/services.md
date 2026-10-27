@@ -77,6 +77,18 @@ The token is checked locally by OpenVPN; Keycloak logout, SCIM deactivation and 
 maximum session lifetime can still terminate the recorded tunnel. In an HA pair, use the
 same **Auth Token secret** on both nodes if tokens must survive a failover.
 
+### Configuration-save runtime repair
+
+After each configuration event, os-sso first restores its saved OpenVPN directives,
+then inspects the generated config of each running, valid managed instance. A running
+instance missing its expected verifier is restarted individually and checked again.
+If the repair fails, the unsafe instance is stopped and the failure is logged. Stopped
+and unrelated instances are not started; invalid selections do not prevent valid ones
+from being checked. Healthy instances are left alone, including an ordinary form save
+that temporarily removed the saved directives. No daemon or package lifecycle hook is
+required. This repair follows the asynchronous configuration event; it is not a
+synchronous pre-start barrier.
+
 ### Existing manually wired profiles
 
 Profiles created before managed instances were introduced keep their instance field empty
@@ -90,23 +102,15 @@ Select an instance and apply the profile to move it under plugin management. The
 then owns that directive and `auth-user-pass-optional`; disabling, deleting or moving the
 profile removes both from the old instance without touching its other options.
 
-### Managed hooks and runtime guard
+### Managed hook reconciliation
 
-OPNsense's OpenVPN form can discard plugin-owned directives. The configuration event
-repairs the saved directives asynchronously, and the normal OpenVPN Apply hook repairs
-them before core generates runtime files. Invalid selections are reported without
-preventing independent valid instances from being reconciled.
-
-The supervised guard also checks the saved and generated configuration once per second.
-Repairing `config.xml` alone does not make an already running daemon safe: if its runtime
-file lacks the expected authentication hook, the guard stops the instance, reconciles the
-saved settings, and restarts only instances whose authentication can be validated.
-Conflicting selections or failed repairs remain stopped; unrelated instances are not
-restarted. Package installation starts the guard and upgrades restart it to load new code.
-
-Detection is periodic, not a synchronous pre-start barrier. A restart racing a configuration
-event can run until the next guard check; the guard prevents that configuration from
-remaining active unnoticed. Keep client-certificate verification enabled.
+OPNsense's OpenVPN form only knows its built-in option list, so saving an instance can
+discard plugin-owned directives. os-sso repairs them immediately before every normal
+OpenVPN **Apply** through the existing core configure hook. Applying an os-sso profile
+also reconciles the selected instances and asks core to regenerate OpenVPN configuration
+only when a managed directive changed. Invalid or conflicting selections are reported,
+left untouched and logged without preventing independent valid instances from being
+reconciled.
 
 > **Mind the username.** OpenVPN takes it from the client and never revisits it on a
 > deferred-auth path: the browser login decides *whether* the tunnel comes up, not *whose*

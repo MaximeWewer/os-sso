@@ -344,7 +344,7 @@ class OidcController extends ApiControllerBase
                 // Back through our own page, not straight to '/': see loggedoutAction().
                 $url = $protocol->buildLogoutUrl(
                     (string)($logout['id_token'] ?? ''),
-                    $this->baseUrlFor($auth) . self::LOGGED_OUT_PATH
+                    $this->baseUrlFor($auth) . OidcProtocol::POST_LOGOUT_PATH
                 );
             }
         } catch (\Throwable $e) {
@@ -355,9 +355,6 @@ class OidcController extends ApiControllerBase
         $this->response->redirect($url !== '' ? $url : '/', true);
         return gettext('Logging out...');
     }
-
-    /** The post_logout_redirect_uri, which the IdP must have registered. */
-    private const LOGGED_OUT_PATH = '/api/sso/oidc/loggedout';
 
     /**
      * GET /api/sso/oidc/loggedout -- where the IdP sends the browser after logout.

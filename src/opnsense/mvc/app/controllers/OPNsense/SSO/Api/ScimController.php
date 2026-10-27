@@ -40,6 +40,14 @@ use OPNsense\SSO\Scim\ScimUsers;
  */
 class ScimController extends ApiControllerBase
 {
+    /**
+     * A directory record is small. body() runs once the client is authenticated, so
+     * this bounds what a misbehaving or compromised directory can make the firewall
+     * hold and decode, not anonymous traffic (the bearer and source gates turn that
+     * away first).
+     */
+    private const MAX_BODY = 1048576;
+
     /** Bearer + source gate replace the WebGUI session entirely. */
     public function doAuth()
     {
@@ -348,7 +356,14 @@ class ScimController extends ApiControllerBase
     /** @return array the decoded request body */
     private function body(): array
     {
+        $declared = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        if ($declared > self::MAX_BODY) {
+            throw new ScimError(413, 'request body is too large');
+        }
         $raw = (string)$this->request->getRawBody();
+        if (strlen($raw) > self::MAX_BODY) {
+            throw new ScimError(413, 'request body is too large');
+        }
         if (trim($raw) === '') {
             throw ScimError::badRequest('empty request body');
         }
