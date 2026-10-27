@@ -3,6 +3,19 @@
 Reference for the **OpenID Connect** server type. The first steps are in the README
 [quick start](../README.md#quick-start); this page holds the options and the reasoning.
 
+## Issuer identity
+
+Copy the exact `issuer` value from the provider's discovery document, including
+any trailing slash. The slash is removed only when constructing the
+`/.well-known/openid-configuration` retrieval URL; it remains part of the issuer
+identity used for discovery validation, token validation and session records.
+
+**Upgrading from a version that normalized issuer URLs:** a configured URL that
+differs from the metadata only by a trailing slash now fails validation. Correct
+the configured issuer to match the metadata exactly. End existing SSO sessions
+and sign in again for providers with a trailing slash, so their session records
+use the exact issuer for back-channel logout.
+
 ## Client authentication
 
 `auto` picks `client_secret_basic` or `client_secret_post` from the discovery document.

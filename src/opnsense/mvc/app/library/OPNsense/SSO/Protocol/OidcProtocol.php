@@ -82,7 +82,7 @@ final class OidcProtocol implements ProtocolInterface
      */
     public function __construct(array $cfg)
     {
-        $this->issuer = rtrim((string)($cfg['issuer'] ?? ''), '/');
+        $this->issuer = (string)($cfg['issuer'] ?? '');
         $this->clientId = (string)($cfg['client_id'] ?? '');
         $this->clientSecret = (string)($cfg['client_secret'] ?? '');
         $this->scopes = $cfg['scopes'] ?? ['openid', 'email', 'profile'];
@@ -796,7 +796,8 @@ final class OidcProtocol implements ProtocolInterface
         }
         $doc = $this->cacheGet('disco_' . $this->issuer, self::DISCO_TTL);
         if ($doc === null) {
-            $doc = $this->httpGetJson($this->issuer . '/.well-known/openid-configuration');
+            // Discovery 1.0 section 4.1 trims the URL used for retrieval only.
+            $doc = $this->httpGetJson(rtrim($this->issuer, '/') . '/.well-known/openid-configuration');
             // issuer in the document is authoritative for later iss comparison.
             if (empty($doc['issuer']) || empty($doc['authorization_endpoint']) || empty($doc['token_endpoint'])) {
                 throw new \RuntimeException('OIDC: discovery document is incomplete');
@@ -865,7 +866,7 @@ final class OidcProtocol implements ProtocolInterface
      */
     private function assertIssuerMatches(array $doc): void
     {
-        if (rtrim((string)($doc['issuer'] ?? ''), '/') !== $this->issuer) {
+        if (($doc['issuer'] ?? null) !== $this->issuer) {
             throw new \RuntimeException('OIDC: discovery issuer does not match the configured issuer');
         }
     }
