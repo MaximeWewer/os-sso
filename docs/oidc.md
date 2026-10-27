@@ -6,15 +6,28 @@ Reference for the **OpenID Connect** server type. The first steps are in the REA
 ## Issuer identity
 
 Copy the exact `issuer` value from the provider's discovery document, including
-any trailing slash. The slash is removed only when constructing the
-`/.well-known/openid-configuration` retrieval URL; it remains part of the issuer
-identity used for discovery validation, token validation and session records.
+any trailing slash (Authentik publishes `https://<authentik>/application/o/<slug>/`,
+Auth0 `https://<tenant>.auth0.com/`). The slash is removed only when constructing the
+`/.well-known/openid-configuration` retrieval URL; the configured value is the issuer
+identity recorded for sessions. ID tokens are always checked against the issuer the
+discovery document names, exactly.
 
-**Upgrading from a version that normalized issuer URLs:** a configured URL that
-differs from the metadata only by a trailing slash now fails validation. Correct
-the configured issuer to match the metadata exactly. End existing SSO sessions
-and sign in again for providers with a trailing slash, so their session records
-use the exact issuer for back-channel logout.
+A configured issuer that differs from the discovered one **only by a trailing slash** is
+still accepted, so installs configured before this check became strict keep logging in,
+but the system log says so and names the exact value to set:
+
+```text
+os-sso oidc: configured issuer 'https://ak/application/o/opnsense' differs from the
+discovered 'https://ak/application/o/opnsense/' only by a trailing slash; set the
+issuer to exactly 'https://ak/application/o/opnsense/'
+```
+
+Any other difference (case, a doubled slash, another host) is refused.
+
+**Upgrading:** nothing breaks. If the provider's issuer ends in a slash and you had
+configured it with one, sessions opened before the upgrade were recorded without it, so
+a back-channel logout from the IdP will not find them; they still end at their idle or
+maximum lifetime, and every login after the upgrade is recorded correctly.
 
 ## Client authentication
 

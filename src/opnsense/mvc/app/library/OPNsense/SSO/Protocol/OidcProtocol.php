@@ -805,7 +805,16 @@ final class OidcProtocol implements ProtocolInterface
             if (stripos($doc['issuer'], 'https://') !== 0) {
                 throw new \RuntimeException('OIDC: discovered issuer is not https');
             }
-            $this->assertIssuerMatches($doc);
+            if (!$this->assertIssuerMatches($doc)) {
+                // Once per fetch, not per login: the cached path below re-checks quietly.
+                syslog(LOG_WARNING, sprintf(
+                    "os-sso oidc: configured issuer '%s' differs from the discovered '%s' only by "
+                    . "a trailing slash; set the issuer to exactly '%s'",
+                    $this->issuer,
+                    (string)$doc['issuer'],
+                    (string)$doc['issuer']
+                ));
+            }
             $this->assertHttpsEndpoints($doc);
             $this->cacheSet('disco_' . $this->issuer, $doc);
         }
@@ -863,12 +872,31 @@ final class OidcProtocol implements ProtocolInterface
      * claimed -- so a multi-tenant IdP where a tenant controls its own metadata could
      * hand us a document naming a different issuer, and tokens minted for that other
      * issuer would validate.
+     *
+     * Exact is the rule, with one tolerance: a difference of a single trailing slash.
+     * Older versions stripped it on both sides, and providers that publish one
+     * (Authentik's ".../application/o/<slug>/", Auth0) were commonly configured
+     * without it; refusing those outright would turn upgrading into a login outage
+     * for a mismatch that grants nothing. The token `iss` is still compared strictly
+     * against the DISCOVERED issuer, so the tolerance never reaches token validation.
+     * Anything else -- case, a doubled slash, another host -- is refused.
+     *
+     * @return bool true on an exact match, false when only the trailing slash differs
      */
-    private function assertIssuerMatches(array $doc): void
+    private function assertIssuerMatches(array $doc): bool
     {
-        if (($doc['issuer'] ?? null) !== $this->issuer) {
-            throw new \RuntimeException('OIDC: discovery issuer does not match the configured issuer');
+        $discovered = $doc['issuer'] ?? null;
+        if ($discovered === $this->issuer) {
+            return true;
         }
+        if (
+            is_string($discovered)
+            && $this->issuer !== ''
+            && ($discovered === $this->issuer . '/' || $discovered . '/' === $this->issuer)
+        ) {
+            return false;
+        }
+        throw new \RuntimeException('OIDC: discovery issuer does not match the configured issuer');
     }
 
     /**

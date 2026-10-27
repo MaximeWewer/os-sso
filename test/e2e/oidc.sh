@@ -166,7 +166,7 @@ echo ">>> case 5b: pushed authorization requests (PAR)"
 # must not break those: the flow falls back to the ordinary redirect, which is the other
 # half of what this case checks.
 ISSUER=$(vm "php /home/vagrant/os-sso/test/vagrant/dump_authserver.php $PROVIDER sso_issuer")
-HAS_PAR=$(vm "fetch -qo - --no-verify-peer '$ISSUER/.well-known/openid-configuration'" \
+HAS_PAR=$(vm "fetch -qo - --no-verify-peer '${ISSUER%/}/.well-known/openid-configuration'" \
     | grep -c pushed_authorization_request_endpoint)
 vm "php /home/vagrant/os-sso/test/vagrant/set_authserver.php $PROVIDER sso_use_par=1" >/dev/null
 PARURL=$(curl -sk -o /dev/null -w '%{redirect_url}' "$GUI/api/sso/oidc/login?provider=$PROVIDER")

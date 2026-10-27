@@ -80,9 +80,12 @@ grep -q 'http://example.com/welcome' "$W/done.html" 2>/dev/null \
 # other suite also writes to. grep -av COMMAND: sudo logs our own probe into the
 # very file we are reading.
 # syslog-ng writes asynchronously, so the line can land a moment after the confirmation
-# page: give it a few seconds before calling it missing.
-for _ in 1 2 3 4 5; do
-    HITS=$(vm "grep -a os-sso /var/log/system/system_*.log | grep -av COMMAND | grep -ac \"in zone $ZONE from\"")
+# page: give it a few seconds before calling it missing. And read the audit log too: the
+# WebGUI's php-cgi worker keeps whatever syslog facility core last opened in it, so the
+# same line goes out as auth (audit log, at once) or user (system log, later) depending
+# on what that worker handled before.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    HITS=$(vm "grep -ah os-sso /var/log/system/system_*.log /var/log/audit/audit_*.log | grep -av COMMAND | grep -ac \"in zone $ZONE from\"")
     [ "${HITS:-0}" -gt 0 ] 2>/dev/null && break
     sleep 1
 done
