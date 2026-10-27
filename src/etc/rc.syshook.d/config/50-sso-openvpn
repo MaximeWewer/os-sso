@@ -6,12 +6,13 @@
 # it on Apply, but `openvpn start|restart <uuid>` (the Services page and the dashboard
 # widget) regenerates the instance config without running crl -- an instance saved but
 # not applied would then come back up without SSO, accepting a client certificate alone.
-# Reconciling here, right after the save, closes that window.
+# Reconcile first, then repair only running instances whose generated config
+# lost the verifier; a healthy running instance survives an ordinary form save.
 #
 # sync_openvpn.php only saves when something changed, so the config event its own save
 # raises finds nothing to do: no loop.
 
-OUT=$(/usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php 2>&1)
+OUT=$(/usr/local/opnsense/scripts/OPNsense/SSO/sync_openvpn.php --repair-running 2>&1)
 case "$OUT" in
     *changed=1*)
         logger -t os-sso -p daemon.notice \

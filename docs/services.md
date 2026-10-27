@@ -77,6 +77,18 @@ The token is checked locally by OpenVPN; Keycloak logout, SCIM deactivation and 
 maximum session lifetime can still terminate the recorded tunnel. In an HA pair, use the
 same **Auth Token secret** on both nodes if tokens must survive a failover.
 
+### Configuration-save runtime repair
+
+After each configuration event, os-sso first restores its saved OpenVPN directives,
+then inspects the generated config of each running, valid managed instance. A running
+instance missing its expected verifier is restarted individually and checked again.
+If the repair fails, the unsafe instance is stopped and the failure is logged. Stopped
+and unrelated instances are not started; invalid selections do not prevent valid ones
+from being checked. Healthy instances are left alone, including an ordinary form save
+that temporarily removed the saved directives. No daemon or package lifecycle hook is
+required. This repair follows the asynchronous configuration event; it is not a
+synchronous pre-start barrier.
+
 ### Existing manually wired profiles
 
 Profiles created before managed instances were introduced keep their instance field empty
