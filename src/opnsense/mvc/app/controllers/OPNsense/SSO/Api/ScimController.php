@@ -40,7 +40,12 @@ use OPNsense\SSO\Scim\ScimUsers;
  */
 class ScimController extends ApiControllerBase
 {
-    /** A directory record is small; cap unauthenticated request memory and JSON work. */
+    /**
+     * A directory record is small. body() runs once the client is authenticated, so
+     * this bounds what a misbehaving or compromised directory can make the firewall
+     * hold and decode, not anonymous traffic (the bearer and source gates turn that
+     * away first).
+     */
     private const MAX_BODY = 1048576;
 
     /** Bearer + source gate replace the WebGUI session entirely. */
