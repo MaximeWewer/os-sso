@@ -1,6 +1,9 @@
 <?php
 
-declare(strict_types=1);
+/*
+ * Copyright (C) 2026 Maxime Wewer
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
 use Firebase\JWT\JWT;
 use OPNsense\SSO\JwkSet;
@@ -14,26 +17,26 @@ openssl_pkey_export($signingKey, $signingPem);
 $signingDetails = openssl_pkey_get_details($signingKey);
 $encodeUrl = fn(string $value): string => rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
 $rawKeys = ['keys' => [[
-	'kty' => 'RSA', 'use' => 'sig', 'kid' => 'algorithm-test',
-	'n' => $encodeUrl($signingDetails['rsa']['n']),
-	'e' => $encodeUrl($signingDetails['rsa']['e']),
+    'kty' => 'RSA', 'use' => 'sig', 'kid' => 'algorithm-test',
+    'n' => $encodeUrl($signingDetails['rsa']['n']),
+    'e' => $encodeUrl($signingDetails['rsa']['e']),
 ]]];
 $tokenClaims = [
-	'iss' => 'https://idp.example', 'aud' => 'firewall', 'sub' => 'alice-sub',
-	'preferred_username' => 'alice', 'iat' => time(), 'exp' => time() + 60, 'nonce' => 'test-nonce',
+    'iss' => 'https://idp.example', 'aud' => 'firewall', 'sub' => 'alice-sub',
+    'preferred_username' => 'alice', 'iat' => time(), 'exp' => time() + 60, 'nonce' => 'test-nonce',
 ];
 foreach (['RS256', 'RS512'] as $algorithm) {
-	$signedToken = JWT::encode($tokenClaims, $signingPem, $algorithm, 'algorithm-test');
-	foreach ([['RS256', 'RS512'], ['RS512', 'RS256']] as $allowed) {
-		$parsedKeys = JwkSet::parse($rawKeys, $allowed, $signedToken);
-		eq($algorithm, $parsedKeys['algorithm-test']->getAlgorithm(), 'the key follows ' . $algorithm . ' with ' . implode(',', $allowed));
-		eq('alice-sub', JWT::decode($signedToken, $parsedKeys)->sub, 'the signed token verifies');
-		$proxy = new JwtProtocol([
-			'issuer' => 'https://idp.example', 'audience' => 'firewall',
-			'public_key' => $signingDetails['key'], 'algorithms' => $allowed,
-		]);
-		eq('alice', $proxy->verify($signedToken)->username, 'static-key forward auth accepts an allowed algorithm regardless of list order');
-	}
+    $signedToken = JWT::encode($tokenClaims, $signingPem, $algorithm, 'algorithm-test');
+    foreach ([['RS256', 'RS512'], ['RS512', 'RS256']] as $allowed) {
+        $parsedKeys = JwkSet::parse($rawKeys, $allowed, $signedToken);
+        eq($algorithm, $parsedKeys['algorithm-test']->getAlgorithm(), 'the key follows ' . $algorithm . ' with ' . implode(',', $allowed));
+        eq('alice-sub', JWT::decode($signedToken, $parsedKeys)->sub, 'the signed token verifies');
+        $proxy = new JwtProtocol([
+            'issuer' => 'https://idp.example', 'audience' => 'firewall',
+            'public_key' => $signingDetails['key'], 'algorithms' => $allowed,
+        ]);
+        eq('alice', $proxy->verify($signedToken)->username, 'static-key forward auth accepts an allowed algorithm regardless of list order');
+    }
 }
 
 $rsToken = JWT::encode($tokenClaims, $signingPem, 'RS256', 'algorithm-test');
@@ -45,8 +48,8 @@ $hmacToken = JWT::encode($tokenClaims, str_repeat('a', 32), 'HS256', 'algorithm-
 throws(fn() => JwkSet::parse($rawKeys, [], $hmacToken), 'not allowed', 'an HMAC header cannot turn an RSA public key into a shared secret');
 throws(fn() => JwkSet::algorithm('malformed', []), 'not allowed', 'a malformed token is refused');
 $restrictedProxy = new JwtProtocol([
-	'issuer' => 'https://idp.example', 'audience' => 'firewall',
-	'public_key' => $signingDetails['key'], 'algorithms' => ['RS512'],
+    'issuer' => 'https://idp.example', 'audience' => 'firewall',
+    'public_key' => $signingDetails['key'], 'algorithms' => ['RS512'],
 ]);
 throws(fn() => $restrictedProxy->verify($rsToken), 'not allowed', 'the forward-auth allowlist is enforced for static keys too');
 $parts = explode('.', $rsToken);
@@ -56,20 +59,20 @@ throws(fn() => JWT::decode($tamperedToken, JwkSet::parse($rawKeys, ['RS256', 'RS
 
 T::group('JWK algorithms: OIDC ID tokens and signed UserInfo');
 if (!stateDirUsable()) {
-	T::skip('OIDC cached-key signature integration', 'state directory unavailable');
+    T::skip('OIDC cached-key signature integration', 'state directory unavailable');
 } else {
-	$oidc = new OidcProtocol(['issuer' => 'https://idp.example', 'client_id' => 'firewall']);
-	$cache = new ReflectionMethod($oidc, 'cacheSet');
-	$cache->invoke($oidc, 'jwks_https://idp.example/algorithm-test', $rawKeys);
-	$discovery = [
-		'issuer' => 'https://idp.example', 'jwks_uri' => 'https://idp.example/algorithm-test',
-		'id_token_signing_alg_values_supported' => ['RS512', 'RS256'],
-		'userinfo_signing_alg_values_supported' => ['RS512'],
-	];
-	$validateToken = new ReflectionMethod($oidc, 'validateIdToken');
-	eq('alice-sub', $validateToken->invoke($oidc, $discovery, $rsToken, 'test-nonce')->sub, 'the OIDC token path uses the token algorithm');
-	$userInfoToken = JWT::encode($tokenClaims, $signingPem, 'RS512', 'algorithm-test');
-	$discovery['id_token_signing_alg_values_supported'] = ['RS256'];
-	$decodeUserInfo = new ReflectionMethod($oidc, 'decodeSignedUserinfo');
-	eq('alice-sub', $decodeUserInfo->invoke($oidc, $discovery, $userInfoToken)['sub'], 'signed UserInfo uses its own advertised algorithms');
+    $oidc = new OidcProtocol(['issuer' => 'https://idp.example', 'client_id' => 'firewall']);
+    $cache = new ReflectionMethod($oidc, 'cacheSet');
+    $cache->invoke($oidc, 'jwks_https://idp.example/algorithm-test', $rawKeys);
+    $discovery = [
+        'issuer' => 'https://idp.example', 'jwks_uri' => 'https://idp.example/algorithm-test',
+        'id_token_signing_alg_values_supported' => ['RS512', 'RS256'],
+        'userinfo_signing_alg_values_supported' => ['RS512'],
+    ];
+    $validateToken = new ReflectionMethod($oidc, 'validateIdToken');
+    eq('alice-sub', $validateToken->invoke($oidc, $discovery, $rsToken, 'test-nonce')->sub, 'the OIDC token path uses the token algorithm');
+    $userInfoToken = JWT::encode($tokenClaims, $signingPem, 'RS512', 'algorithm-test');
+    $discovery['id_token_signing_alg_values_supported'] = ['RS256'];
+    $decodeUserInfo = new ReflectionMethod($oidc, 'decodeSignedUserinfo');
+    eq('alice-sub', $decodeUserInfo->invoke($oidc, $discovery, $userInfoToken)['sub'], 'signed UserInfo uses its own advertised algorithms');
 }
