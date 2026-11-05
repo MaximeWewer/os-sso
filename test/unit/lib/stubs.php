@@ -184,6 +184,31 @@ class BaseModelMigration
     }
 }
 
+namespace OPNsense\Auth\SSOProviders;
+
+/** Core's SSO container contract and provider value object, as the login page reads them. */
+interface ISSOContainer
+{
+    public function listProviders(): \Generator;
+}
+
+class Provider
+{
+    public string $id = '';
+    public string $appcode = '';
+    public string $name = '';
+    public string $login_uri = '';
+    public string $service = '';
+    public string $html_content = '';
+
+    public function __construct(array $props)
+    {
+        foreach (array_keys(get_class_vars(self::class)) as $key) {
+            $this->$key = (string)($props[$key] ?? '');
+        }
+    }
+}
+
 namespace OPNsense\SSO\Test;
 
 /**
