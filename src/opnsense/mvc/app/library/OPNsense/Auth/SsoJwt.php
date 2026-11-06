@@ -45,6 +45,7 @@ class SsoJwt extends Local implements IAuthConnector
     public $ssoGroupMap = null;
     public $ssoGroupSync = false;
     public $ssoButtonLabel = null;
+    public $ssoHideButton = false;
     public $ssoLoginRedirect = null;
 
     public static function getType()
@@ -87,6 +88,7 @@ class SsoJwt extends Local implements IAuthConnector
             $this->ssoSessionLifetime = (int)$config['sso_session_lifetime'];
         }
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
+        $this->ssoHideButton = !empty($config['sso_hide_button']);
         if (!empty($config['sso_jwt_algorithms'])) {
             $this->ssoJwtAlgorithms = array_filter(array_map('trim', explode(',', $config['sso_jwt_algorithms'])));
         }
@@ -295,6 +297,13 @@ class SsoJwt extends Local implements IAuthConnector
                 'name' => gettext('Login button label'),
                 'help' => gettext('Text shown on the login-page button (defaults to the server name).'),
                 'type' => 'text',
+            ],
+            'sso_hide_button' => [
+                'name' => gettext('Hide login button'),
+                'help' => gettext('Do not offer this provider on the WebGUI login page. For a proxy that '
+                    . 'starts the login itself and injects the header on that request only: a click on the '
+                    . 'button would arrive without the header and fail. The login endpoint keeps working.'),
+                'type' => 'checkbox',
             ],
             'sso_login_redirect' => [
                 'name' => gettext('Default landing URL'),

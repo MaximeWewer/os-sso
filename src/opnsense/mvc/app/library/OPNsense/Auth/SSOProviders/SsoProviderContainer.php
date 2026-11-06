@@ -68,6 +68,12 @@ class SsoProviderContainer implements ISSOContainer
             if (!ServiceScope::allows($services, ServiceScope::WEBGUI)) {
                 continue; // portal- or VPN-only: no button on the firewall login page
             }
+            // Still a WebGUI door, just not one a click can open: a forward-auth proxy that
+            // starts the login itself (header injected on that one request only) leaves a
+            // button that can only fail -- and it shows on the LAN login page too.
+            if (!empty((string)($server->sso_hide_button ?? ''))) {
+                continue;
+            }
 
             // Full-width button: "Login with XXX" with the IdP favicon to the right.
             $html = sprintf(
@@ -91,16 +97,16 @@ class SsoProviderContainer implements ISSOContainer
             ]);
         }
 
-        if (empty($providers)) {
-            return;
+        // Thin rule that visually separates the standard login from the SSO buttons --
+        // only when there is a button below it. No WebGUI button (portal-only providers,
+        // hidden buttons) must not take the portal's providers away with it.
+        if (!empty($providers)) {
+            yield new Provider([
+                'id' => 'sso-separator',
+                'service' => 'WebGui',
+                'html_content' => '<hr style="margin:10px 0 8px;border:0;border-top:1px solid #ddd;">',
+            ]);
         }
-
-        // Thin rule that visually separates the standard login from the SSO buttons.
-        yield new Provider([
-            'id' => 'sso-separator',
-            'service' => 'WebGui',
-            'html_content' => '<hr style="margin:10px 0 8px;border:0;border-top:1px solid #ddd;">',
-        ]);
         foreach ($providers as $provider) {
             yield $provider;
         }

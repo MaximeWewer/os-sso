@@ -18,6 +18,16 @@ Access).
 
 Only asymmetric algorithms (`RS256`/`ES256`/…) are accepted; `exp`/`nbf` are enforced.
 
+## Proxies that start the login themselves
+
+The login page shows a button for the provider, which works when the proxy fronts every
+request: the click goes through it and picks up the header. Some setups only inject the
+header on the one request the proxy makes itself - for example an application that opens
+the firewall's WebGUI for an already authenticated user. There a click on the button
+arrives without a token and fails, and the button shows on the LAN login page as well.
+Tick **Hide login button** to keep the provider off the login page; the login endpoint
+keeps working.
+
 ## Bounding the replay window
 
 A signed JWT is a bearer credential - whoever holds the bytes is the user until it

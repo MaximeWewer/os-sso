@@ -9,6 +9,10 @@ Each configured OIDC/SAML/JWT server adds a **“Login with …”** button to t
 login page. Users click it, authenticate at the IdP, and land in the WebGUI with
 privileges from their mapped groups.
 
+**Hide login button** (JWT forward-auth) keeps a WebGUI provider off the page while its
+login endpoint stays open - for a proxy that starts the login itself, see
+[JWT forward-auth](jwt.md#proxies-that-start-the-login-themselves).
+
 A provider whose **Applies to** does not list `webgui` gets no button - and its login
 endpoint refuses a WebGUI login, which is the half that matters: the button is only the
 part an attacker does not need.
