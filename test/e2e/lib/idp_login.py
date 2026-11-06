@@ -176,10 +176,16 @@ def edit_callback(url):
     query = [(k, v) for k, v in query if k not in CALLBACK_EDITS]
     for name, value in CALLBACK_EDITS.items():
         if value == "@corrupt":
-            # Flip the last character of what the IdP sent: breaks a signature, keeps
-            # the shape of the value.
+            # Change one character of what the IdP sent, keeping its shape. Not the last
+            # one: in base64url the final character of a signature carries padding bits,
+            # and changing those can leave the decoded signature -- and its validity --
+            # untouched. Ten characters in, every bit counts.
             original = received.get(name, "")
-            value = original[:-1] + ("A" if original[-1:] != "A" else "B") if original else ""
+            if len(original) > 10:
+                i = len(original) - 10
+                value = original[:i] + ("A" if original[i] != "A" else "B") + original[i + 1:]
+            else:
+                value = ""
         if value != "":
             query.append((name, value))
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
