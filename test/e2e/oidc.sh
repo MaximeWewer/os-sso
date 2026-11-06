@@ -282,6 +282,21 @@ check "garbage logout_token refused" 400 \
 check "no logout_token refused" 400 \
     "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$GUI/api/sso/oidc/backchannel?provider=$PROVIDER")"
 
+# --- 2b. requested claims (the OIDC claims parameter) -----------------------------
+# Keycloak's fw_role mapper (setup-keycloak.sh) answers an essential fw_role claim
+# requested with a value. Read the groups from it and require that value: the login then
+# passes only if the claims request reached the IdP and its answer came back.
+if [ "$IDP" = "keycloak" ]; then
+    echo ">>> case 2b: requested claims (claims parameter)"
+    asjson() { vm "php /home/vagrant/os-sso/test/vagrant/set_authserver_json.php $PROVIDER b64:$(printf '%s' "$1" | base64 | tr -d '\n')" >/dev/null; }
+    asjson '{"sso_groups_claim":"fw_role","sso_required_groups":"fw-claims-ok","sso_claims_request":"{\"id_token\":{\"fw_role\":{\"essential\":true,\"value\":\"fw-claims-ok\"}}}"}'
+    vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+    check "the requested claim satisfies the group gate" 302 "$(login "$W/jar-claims1")"
+    asjson '{"sso_claims_request":""}'
+    check "without the claims request it is not there" 400 "$(login "$W/jar-claims2")"
+    asjson '{"sso_groups_claim":"groups","sso_required_groups":""}'
+fi
+
 # --- 10b. front-channel logout --------------------------------------------------
 # What Entra ID offers instead of back-channel: a sign-out at the IdP loads our page in
 # an iframe with the IdP session id. Keycloak is set up for it (setup-keycloak.sh); the

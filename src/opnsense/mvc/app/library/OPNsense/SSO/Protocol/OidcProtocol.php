@@ -58,6 +58,8 @@ final class OidcProtocol implements ProtocolInterface
     private array $requiredAcr;
     /** @var array<string,string> extra authorization-request parameters */
     private array $extraParams;
+    /** the OIDC "claims" request parameter, as compact JSON ('' = none) */
+    private string $claimsRequest;
     /** per-provider session-key prefix so concurrent flows do not clobber each other */
     private string $sessionPrefix;
     /** how this firewall proves it is the client when calling the token endpoint */
@@ -100,6 +102,9 @@ final class OidcProtocol implements ProtocolInterface
             (array)($cfg['required_acr'] ?? [])
         )));
         $this->extraParams = self::parseExtraParams((string)($cfg['extra_params'] ?? ''));
+        $claims = trim((string)($cfg['claims_request'] ?? ''));
+        $this->claimsRequest = $claims === '' ? '' : (self::claimsRequest($claims)
+            ?? throw new \RuntimeException('OIDC: the requested claims are not a valid claims request'));
         $this->graphOverage = (bool)($cfg['graph_overage'] ?? false);
         $this->usePar = (bool)($cfg['use_par'] ?? false);
         $this->clientAuth = new ClientAuth([
@@ -171,6 +176,10 @@ final class OidcProtocol implements ProtocolInterface
             // the preference order per OIDC Core; the check accepts any of them.
             $params['acr_values'] = implode(' ', $this->requiredAcr);
         }
+        if ($this->claimsRequest !== '') {
+            // Individual claims no scope covers (OIDC Core section 5.5).
+            $params['claims'] = $this->claimsRequest;
+        }
         // Operator extras (prompt, login_hint, ui_locales...). parseExtra
         // already dropped anything that would overwrite a parameter we depend on.
         $params += $this->extraParams;
@@ -224,6 +233,27 @@ final class OidcProtocol implements ProtocolInterface
     }
 
     /**
+     * The OIDC "claims" request parameter (OIDC Core section 5.5), as compact JSON, or
+     * null when $json is not one: a JSON object whose only members are "id_token" and
+     * "userinfo", each an object naming claims. Anything else would reach the IdP as a
+     * request it either rejects or, worse, half-understands.
+     */
+    public static function claimsRequest(string $json): ?string
+    {
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded) || $decoded === [] || array_is_list($decoded)) {
+            return null;
+        }
+        foreach ($decoded as $member => $claims) {
+            if (!in_array($member, ['id_token', 'userinfo'], true) || !is_array($claims) || array_is_list($claims) && $claims !== []) {
+                return null;
+            }
+        }
+        $compact = json_encode(json_decode($json), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return $compact === false ? null : $compact;
+    }
+
+    /**
      * Parse the operator's "key=value, key=value" extras.
      *
      * Anything that carries the security of the flow -- the ones minted per login,
@@ -241,6 +271,8 @@ final class OidcProtocol implements ProtocolInterface
             // also verifies the acr that comes back. Requesting one here and not
             // checking it is how you end up believing MFA is enforced when it is not.
             'acr_values',
+            // claims has its own field, which validates the JSON.
+            'claims',
         ];
         $out = [];
         foreach (preg_split('/[,\r\n]+/', $spec) ?: [] as $pair) {

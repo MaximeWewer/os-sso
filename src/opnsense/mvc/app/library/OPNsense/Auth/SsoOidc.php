@@ -38,6 +38,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoMtlsKey = null;
     public $ssoGraphOverage = false;
     public $ssoExtraParams = null;
+    public $ssoClaimsRequest = null;
     public $ssoSessionLifetime = 0;
     public $ssoScimEnabled = false;
     public $ssoScimToken = null;
@@ -79,6 +80,7 @@ class SsoOidc extends Local implements IAuthConnector
             'sso_group_map' => 'ssoGroupMap',
             'sso_scim_token' => 'ssoScimToken',
             'sso_extra_params' => 'ssoExtraParams',
+            'sso_claims_request' => 'ssoClaimsRequest',
             'sso_token_auth_method' => 'ssoTokenAuthMethod',
             'sso_assertion_alg' => 'ssoAssertionAlg',
             'sso_private_key' => 'ssoPrivateKey',
@@ -199,6 +201,16 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'flow (state, nonce, redirect_uri, PKCE, max_age, acr_values...) are ignored here - use '
                     . 'the dedicated fields, which also verify what comes back.'),
                 'type' => 'text',
+            ],
+            'sso_claims_request' => [
+                'name' => gettext('Requested claims'),
+                'help' => gettext('Optional OIDC "claims" request parameter, as JSON: the individual claims '
+                    . 'to return in the ID token and/or from userinfo, e.g. '
+                    . '{"id_token": {"groups": {"essential": true}}}. For a claim the IdP would not send by '
+                    . 'default and no scope covers. Only "id_token" and "userinfo" members are accepted.'),
+                'type' => 'text',
+                'validate' => fn($v) => trim((string)$v) === '' || \OPNsense\SSO\Protocol\OidcProtocol::claimsRequest((string)$v) !== null
+                    ? [] : [gettext('Requested claims must be a JSON object with only "id_token" and/or "userinfo" objects.')],
             ],
             'sso_token_auth_method' => [
                 'name' => gettext('Client authentication method'),

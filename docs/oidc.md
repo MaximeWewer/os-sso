@@ -59,6 +59,11 @@ endpoint is used automatically.
   channel and the browser only carries an opaque reference. Used automatically when the
   IdP declares it requires them.
 - **Extra authorization parameters** - for things like `prompt=login`.
+- **Requested claims** - the OIDC `claims` request parameter, as JSON, for an individual
+  claim the IdP does not send by default and no scope covers:
+  `{"id_token": {"groups": {"essential": true}}}`. Only `id_token` and `userinfo`
+  members are accepted. Keycloak honours a requested *value* only for a claim marked
+  `essential`.
 
 A **signed userinfo response** (`userinfo_signed_response_alg`) needs nothing configured:
 the JWT is verified against the same keys as the ID token, and refused if it is signed

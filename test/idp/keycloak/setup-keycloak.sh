@@ -40,6 +40,13 @@ fi
 SECRET=$("${KC[@]}" get "clients/$CID/client-secret" -r "$R" 2>/dev/null | grep -o '"value"[^,]*' | cut -d'"' -f4)
 echo "oidc_client_uuid=$CID"
 echo "oidc_client_secret=$SECRET"
+# A mapper that answers the OIDC "claims" request parameter: an essential fw_role claim
+# requested with a value comes back with that value (oidc.sh, requested claims case).
+if ! "${KC[@]}" get "clients/$CID/protocol-mappers/models" -r "$R" 2>/dev/null | grep -q '"name" : "fw_role"'; then
+  "${KC[@]}" create "clients/$CID/protocol-mappers/models" -r "$R" \
+    -s name=fw_role -s protocol=openid-connect -s protocolMapper=oidc-claims-param-value-idtoken-mapper \
+    -s 'config."claim.name"=fw_role' -s 'config."id.token.claim"=true' >/dev/null 2>&1 || true
+fi
 
 # --- SAML client (SP) ---
 # Keycloak signs the assertion with the realm key; SP request signature not required.
