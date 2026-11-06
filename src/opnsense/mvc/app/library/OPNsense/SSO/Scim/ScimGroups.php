@@ -299,6 +299,6 @@ final class ScimGroups
     private function persist(string $groupName): void
     {
         Config::getInstance()->save();
-        (new \OPNsense\Core\Backend())->configdpRun('auth group changed', [$groupName]);
+        (new \OPNsense\Core\Backend())->configdpRun('auth sync group', [$groupName]);
     }
 }
