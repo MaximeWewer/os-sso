@@ -2,7 +2,9 @@
 
 **System ▸ Access ▸ SSO Diagnostics** shows, for every configured provider:
 
-- the exact URLs to register at the IdP (the SCIM base URL included, when SCIM is on);
+- the exact URLs to register at the IdP (back- and front-channel logout, the SCIM base URL
+  when SCIM is on), and each provider's direct login link - the way in when its button is
+  hidden, and the initiate-login URI an IdP app launcher asks for;
 - the effective policy - required groups, auto-creation, group sync, deprovisioning, SCIM,
   session lifetime;
 - a **Test** button that talks to the IdP live: discovery + JWKS for OIDC, the metadata

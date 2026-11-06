@@ -60,6 +60,14 @@ be a non-empty OIDC identifier, binds `at_hash` to the access token and requires
 asymmetric signature; SAML verifies the assertion signature and is replay-protected
 (single-use request id plus a consumed-assertion cache).
 
+The authorization response must name the IdP the user was sent to (RFC 9207 `iss`, which
+closes the mix-up attack between providers), and a token declaring another kind in its
+`typ` header (RFC 8725) is refused where it does not belong - a logout token is never an
+ID token, nor a DPoP proof a forward-auth login. Optionally, the request travels signed
+by the client (JAR), the response comes back signed by the IdP (JARM, and an unsigned one
+is then refused), and the access token is bound to a per-login key (DPoP) so that it is
+useless to whoever intercepts it.
+
 What the IdP is *asked* for is also *checked* on return - `max_age` against `auth_time`
 (SAML: `AuthnInstant`), the required `acr` against the returned one - because requesting an
 MFA context is voluntary per the spec, so only the answer proves anything.
@@ -80,7 +88,7 @@ proxy or port-forward; the form shows the exact redirect/ACS URL to copy into th
 
 ## Revocation reaches all three doors
 
-A back-channel logout, a SAML Single Logout, a SCIM `active: false`, "deprovision on
+A back-channel or front-channel logout, a SAML Single Logout, a SCIM `active: false`, "deprovision on
 refused login" and the *End* button on the diagnostics page all act on the same record of
 what os-sso granted - so they end the WebGUI session, disconnect the captive-portal client
 from the network, and drop the OpenVPN tunnels of that common name, rather than only the
