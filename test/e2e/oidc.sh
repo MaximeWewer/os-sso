@@ -387,6 +387,10 @@ echo ">>> case 10b: front-channel logout"
 check "a request without sid is refused" 400 \
     "$(curl -sk -o /dev/null -w '%{http_code}' "$GUI/api/sso/oidc/frontchannel?provider=$PROVIDER")"
 if [ "$IDP" = "keycloak" ]; then
+    # Keycloak does front- or back-channel per client: make sure this one is front.
+    command -v docker >/dev/null && docker exec keycloak /opt/keycloak/bin/kcadm.sh update \
+        "clients/$(docker exec keycloak /opt/keycloak/bin/kcadm.sh get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')" \
+        -r opnsense -s frontchannelLogout=true >/dev/null 2>&1
     vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
     check "login for the front-channel case" 302 "$(login "$W/jar-fc")"
     python3 lib/kc_frontchannel.py "$W/jar-fc" "https://keycloak.test:9443/realms/opnsense" > "$W/fc.out" 2>&1
@@ -396,6 +400,36 @@ if [ "$IDP" = "keycloak" ]; then
     grep -q "frame-ancestors https://keycloak.test:9443" "$W/fc.out" \
         && ok "and only the IdP may frame it" || ko "unexpected framing policy ($(grep CSP "$W/fc.out"))"
     not_live "$W/jar-fc" "the firewall session ends with the IdP session"
+fi
+
+# --- 10c. a real back-channel logout from Keycloak -----------------------------------
+# Keycloak calls the firewall itself, over HTTPS it can verify: the lab gives the WebGUI a
+# certificate from the lab CA (deploy.sh), which the Keycloak container trusts. Keycloak
+# does front- or back-channel per client, not both, so the client is switched for the
+# case and back afterwards. Its logout token is explicitly typed logout+jwt.
+if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
+    echo ">>> case 10c: a real back-channel logout from Keycloak"
+    # No -i: with stdin attached, "kcadm create" reads it as the request body.
+    kcadm() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
+    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
+    KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
+    KCUSER=$(kcadm get users -r opnsense -q username="$IDP_USER" --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
+    # Keycloak sends one logout token per open session: clear those of the earlier cases
+    # (with no logout URL set yet, so nothing is sent) to leave only this case's one.
+    kcadm update "clients/$KCID" -r opnsense -s frontchannelLogout=false \
+        -s 'attributes."backchannel.logout.url"=' >/dev/null 2>&1
+    kcadm create "users/$KCUSER/logout" -r opnsense >/dev/null 2>&1
+    kcadm update "clients/$KCID" -r opnsense \
+        -s "attributes.\"backchannel.logout.url\"=$GUI/api/sso/oidc/backchannel?provider=$PROVIDER" \
+        -s 'attributes."backchannel.logout.session.required"=true' >/dev/null 2>&1
+    vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+    check "login for the back-channel case" 302 "$(login "$W/jar-bc")"
+    is_live "$W/jar-bc" "the session is open"
+    kcadm create "users/$KCUSER/logout" -r opnsense >/dev/null 2>&1
+    for _ in 1 2 3 4 5 6 7 8 9 10; do authed "$W/jar-bc" || break; sleep 2; done
+    not_live "$W/jar-bc" "Keycloak's logout token ended it, over verified HTTPS"
+    kcadm update "clients/$KCID" -r opnsense -s frontchannelLogout=true \
+        -s 'attributes."backchannel.logout.url"=' >/dev/null 2>&1
 fi
 
 # --- 11. service scoping --------------------------------------------------------

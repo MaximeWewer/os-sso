@@ -178,3 +178,11 @@ for h in authentik.test keycloak.test; do
     grep -q "$h" /etc/hosts || echo "10.0.2.2 $h" >> /etc/hosts
 done
 echo ">>> os-sso: IdP hostnames in /etc/hosts: $(grep -c -E 'authentik.test|keycloak.test' /etc/hosts)"
+
+# A WebGUI certificate from the lab CA, which the IdP containers trust: they can then
+# call the firewall over verified HTTPS (back-channel logout, a request_uri they fetch).
+if [ -f /home/vagrant/os-sso/test/idp/certs/ca.key ]; then
+    OUT=$(php /home/vagrant/os-sso/test/vagrant/set_webgui_cert.php "$SSO_LAN_IP" /home/vagrant/os-sso/test/idp/certs 2>&1)
+    echo ">>> os-sso: WebGUI certificate: $OUT"
+    case "$OUT" in issued*) /usr/local/etc/rc.restart_webgui >/dev/null 2>&1 || true ;; esac
+fi

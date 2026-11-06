@@ -19,6 +19,12 @@ services:
       KC_HOSTNAME: https://keycloak.test:9443
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
+      # Trust the lab CA for outgoing calls: the firewall's WebGUI certificate is issued
+      # by it (test/vagrant/deploy.sh), so back-channel logout tokens and a request_uri
+      # fetched from the firewall go over verified HTTPS.
+      KC_TRUSTSTORE_PATHS: /opt/keycloak/conf/truststores/os-sso-lab-ca.crt
+    volumes:
+      - ../certs/ca.crt:/opt/keycloak/conf/truststores/os-sso-lab-ca.crt:ro
     ports:
       # Host convenience only (kcadm runs through docker exec, and the proxy reaches
       # the container over the shared network). Overridable: 8081 is a popular port.
