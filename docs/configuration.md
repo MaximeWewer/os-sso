@@ -17,6 +17,7 @@ only what is easy to get wrong, and shared by all three types.
 | **Deprovision on refused login** | Disables the account behind a refused login, and re-enables it when the IdP allows that account again. Does nothing without *Required groups*. |
 | **Maximum session lifetime** | The WebGUI timeout is *idle*-only. Applies to the portal client and the VPN tunnel too (capped at 24 h there) - see [Sessions](security.md#sessions). |
 | **SCIM provisioning** | Token **and** source addresses, both required - see [SCIM](scim.md). |
+| **SCIM may create groups** | Off by default. Created groups carry no privilege, and the IdP manages only the ones it created. |
 
 Then, per type:
 

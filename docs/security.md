@@ -65,8 +65,8 @@ closes the mix-up attack between providers), and a token declaring another kind 
 `typ` header (RFC 8725) is refused where it does not belong - a logout token is never an
 ID token, nor a DPoP proof a forward-auth login. Optionally, the request travels signed
 by the client (JAR), the response comes back signed by the IdP (JARM, and an unsigned one
-is then refused), and the access token is bound to a per-login key (DPoP) so that it is
-useless to whoever intercepts it.
+is then refused), and the authorization code and the access token are bound to a
+per-login key (DPoP, with `dpop_jkt`) so that neither is of use to whoever intercepts it.
 
 What the IdP is *asked* for is also *checked* on return - `max_age` against `auth_time`
 (SAML: `AuthnInstant`), the required `acr` against the returned one - because requesting an
@@ -88,11 +88,11 @@ proxy or port-forward; the form shows the exact redirect/ACS URL to copy into th
 
 ## Revocation reaches all three doors
 
-A back-channel or front-channel logout, a SAML Single Logout, a SCIM `active: false`, "deprovision on
-refused login" and the *End* button on the diagnostics page all act on the same record of
-what os-sso granted - so they end the WebGUI session, disconnect the captive-portal client
-from the network, and drop the OpenVPN tunnels of that common name, rather than only the
-first of the three.
+A back-channel or front-channel logout, a SAML Single Logout, a SCIM `active: false`,
+"deprovision on refused login" and the *End* button on the diagnostics page all act on
+the same record of what os-sso granted - so they end the WebGUI session, disconnect the
+captive-portal client from the network, and drop the OpenVPN tunnels of that common
+name, rather than only the first of the three.
 
 A deprovisioning is also **undone** by the login that disproves it: put the account back
 in the required group at the IdP and the next login re-enables it, on all three doors,
@@ -121,4 +121,6 @@ with a still-valid OpenVPN auth token until their recorded os-sso session is rev
 reaches its configured maximum lifetime.
 
 [SCIM](scim.md) needs a bearer token **and** a source-address allowlist, and refuses on the
-same principles as the login path.
+same principles as the login path. A provider may create groups only when explicitly
+allowed to, and those start with no privilege: what a group may do on the firewall stays
+an operator decision.

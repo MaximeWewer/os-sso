@@ -151,7 +151,7 @@ sessions. Register at your IdP:
 
 Both bring the browser back through a short "signed out" page that sends no `Referer`,
 then on to the login page. Coming straight from the IdP, the login page would be
-refused by OPNsense's HTTP_REFERER check (*The HTTP_REFERER "https://login.live.com/"
+refused by OPNsense's HTTP_REFERER check (*The HTTP_REFERER "`https://login.live.com/`"
 does not match the predefined settings*), which this keeps on without listing the IdP
 under alternate hostnames.
 
