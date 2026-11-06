@@ -10,6 +10,7 @@ namespace OPNsense\SSO\Protocol;
 use Firebase\JWT\JWT;
 use OPNsense\SSO\ClaimPath;
 use OPNsense\SSO\ClientAuth;
+use OPNsense\SSO\DPoP;
 use OPNsense\SSO\JwkSet;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\NormalizedIdentity;
@@ -72,6 +73,10 @@ final class OidcProtocol implements ProtocolInterface
     private bool $signedRequest;
     /** have the IdP sign the authorization response (JARM) */
     private bool $jarm;
+    /** bind the access token to an ephemeral key with DPoP proofs (RFC 9449) */
+    private bool $useDpop;
+    /** the DPoP key of the login in progress, null when DPoP is off */
+    private ?DPoP $dpop = null;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -113,6 +118,7 @@ final class OidcProtocol implements ProtocolInterface
         $this->usePar = (bool)($cfg['use_par'] ?? false);
         $this->signedRequest = (bool)($cfg['signed_request'] ?? false);
         $this->jarm = (bool)($cfg['jarm'] ?? false);
+        $this->useDpop = (bool)($cfg['dpop'] ?? false);
         $this->clientAuth = new ClientAuth([
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
@@ -365,6 +371,8 @@ final class OidcProtocol implements ProtocolInterface
             throw new \RuntimeException('OIDC: missing authorization code');
         }
 
+        // One key per login: it lives exactly as long as the access token is used here.
+        $this->dpop = $this->useDpop ? new DPoP() : null;
         $tokens = $this->exchangeCode($disco, $code, $verifier);
         $idToken = (string)($tokens['id_token'] ?? '');
         if ($idToken === '') {
@@ -380,7 +388,7 @@ final class OidcProtocol implements ProtocolInterface
         // Optionally enrich from userinfo (groups/email often live there).
         $merged = (array)$claims;
         if (!empty($tokens['access_token']) && !empty($disco['userinfo_endpoint'])) {
-            $userInfo = $this->fetchUserInfo($disco, (string)$tokens['access_token']);
+            $userInfo = $this->fetchUserInfo($disco, (string)$tokens['access_token'], (string)($tokens['token_type'] ?? ''));
             if (!empty($userInfo)) {
                 // OIDC Core §5.3.2: the UserInfo `sub` MUST exactly match the ID
                 // token `sub`; otherwise the response MUST NOT be used. Without this
@@ -1199,7 +1207,7 @@ final class OidcProtocol implements ProtocolInterface
             }
             $body['code_verifier'] = $verifier;
         }
-        return $this->tokenRequest($disco, $body);
+        return $this->tokenRequest($disco, $body, $this->dpop);
     }
 
     /**
@@ -1210,14 +1218,14 @@ final class OidcProtocol implements ProtocolInterface
      * having one place for it means a private_key_jwt or mTLS setup works for both
      * without being wired twice.
      */
-    private function tokenRequest(array $disco, array $body): array
+    private function tokenRequest(array $disco, array $body, ?DPoP $dpop = null): array
     {
         $method = $this->clientAuth->method($disco);
         $endpoint = $this->clientAuth->tokenEndpoint($disco, $method);
         if ($endpoint === '') {
             throw new \RuntimeException('OIDC: discovery has no usable token_endpoint');
         }
-        return $this->postToEndpoint($disco, $endpoint, $body);
+        return $this->postToEndpoint($disco, $endpoint, $body, $dpop);
     }
 
     /**
@@ -1228,22 +1236,42 @@ final class OidcProtocol implements ProtocolInterface
      * client exactly the same way, so a private_key_jwt or mTLS setup works for both
      * without being wired twice.
      */
-    private function postToEndpoint(array $disco, string $endpoint, array $body): array
+    private function postToEndpoint(array $disco, string $endpoint, array $body, ?DPoP $dpop = null): array
     {
-        $headers = [
-            'Content-Type: application/x-www-form-urlencoded',
-            'Accept: application/json',
-        ];
-        $curlOptions = [];
         $method = $this->clientAuth->method($disco);
-        $this->clientAuth->apply($disco, $method, $body, $headers, $curlOptions);
-
-        $resp = $this->curl($endpoint, http_build_query($body), $headers, $curlOptions);
-        $json = json_decode($resp, true);
-        if (!is_array($json) || isset($json['error'])) {
-            throw new \RuntimeException('OIDC: ' . $endpoint . ' returned: ' . ($json['error'] ?? 'an invalid response'));
+        $nonce = '';
+        // A DPoP server may want a nonce of its own first (RFC 9449 section 8): it says so
+        // with use_dpop_nonce and a DPoP-Nonce header, and the request is made once more.
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            // Rebuilt each time: a client assertion is single-use (its jti), so a retry
+            // carrying the same one would be refused as a replay.
+            $form = $body;
+            $headers = [
+                'Content-Type: application/x-www-form-urlencoded',
+                'Accept: application/json',
+            ];
+            $curlOptions = [];
+            $this->clientAuth->apply($disco, $method, $form, $headers, $curlOptions);
+            if ($dpop !== null) {
+                $headers[] = 'DPoP: ' . $dpop->proof('POST', $endpoint, $nonce);
+            }
+            [$status, $responseHeaders, $resp] = $this->request($endpoint, http_build_query($form), $headers, $curlOptions);
+            $json = json_decode($resp, true);
+            if (
+                $dpop !== null && $attempt === 1 && $nonce === ''
+                && is_array($json) && ($json['error'] ?? '') === 'use_dpop_nonce'
+                && ($responseHeaders['dpop-nonce'] ?? '') !== ''
+            ) {
+                $nonce = $responseHeaders['dpop-nonce'];
+                continue;
+            }
+            if ($status < 200 || $status >= 300 || !is_array($json) || isset($json['error'])) {
+                throw new \RuntimeException('OIDC: ' . $endpoint . ' returned: '
+                    . (is_array($json) && isset($json['error']) ? $json['error'] : 'HTTP ' . $status));
+            }
+            return $json;
         }
-        return $json;
+        throw new \RuntimeException('OIDC: ' . $endpoint . ' kept asking for a new DPoP nonce');
     }
 
     /** The client authentication method in force against this IdP (for diagnostics). */
@@ -1261,13 +1289,10 @@ final class OidcProtocol implements ProtocolInterface
      * with required groups configured that is a refusal nobody can explain. So a
      * response we cannot use says so, and a signed one is simply verified and used.
      */
-    private function fetchUserInfo(array $disco, string $accessToken): array
+    private function fetchUserInfo(array $disco, string $accessToken, string $tokenType = ''): array
     {
         try {
-            $resp = $this->httpGet((string)$disco['userinfo_endpoint'], [
-                'Authorization: Bearer ' . $accessToken,
-                'Accept: application/json, application/jwt',
-            ]);
+            $resp = $this->userInfoRequest((string)$disco['userinfo_endpoint'], $accessToken, $tokenType);
         } catch (\Throwable $e) {
             syslog(LOG_WARNING, 'os-sso oidc: the userinfo request failed: ' . $e->getMessage());
             return [];
@@ -1282,6 +1307,42 @@ final class OidcProtocol implements ProtocolInterface
             syslog(LOG_WARNING, 'os-sso oidc: unusable userinfo response: ' . $e->getMessage());
             return [];
         }
+    }
+
+    /**
+     * The userinfo request, presenting the token the way it was issued.
+     *
+     * A DPoP-bound token (token_type DPoP) goes as `Authorization: DPoP` with a fresh proof
+     * naming this request and the token (ath); a resource server may ask for its own nonce
+     * once, like the token endpoint. Anything else goes as a bearer token -- including when
+     * DPoP was asked for and the IdP issued a plain bearer token anyway.
+     */
+    private function userInfoRequest(string $endpoint, string $accessToken, string $tokenType): string
+    {
+        $accept = 'Accept: application/json, application/jwt';
+        if ($this->dpop === null || strcasecmp($tokenType, 'DPoP') !== 0) {
+            return $this->httpGet($endpoint, ['Authorization: Bearer ' . $accessToken, $accept]);
+        }
+        $nonce = '';
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            [$status, $headers, $body] = $this->request($endpoint, null, [
+                'Authorization: DPoP ' . $accessToken,
+                'DPoP: ' . $this->dpop->proof('GET', $endpoint, $nonce, $accessToken),
+                $accept,
+            ]);
+            if (
+                $status === 401 && $attempt === 1 && ($headers['dpop-nonce'] ?? '') !== ''
+                && stripos($headers['www-authenticate'] ?? '', 'use_dpop_nonce') !== false
+            ) {
+                $nonce = $headers['dpop-nonce'];
+                continue;
+            }
+            if ($status < 200 || $status >= 300) {
+                throw new \RuntimeException('OIDC: HTTP ' . $status . ' from ' . $endpoint);
+            }
+            return $body;
+        }
+        throw new \RuntimeException('OIDC: ' . $endpoint . ' kept asking for a new DPoP nonce');
     }
 
     /**
@@ -1365,6 +1426,22 @@ final class OidcProtocol implements ProtocolInterface
      */
     private function curl(string $url, ?string $postBody, array $headers, array $extraOptions = []): string
     {
+        [$httpCode, , $resp] = $this->request($url, $postBody, $headers, $extraOptions);
+        if ($httpCode < 200 || $httpCode >= 300) {
+            throw new \RuntimeException('OIDC: HTTP ' . $httpCode . ' from ' . $url);
+        }
+        return $resp;
+    }
+
+    /**
+     * One HTTP request, answered whatever its status: [status, headers, body], header
+     * names lowercased. For the callers that read an error response (a DPoP nonce comes
+     * with a 400 or a 401); everything else goes through curl(), which refuses non-2xx.
+     *
+     * @return array{0:int,1:array<string,string>,2:string}
+     */
+    private function request(string $url, ?string $postBody, array $headers, array $extraOptions = []): array
+    {
         if (stripos($url, 'https://') !== 0) {
             throw new \RuntimeException('OIDC: refusing non-https endpoint ' . $url);
         }
@@ -1390,18 +1467,23 @@ final class OidcProtocol implements ProtocolInterface
         if (!empty($extraOptions)) {
             curl_setopt_array($ch, $extraOptions);
         }
+        $responseHeaders = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, string $line) use (&$responseHeaders): int {
+            $parts = explode(':', $line, 2);
+            if (count($parts) === 2) {
+                $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+            }
+            return strlen($line);
+        });
         $resp = curl_exec($ch);
         $err = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         if ($resp === false) {
             throw new \RuntimeException('OIDC: HTTP request failed: ' . $err);
         }
-        if ($httpCode < 200 || $httpCode >= 300) {
-            throw new \RuntimeException('OIDC: HTTP ' . $httpCode . ' from ' . $url);
-        }
-        return (string)$resp;
+        return [$httpCode, $responseHeaders, (string)$resp];
     }
 
     private function randomToken(int $bytes = 32): string

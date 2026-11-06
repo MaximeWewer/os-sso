@@ -344,6 +344,28 @@ if [ "$IDP" = "keycloak" ]; then
     asjson '{"sso_form_post":"","sso_jarm":""}'
 fi
 
+# --- 2e. DPoP-bound access token (RFC 9449) ----------------------------------------
+# Keycloak is told to require DPoP for this client. With DPoP on, the token request and
+# the userinfo call both carry proofs: the login passes and no userinfo failure is
+# logged (a DPoP-bound token presented as Bearer would be refused there). Off, the token
+# request itself is refused.
+if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
+    echo ">>> case 2e: DPoP-bound access token"
+    kcadm() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
+    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
+    KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
+    kcadm update "clients/$KCID" -r opnsense -s 'attributes."dpop.bound.access.tokens"=true' >/dev/null 2>&1
+    asjson '{"sso_dpop":"1"}'
+    vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+    UI_BEFORE=$(vm "grep -ah \"userinfo request failed\" /var/log/system/system_*.log /var/log/audit/audit_*.log | grep -vc COMMAND")
+    check "a DPoP-bound login passes where the IdP requires DPoP" 302 "$(login "$W/jar-dpop1")"
+    UI_AFTER=$(vm "grep -ah \"userinfo request failed\" /var/log/system/system_*.log /var/log/audit/audit_*.log | grep -vc COMMAND")
+    check "and the userinfo call is accepted with its DPoP proof" "$UI_BEFORE" "$UI_AFTER"
+    asjson '{"sso_dpop":""}'
+    check "without DPoP the token request is refused" 400 "$(login "$W/jar-dpop2")"
+    kcadm update "clients/$KCID" -r opnsense -s 'attributes."dpop.bound.access.tokens"=false' >/dev/null 2>&1
+fi
+
 # --- 10b. front-channel logout --------------------------------------------------
 # What Entra ID offers instead of back-channel: a sign-out at the IdP loads our page in
 # an iframe with the IdP session id. Keycloak is set up for it (setup-keycloak.sh); the

@@ -469,6 +469,7 @@ class OidcController extends ApiControllerBase
             'use_par' => $auth->ssoUsePar,
             'signed_request' => $auth->ssoSignedRequest,
             'jarm' => $auth->ssoJarm,
+            'dpop' => $auth->ssoDpop,
             'required_acr' => $auth->ssoRequiredAcr,
             'extra_params' => $auth->ssoExtraParams,
             'claims_request' => $auth->ssoClaimsRequest,

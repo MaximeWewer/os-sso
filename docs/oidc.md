@@ -68,6 +68,10 @@ endpoint is used automatically.
   in a JWT it signs (`query.jwt`, or `form_post.jwt` with form_post), verified with its
   keys before anything in it is used. Once on, an unsigned response is refused rather
   than read the plain way.
+- **DPoP-bound access token** (RFC 9449) - the access token is bound to a key the
+  firewall holds, generated per login and never stored: the token request and the
+  userinfo call carry DPoP proofs, and an intercepted token is useless alone. A server
+  nonce (`DPoP-Nonce`) is honoured. Nothing to register at the IdP.
 - **Extra authorization parameters** - for things like `prompt=login`.
 - **Requested claims** - the OIDC `claims` request parameter, as JSON, for an individual
   claim the IdP does not send by default and no scope covers:
@@ -94,9 +98,9 @@ token or a signed userinfo response declaring another kind (`logout+jwt`, `at+jw
 `logout+jwt` or the generic `JWT`. A token without `typ` is accepted, as most IdPs send.
 
 **Deliberately absent.** **Refresh tokens** would be an offline credential for calls
-os-sso never makes; **DPoP** binds access tokens the firewall does not keep; and an
-**encrypted ID token or userinfo response** (JWE) is a decryption key to hold for
-something that already travels inside TLS to a back-channel endpoint.
+os-sso never makes; and an **encrypted ID token or userinfo response** (JWE) is a
+decryption key to hold for something that already travels inside TLS to a back-channel
+endpoint.
 
 ## Providers
 

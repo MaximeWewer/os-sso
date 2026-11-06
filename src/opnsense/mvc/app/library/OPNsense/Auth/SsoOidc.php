@@ -41,6 +41,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoClaimsRequest = null;
     public $ssoSignedRequest = false;
     public $ssoJarm = false;
+    public $ssoDpop = false;
     public $ssoSessionLifetime = 0;
     public $ssoScimEnabled = false;
     public $ssoScimToken = null;
@@ -100,6 +101,7 @@ class SsoOidc extends Local implements IAuthConnector
         $this->ssoUsePar = !empty($config['sso_use_par']);
         $this->ssoSignedRequest = !empty($config['sso_signed_request']);
         $this->ssoJarm = !empty($config['sso_jarm']);
+        $this->ssoDpop = !empty($config['sso_dpop']);
         $this->ssoGraphOverage = !empty($config['sso_graph_overage']);
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
             $this->ssoMaxAge = (int)$config['sso_max_age'];
@@ -202,6 +204,13 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'Response Mode), verified with its keys before anything in it is used: the code, the state '
                     . 'and the issuer can no longer be altered or swapped on the way back. Combines with form_post '
                     . '(form_post.jwt). Once on, an unsigned response is refused.'),
+                'type' => 'checkbox',
+            ],
+            'sso_dpop' => [
+                'name' => gettext('DPoP-bound access token'),
+                'help' => gettext('Bind the access token to a key the firewall holds (DPoP, RFC 9449), so the '
+                    . 'token alone is useless to anyone who intercepts it. The key is generated per login and '
+                    . 'never stored; nothing to register at the IdP. Needs an IdP that supports DPoP.'),
                 'type' => 'checkbox',
             ],
             'sso_required_acr' => [
