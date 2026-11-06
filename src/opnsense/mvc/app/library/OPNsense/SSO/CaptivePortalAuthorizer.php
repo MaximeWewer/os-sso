@@ -36,8 +36,12 @@ final class CaptivePortalAuthorizer
      * @throws \RuntimeException on an unknown zone, an unbound provider, a failed
      *                           group check, or a failed authorization write
      */
-    public static function authorize(string $zoneId, string $providerName, NormalizedIdentity $identity, string $clientIp): array
-    {
+    public static function authorize(
+        string $zoneId,
+        string $providerName,
+        NormalizedIdentity $identity,
+        string $clientIp
+    ): array {
         $zoneId = preg_replace('/[^0-9]/', '', $zoneId);
         if ($zoneId === '') {
             throw new \RuntimeException('invalid captive portal zone');

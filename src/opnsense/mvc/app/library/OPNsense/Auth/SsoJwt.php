@@ -101,7 +101,9 @@ class SsoJwt extends Local implements IAuthConnector
             $this->ssoJwtMaxAge = (int)$config['sso_jwt_max_age'];
         }
         $this->ssoJwtSingleUse = !empty($config['sso_jwt_single_use']);
-        $this->ssoJwtTrustedProxies = array_filter(array_map('trim', explode(',', $config['sso_jwt_trusted_proxies'] ?? '')));
+        $this->ssoJwtTrustedProxies = array_filter(
+            array_map('trim', explode(',', $config['sso_jwt_trusted_proxies'] ?? ''))
+        );
         $this->ssoRequiredGroups = array_filter(array_map('trim', explode(',', $config['sso_required_groups'] ?? '')));
         $this->ssoDefaultGroups = array_filter(array_map('trim', explode(',', $config['sso_default_groups'] ?? '')));
     }
@@ -146,17 +148,20 @@ class SsoJwt extends Local implements IAuthConnector
                 'name' => gettext('JWKS URL'),
                 'help' => gettext('HTTPS JWKS endpoint of the signer (preferred, supports key rotation).'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
+                'validate' => fn($v) => empty($v)
+                    || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
                     ? [] : [gettext('JWKS URL must be a valid https URL.')],
             ],
             'sso_jwt_public_key' => [
                 'name' => gettext('Static public key (PEM)'),
-                'help' => gettext('Alternative to JWKS: the signer PEM public key. The first algorithm below must match it.'),
+                'help' => gettext('Alternative to JWKS: the signer PEM public key. The first algorithm below '
+                    . 'must match it.'),
                 'type' => 'text',
             ],
             'sso_jwt_algorithms' => [
                 'name' => gettext('Algorithms'),
-                'help' => gettext('Comma separated, asymmetric only (RS256/ES256/PS256...). Symmetric HS* is rejected.'),
+                'help' => gettext('Comma separated, asymmetric only (RS256/ES256/PS256...). Symmetric HS* is '
+                    . 'rejected.'),
                 'type' => 'text',
                 'default' => join(',', $this->ssoJwtAlgorithms),
             ],
@@ -216,7 +221,8 @@ class SsoJwt extends Local implements IAuthConnector
             ],
             'sso_create_users' => [
                 'name' => gettext('Automatic user creation'),
-                'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local password.'),
+                'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local '
+                    . 'password.'),
                 'type' => 'checkbox',
             ],
             'sso_strict_binding' => [
@@ -321,7 +327,8 @@ class SsoJwt extends Local implements IAuthConnector
                 'help' => gettext('Same-site relative path where users land after login (e.g. /ui/dashboard). '
                     . 'Leave empty for the requested page or the dashboard.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || ($v[0] === '/' && !str_starts_with($v, '//') && strpbrk($v, "\\\r\n\t") === false)
+                'validate' => fn($v) => empty($v)
+                    || ($v[0] === '/' && !str_starts_with($v, '//') && strpbrk($v, "\\\r\n\t") === false)
                     ? [] : [gettext('Landing URL must be a same-site path starting with "/".')],
             ],
             // Upgrade the PEM input to a textarea (legacy Servers form renders text only).

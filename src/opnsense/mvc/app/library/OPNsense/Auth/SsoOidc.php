@@ -137,7 +137,8 @@ class SsoOidc extends Local implements IAuthConnector
         return [
             'sso_issuer' => [
                 'name' => gettext('Issuer URL'),
-                'help' => gettext('OIDC issuer base URL (the part before /.well-known/openid-configuration).') . ' ' . $callback,
+                'help' => gettext('OIDC issuer base URL (the part before /.well-known/openid-configuration).')
+                    . ' ' . $callback,
                 'type' => 'text',
                 'validate' => fn($v) => filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
                     ? [] : [gettext('Issuer must be a valid https URL.')],
@@ -163,7 +164,8 @@ class SsoOidc extends Local implements IAuthConnector
             ],
             'sso_use_pkce' => [
                 'name' => gettext('Use PKCE (S256)'),
-                'help' => gettext('Proof Key for Code Exchange. Recommended; keep enabled unless the IdP does not support it.'),
+                'help' => gettext('Proof Key for Code Exchange. Recommended; keep enabled unless the IdP does '
+                    . 'not support it.'),
                 'type' => 'checkbox',
                 'default' => '1',
             ],
@@ -250,8 +252,10 @@ class SsoOidc extends Local implements IAuthConnector
                     . '{"id_token": {"groups": {"essential": true}}}. For a claim the IdP would not send by '
                     . 'default and no scope covers. Only "id_token" and "userinfo" members are accepted.'),
                 'type' => 'text',
-                'validate' => fn($v) => trim((string)$v) === '' || \OPNsense\SSO\Protocol\OidcProtocol::claimsRequest((string)$v) !== null
-                    ? [] : [gettext('Requested claims must be a JSON object with only "id_token" and/or "userinfo" objects.')],
+                'validate' => fn($v) => trim((string)$v) === ''
+                    || \OPNsense\SSO\Protocol\OidcProtocol::claimsRequest((string)$v) !== null
+                    ? [] : [gettext('Requested claims must be a JSON object with only "id_token" and/or '
+                        . '"userinfo" objects.')],
             ],
             'sso_token_auth_method' => [
                 'name' => gettext('Client authentication method'),
@@ -359,7 +363,8 @@ class SsoOidc extends Local implements IAuthConnector
             ],
             'sso_create_users' => [
                 'name' => gettext('Automatic user creation'),
-                'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local password.'),
+                'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local '
+                    . 'password.'),
                 'type' => 'checkbox',
             ],
             'sso_strict_binding' => [
@@ -466,7 +471,8 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'without it the URL is derived from the request Host header, which the client controls. '
                     . 'Set it to exactly what the IdP has registered (mind a reverse proxy or port-forward).'),
                 'type' => 'text',
-                'validate' => fn($v) => !empty($v) && filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
+                'validate' => fn($v) => !empty($v)
+                    && filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
                     ? [] : [gettext('Base URL is required and must be a valid https URL.')],
             ],
             'sso_login_redirect' => [
@@ -475,7 +481,8 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'when no specific page was requested (e.g. /ui/dashboard or /index.php). '
                     . 'Leave empty to use the originally requested page, or the dashboard.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || ($v[0] === '/' && !str_starts_with($v, '//') && strpbrk($v, "\\\r\n\t") === false)
+                'validate' => fn($v) => empty($v)
+                    || ($v[0] === '/' && !str_starts_with($v, '//') && strpbrk($v, "\\\r\n\t") === false)
                     ? [] : [gettext('Landing URL must be a same-site path starting with "/".')],
             ],
             // Hidden carrier: JS shows the live redirect/callback URL under Base URL.

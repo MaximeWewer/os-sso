@@ -47,7 +47,10 @@ final class SessionEstablisher
         $userNode = $this->findEnabledUser($cnf, $localUsername);
         if ($userNode === null) {
             throw new \RuntimeException(
-                sprintf("SSO: refusing to establish session, local user '%s' is missing, disabled or expired", $localUsername)
+                sprintf(
+                    "SSO: refusing to establish session, local user '%s' is missing, disabled or expired",
+                    $localUsername
+                )
             );
         }
 

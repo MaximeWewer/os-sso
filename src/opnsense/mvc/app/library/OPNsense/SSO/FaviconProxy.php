@@ -99,11 +99,13 @@ final class FaviconProxy
 
         // 2. parse the home page for a <link rel="icon" href="...">
         $home = self::get($origin . '/', $origin, $resolve);
-        if ($home !== null && preg_match(
-            '/<link[^>]+rel=["\'][^"\']*icon[^"\']*["\'][^>]*>/i',
-            $home['data'],
-            $m
-        ) && preg_match('/href=["\']([^"\']+)["\']/i', $m[0], $h)) {
+        if (
+            $home !== null && preg_match(
+                '/<link[^>]+rel=["\'][^"\']*icon[^"\']*["\'][^>]*>/i',
+                $home['data'],
+                $m
+            ) && preg_match('/href=["\']([^"\']+)["\']/i', $m[0], $h)
+        ) {
             $href = self::resolveHref($h[1], $origin);
             if ($href !== null) {
                 $icon = self::asIcon(self::get($href, $origin, $resolve));

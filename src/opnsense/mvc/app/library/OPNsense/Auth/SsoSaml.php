@@ -139,7 +139,8 @@ class SsoSaml extends Local implements IAuthConnector
                     . 'read from it (cached 24h) -- which also means an IdP signing-key rotation is picked '
                     . 'up on its own. Anything you fill in by hand wins over the document.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
+                'validate' => fn($v) => empty($v)
+                    || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
                     ? [] : [gettext('Metadata URL must be a valid https URL.')],
             ],
             'sso_idp_metadata_cert' => [
@@ -162,14 +163,17 @@ class SsoSaml extends Local implements IAuthConnector
                 'help' => gettext('IdP Single Sign-On endpoint (HTTP-Redirect binding). '
                     . 'Required unless an IdP metadata URL is set.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
+                'validate' => fn($v) => empty($v)
+                    || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
                     ? [] : [gettext('SSO URL must be a valid https URL.')],
             ],
             'sso_idp_slo_url' => [
                 'name' => gettext('IdP SLO URL'),
-                'help' => gettext('IdP Single Logout endpoint (HTTP-Redirect). Leave empty to disable SLO; defaults to the SSO URL on Keycloak.'),
+                'help' => gettext('IdP Single Logout endpoint (HTTP-Redirect). Leave empty to disable SLO; '
+                    . 'defaults to the SSO URL on Keycloak.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
+                'validate' => fn($v) => empty($v)
+                    || (filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0)
                     ? [] : [gettext('SLO URL must be a valid https URL.')],
             ],
             'sso_idp_x509' => [
@@ -193,7 +197,8 @@ class SsoSaml extends Local implements IAuthConnector
             ],
             'sso_nameid_format' => [
                 'name' => gettext('NameID format'),
-                'help' => gettext('Requested NameID format. "persistent" suits most setups; some IdPs need "unspecified" or "emailAddress".'),
+                'help' => gettext('Requested NameID format. "persistent" suits most setups; some IdPs need '
+                    . '"unspecified" or "emailAddress".'),
                 'type' => 'text',
                 'default' => $this->ssoNameIdFormat,
             ],
@@ -223,7 +228,8 @@ class SsoSaml extends Local implements IAuthConnector
             ],
             'sso_want_messages_signed' => [
                 'name' => gettext('Require signed response'),
-                'help' => gettext('Require the SAML Response (message) itself to be signed, not only the assertion. Enable when the IdP supports it (mitigates signature-wrapping).'),
+                'help' => gettext('Require the SAML Response (message) itself to be signed, not only the '
+                    . 'assertion. Enable when the IdP supports it (mitigates signature-wrapping).'),
                 'type' => 'checkbox',
             ],
             'sso_allow_sha1' => [
@@ -335,7 +341,8 @@ class SsoSaml extends Local implements IAuthConnector
             ],
             'sso_create_users' => [
                 'name' => gettext('Automatic user creation'),
-                'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local password.'),
+                'help' => gettext('Discouraged on a firewall. Persists new users to config.xml with no local '
+                    . 'password.'),
                 'type' => 'checkbox',
             ],
             'sso_strict_binding' => [
@@ -442,7 +449,8 @@ class SsoSaml extends Local implements IAuthConnector
                     . 'the request Host header, which the client controls. Set it to the public URL the IdP '
                     . 'reaches (mind a reverse proxy or port-forward) so the signed Destination/ACS match.'),
                 'type' => 'text',
-                'validate' => fn($v) => !empty($v) && filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
+                'validate' => fn($v) => !empty($v)
+                    && filter_var($v, FILTER_VALIDATE_URL) && stripos($v, 'https://') === 0
                     ? [] : [gettext('Base URL is required and must be a valid https URL.')],
             ],
             'sso_login_redirect' => [
@@ -451,7 +459,8 @@ class SsoSaml extends Local implements IAuthConnector
                     . 'when no specific page was requested (e.g. /ui/dashboard or /index.php). '
                     . 'Leave empty to use the originally requested page, or the dashboard.'),
                 'type' => 'text',
-                'validate' => fn($v) => empty($v) || ($v[0] === '/' && !str_starts_with($v, '//') && strpbrk($v, "\\\r\n\t") === false)
+                'validate' => fn($v) => empty($v)
+                    || ($v[0] === '/' && !str_starts_with($v, '//') && strpbrk($v, "\\\r\n\t") === false)
                     ? [] : [gettext('Landing URL must be a same-site path starting with "/".')],
             ],
             // The legacy Servers form only renders text/dropdown/checkbox, so this
