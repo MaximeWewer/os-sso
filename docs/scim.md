@@ -42,7 +42,7 @@ them into and out of groups.
 
 `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas`, `/Users` (GET/POST/PUT/PATCH/
 DELETE, pagination, `count=0` as a total-only probe) and `/Groups` (GET plus PATCH of
-membership).
+membership; POST, PUT and DELETE for a provider allowed to create groups, below).
 
 - `POST /Users` answers **201** when it created the account, **200** when it adopted one
   already carrying the `userName`, **409** on a repeated `externalId`.
@@ -67,5 +67,23 @@ This is a write API into a firewall's account database:
   and API keys;
 - a **group carrying any firewall ACL privileges** takes no membership from SCIM.
 
-Groups themselves are never created or deleted either - the client fills the ones that
-exist.
+By default, groups themselves are never created or deleted either - the client fills the
+ones that exist.
+
+## Letting the IdP create groups
+
+Entra's group provisioning and Okta's Push Groups create the groups they push, and log an
+error for each one the firewall refuses. **SCIM may create groups**, per authentication
+server and off by default, lets them, on these terms:
+
+- a created group has **no privilege at all**: what its members may do stays your
+  decision, granted in System > Access > Groups;
+- the IdP may rename, replace (`PUT`) or delete **only the groups it created** itself,
+  and only while they carry no privilege - once you grant one, the group is yours and
+  its membership leaves SCIM's reach like any other privileged group;
+- a directory name core does not accept as a group name (`VPN Users`) becomes one it
+  does (`VPN_Users`, at most 32 characters); the directory still sees, and finds the
+  group by, its own name. A name already taken on the firewall is a **409**.
+
+Which provider created which group is kept under `OPNsense/SSO` in config.xml, so it
+follows HA sync like the account records.

@@ -109,7 +109,7 @@ e2e/oidc.sh                                    # or one suite on its own
 | `saml.sh` | host | 16-21 | per-provider EntityID/ACS/SLO, assertion replay, IdP-initiated (off/on/off - Keycloak only), POST binding, metadata import, SLO |
 | `portal.sh` | host | 11 | a captive client signing in, being authorized in its zone, and being disconnected again when its grant is revoked |
 | `vpn-client.sh` | host | 5 | a real OpenVPN client: deferred auth, WEB_AUTH url, tunnel up after the browser login |
-| `scim.sh` | host | 46 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, session revocation on deactivate, and Authentik's real SCIM client |
+| `scim.sh` | host | 60 | discovery, bearer + source gate, user lifecycle, filters, the four refusals, group creation for a provider allowed to, session revocation on deactivate, and Authentik's real SCIM client |
 | `jwt.sh` | VM | 20 | source gate, signature/aud, `iat`, max-age, single-use, group mapping, explicit token typing |
 | `cp.sh` | VM | 8 | the authorizer gates, CORS scoping, and a real configd allow |
 | `vpn.sh` | VM | 23 | the hook and the verdict writer, profile resolution, IP binding, single-use session ids, username enforcement, the common name a revocation kills, stale-session sweep |

@@ -47,6 +47,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoScimEnabled = false;
     public $ssoScimToken = null;
     public $ssoScimTrusted = [];
+    public $ssoScimCreateGroups = false;
     public $ssoServices = [];
     public $ssoCreateUsers = false;
     public $ssoStrictBinding = false;
@@ -113,6 +114,7 @@ class SsoOidc extends Local implements IAuthConnector
         $this->ssoStrictBinding = !empty($config['sso_strict_binding']);
         $this->ssoScimEnabled = !empty($config['sso_scim_enabled']);
         $this->ssoScimTrusted = array_filter(array_map('trim', explode(',', $config['sso_scim_trusted'] ?? '')));
+        $this->ssoScimCreateGroups = !empty($config['sso_scim_create_groups']);
         $this->ssoDeprovision = !empty($config['sso_deprovision']);
         if (isset($config['sso_session_lifetime']) && $config['sso_session_lifetime'] !== '') {
             $this->ssoSessionLifetime = (int)$config['sso_session_lifetime'];
@@ -435,6 +437,15 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'every request rather than accepting any source. Matched on the direct TCP peer, never '
                     . 'on a forwardable header.'),
                 'type' => 'text',
+            ],
+            'sso_scim_create_groups' => [
+                'name' => gettext('SCIM may create groups'),
+                'help' => gettext('Let this IdP create groups over SCIM (Entra group provisioning, Okta Push '
+                    . 'Groups) instead of only filling the ones that exist. A group it creates starts with no '
+                    . 'privilege - granting it any stays your decision - and it may rename, replace or delete '
+                    . 'only the groups it created, while they carry no privilege. A directory name core does '
+                    . 'not accept as a group name ("VPN Users") is kept for SCIM and becomes VPN_Users here.'),
+                'type' => 'checkbox',
             ],
             'sso_button_label' => [
                 'name' => gettext('Login button label'),

@@ -283,6 +283,62 @@ $resource = $groups()->get('2002');
 eq('staff', $resource['displayName'], 'the group resource names the group');
 eq(['2101'], array_column($resource['members'], 'value'), 'and lists only the members we own');
 
+T::group('ScimGroups: creating groups, for a provider allowed to');
+
+$root = Tree::build([
+    ['name' => 'ours', 'uid' => '2100', 'scrambled_password' => '1', 'scim_ref' => 'kc|e1'],
+    ['name' => 'handmade', 'uid' => '2102', 'password' => '$2y$10$abcdefghijklmnopqrstuv'],
+], [
+    ['name' => 'admins', 'gid' => '1999'],
+    ['name' => 'staff', 'gid' => '2000'],
+]);
+$creator = fn(string $provider = 'kc') => new ScimGroups($provider, $base, null, true);
+
+throws(fn() => $groups()->create(['displayName' => 'x']), 'not created', 'by default a group is not created');
+throws(fn() => $groups()->replace('2000', ['displayName' => 'staff']), 'not created', 'nor replaced');
+throws(fn() => $groups()->delete('2000'), 'not created', 'nor deleted');
+
+$made = $creator()->create(['displayName' => 'VPN Users', 'members' => [['value' => '2100'], ['value' => '2102']]]);
+eq('VPN Users', $made['displayName'] ?? null, 'the directory keeps the name it gave');
+eq('2001', $made['id'] ?? null, 'with the first free gid from 2000');
+$node = null;
+foreach ($root->system->group as $g) {
+    if ((string)$g->gid === '2001') {
+        $node = $g;
+    }
+}
+eq('VPN_Users', (string)($node->name ?? ''), 'the firewall group has a name core accepts');
+eq(0, count($node->priv ?? []), 'and no privilege at all');
+truthy((string)($node->attributes()['uuid'] ?? '') !== '', 'and a uuid, so core can edit it');
+eq(['2100'], Tree::members($root, 'VPN_Users'), 'only the accounts this provider owns become members');
+eq(1, $creator()->search('displayName eq "VPN Users"', 1, 10)['totalResults'], 'found again by its directory name');
+throws(fn() => $creator()->create(['displayName' => 'VPN Users']), 'already exists', 'a second one is a conflict');
+throws(fn() => $creator()->create(['displayName' => 'staff']), 'already exists', 'so is the name of an existing group');
+throws(fn() => $creator()->create(['displayName' => '']), 'required', 'a displayName is required');
+
+$creator()->patch('2001', [['op' => 'replace', 'path' => 'displayName', 'value' => 'VPN Staff']]);
+eq('VPN Staff', $creator()->get('2001')['displayName'], 'its creator may rename it');
+eq([], Tree::members($root, 'VPN_Users'), 'renamed on the firewall too');
+eq(['2100'], Tree::members($root, 'VPN_Staff'), 'with its members');
+$creator()->patch('2001', [['op' => 'replace', 'value' => ['members' => []]]]);
+eq([], Tree::members($root, 'VPN_Staff'), 'a replace without a path takes the members out of the value');
+$creator()->patch('2001', [['op' => 'replace', 'value' => ['displayName' => 'VPN Staff']]]);
+eq([], Tree::members($root, 'VPN_Staff'), 'and a displayName alone is not read as members');
+$creator()->replace('2001', ['displayName' => 'VPN Staff', 'members' => [['value' => '2100']]]);
+eq(['2100'], Tree::members($root, 'VPN_Staff'), 'PUT replaces the members');
+
+throws(fn() => $creator()->patch('2000', [['op' => 'replace', 'path' => 'displayName', 'value' => 'x']]),
+    'keeps its name', 'a group it did not create keeps its name');
+throws(fn() => $creator()->delete('2000'), 'not created over SCIM', 'and is not deleted');
+throws(fn() => $creator('other')->delete('2001'), 'not created over SCIM', 'nor is one another provider created');
+
+$node->addChild('priv', 'page-dashboard-all');
+throws(fn() => $creator()->delete('2001'), 'ACL privileges', 'once granted a privilege, it is out of reach');
+unset($node->priv);
+nothrow(fn() => $creator()->delete('2001'), 'without one, its creator deletes it');
+throws(fn() => $creator()->get('2001'), 'not found', 'and it is gone');
+eq(0, count($root->OPNsense->SSO->scimgroups->group ?? []), 'with its record');
+
 T::group('ScimFilter: what a directory may ask for');
 
 use OPNsense\SSO\Scim\ScimFilter;

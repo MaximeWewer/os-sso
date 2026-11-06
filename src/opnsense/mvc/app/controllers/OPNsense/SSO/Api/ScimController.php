@@ -135,12 +135,20 @@ class ScimController extends ApiControllerBase
         });
     }
 
-    /** /api/sso/scim/Groups[/<id>] -- GET and PATCH (membership only) */
+    /**
+     * /api/sso/scim/Groups[/<id>] -- GET and PATCH; POST, PUT and DELETE only for a
+     * provider allowed to create groups (see ScimGroups for the terms).
+     */
     public function groupsAction($id = null)
     {
         return $this->run(function () use ($id) {
             $provider = $this->authenticate();
-            $groups = new ScimGroups($provider, $this->baseUrl());
+            $groups = new ScimGroups(
+                $provider,
+                $this->baseUrl(),
+                null,
+                !empty($this->authenticated->ssoScimCreateGroups)
+            );
             $id = (string)($id ?? '');
 
             switch ($this->method()) {
@@ -152,12 +160,18 @@ class ScimController extends ApiControllerBase
                     $this->requireResource($id);
                     return $groups->patch($id, $this->operations());
                 case 'POST':
+                    $this->requireCollection($id);
+                    $resource = $groups->create($this->body());
+                    $this->response->setStatusCode(201, 'Created');
+                    return $resource;
                 case 'PUT':
+                    $this->requireResource($id);
+                    return $groups->replace($id, $this->body());
                 case 'DELETE':
-                    throw new ScimError(
-                        403,
-                        'groups are not created, replaced or deleted over SCIM; only their membership is'
-                    );
+                    $this->requireResource($id);
+                    $groups->delete($id);
+                    $this->response->setStatusCode(204, 'No Content');
+                    return null;
                 default:
                     throw new ScimError(405, 'method not allowed on /Groups');
             }

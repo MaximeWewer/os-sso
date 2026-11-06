@@ -160,6 +160,38 @@ check "a privileged group refuses membership from SCIM" 403 \
     "$(code -H "$AUTH" -H "$CT" -X PATCH "$BASE/Groups/$ADMINS" \
     -d "{\"Operations\":[{\"op\":\"add\",\"path\":\"members\",\"value\":[{\"value\":\"$UID_\"}]}]}")"
 
+echo ">>> case 7b: a provider allowed to create groups"
+# Entra's group provisioning and Okta's Push Groups create the groups they push. Off by
+# default; once on, a created group starts with no privilege and only its creator may
+# rename, replace or delete it -- and only while it still carries none.
+check "POST /Groups is still refused while the option is off" 403 \
+    "$(code -H "$AUTH" -H "$CT" -X POST "$BASE/Groups" -d '{"displayName":"x"}')"
+set_provider "sso_scim_create_groups=1"
+check "a directory group is created" 201 "$(code -H "$AUTH" -H "$CT" -X POST "$BASE/Groups" \
+    -d "{\"displayName\":\"SCIM Pushed\",\"members\":[{\"value\":\"$UID_\"}]}")"
+NEWGID=$(json "['id']")
+check "under the name the directory gave it" "SCIM Pushed" "$(json "['displayName']")"
+# Members reach /etc/group only for accounts with a shell, which SCIM never grants; the
+# group itself does, through core's own sync.
+vm "pw groupshow SCIM_Pushed" | grep -q "^SCIM_Pushed:\*:$NEWGID:" \
+    && ok "as SCIM_Pushed on the firewall, synced to the system" || ko "SCIM_Pushed not on the system"
+check "with no privilege" "" "$(vm "php /home/vagrant/os-sso/test/vagrant/dump_group.php SCIM_Pushed priv" | tr -d '\n')"
+code -H "$AUTH" -G "$BASE/Groups" --data-urlencode 'filter=displayName eq "SCIM Pushed"' >/dev/null
+check "the directory finds it again by its own name" 1 "$(json "['totalResults']")"
+check "a second one is a conflict" 409 "$(code -H "$AUTH" -H "$CT" -X POST "$BASE/Groups" -d '{"displayName":"SCIM Pushed"}')"
+check "renamed by its creator" 200 "$(code -H "$AUTH" -H "$CT" -X PATCH "$BASE/Groups/$NEWGID" \
+    -d '{"Operations":[{"op":"replace","path":"displayName","value":"SCIM Renamed"}]}')"
+check "replaced by PUT" 200 "$(code -H "$AUTH" -H "$CT" -X PUT "$BASE/Groups/$NEWGID" \
+    -d '{"displayName":"SCIM Renamed","members":[]}')"
+check "a group the operator made is not deleted" 403 "$(code -H "$AUTH" -X DELETE "$BASE/Groups/$GID")"
+check "nor renamed" 403 "$(code -H "$AUTH" -H "$CT" -X PATCH "$BASE/Groups/$GID" \
+    -d '{"Operations":[{"op":"replace","path":"displayName","value":"stolen"}]}')"
+check "its own group is deleted" 204 "$(code -H "$AUTH" -X DELETE "$BASE/Groups/$NEWGID")"
+vm "php /home/vagrant/os-sso/test/vagrant/dump_group.php SCIM_Renamed" | grep -q . \
+    && ko "the group is still in config.xml" || ok "gone from config.xml"
+vm "pw groupshow SCIM_Renamed" | grep -q . && ko "the system group is still there" || ok "and from the system"
+set_provider "sso_scim_create_groups="
+
 # --- 8. what SCIM is for ---------------------------------------------------------
 echo ">>> case 8: deactivating over SCIM ends the open sessions"
 # A non-privileged account, or the guards above would (rightly) refuse to touch it.
