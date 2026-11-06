@@ -317,7 +317,11 @@ final class OidcProtocol implements ProtocolInterface
             return null;
         }
         foreach ($decoded as $member => $claims) {
-            if (!in_array($member, ['id_token', 'userinfo'], true) || !is_array($claims) || array_is_list($claims) && $claims !== []) {
+            if (
+                !in_array($member, ['id_token', 'userinfo'], true)
+                || !is_array($claims)
+                || (array_is_list($claims) && $claims !== [])
+            ) {
                 return null;
             }
         }
@@ -416,7 +420,11 @@ final class OidcProtocol implements ProtocolInterface
         // Optionally enrich from userinfo (groups/email often live there).
         $merged = (array)$claims;
         if (!empty($tokens['access_token']) && !empty($disco['userinfo_endpoint'])) {
-            $userInfo = $this->fetchUserInfo($disco, (string)$tokens['access_token'], (string)($tokens['token_type'] ?? ''));
+            $userInfo = $this->fetchUserInfo(
+                $disco,
+                (string)$tokens['access_token'],
+                (string)($tokens['token_type'] ?? '')
+            );
             if (!empty($userInfo)) {
                 // OIDC Core §5.3.2: the UserInfo `sub` MUST exactly match the ID
                 // token `sub`; otherwise the response MUST NOT be used. Without this
@@ -519,7 +527,9 @@ final class OidcProtocol implements ProtocolInterface
             return;
         }
         if (!empty($disco['authorization_response_iss_parameter_supported'])) {
-            throw new \RuntimeException('OIDC: the authorization response has no iss, which this IdP always sends (RFC 9207)');
+            throw new \RuntimeException(
+                'OIDC: the authorization response has no iss, which this IdP always sends (RFC 9207)'
+            );
         }
     }
 
@@ -1169,8 +1179,12 @@ final class OidcProtocol implements ProtocolInterface
      * cache (used once on an unknown kid to pick up a key rotation).
      * @return \Firebase\JWT\Key[]
      */
-    private function jwks(array $disco, bool $force, string $jwt = '', string $algorithmField = 'id_token_signing_alg_values_supported'): array
-    {
+    private function jwks(
+        array $disco,
+        bool $force,
+        string $jwt = '',
+        string $algorithmField = 'id_token_signing_alg_values_supported'
+    ): array {
         if (empty($disco['jwks_uri'])) {
             throw new \RuntimeException('OIDC: discovery has no jwks_uri');
         }
@@ -1283,7 +1297,8 @@ final class OidcProtocol implements ProtocolInterface
             if ($dpop !== null) {
                 $headers[] = 'DPoP: ' . $dpop->proof('POST', $endpoint, $nonce);
             }
-            [$status, $responseHeaders, $resp] = $this->request($endpoint, http_build_query($form), $headers, $curlOptions);
+            [$status, $responseHeaders, $resp] =
+                $this->request($endpoint, http_build_query($form), $headers, $curlOptions);
             $json = json_decode($resp, true);
             if (
                 $dpop !== null && $attempt === 1 && $nonce === ''
@@ -1518,5 +1533,4 @@ final class OidcProtocol implements ProtocolInterface
     {
         return rtrim(strtr(base64_encode(random_bytes($bytes)), '+/', '-_'), '=');
     }
-
 }

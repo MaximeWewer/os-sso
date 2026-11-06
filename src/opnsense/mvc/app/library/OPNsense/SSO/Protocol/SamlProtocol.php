@@ -462,8 +462,12 @@ final class SamlProtocol implements ProtocolInterface
      * SP-initiated Single Logout: build the LogoutRequest redirect URL.
      * @return array{url:string,request_id:string} ('' url if the IdP has no SLO)
      */
-    public function buildLogoutRequest(string $returnTo, string $nameId, string $sessionIndex, string $nameIdFormat): array
-    {
+    public function buildLogoutRequest(
+        string $returnTo,
+        string $nameId,
+        string $sessionIndex,
+        string $nameIdFormat
+    ): array {
         if (empty($this->cfg['idp_slo_url'])) {
             return ['url' => '', 'request_id' => ''];
         }
@@ -993,5 +997,4 @@ final class SamlProtocol implements ProtocolInterface
         }
         return ["x509certMulti" => ["signing" => $certs]];
     }
-
 }
