@@ -64,6 +64,10 @@ endpoint is used automatically.
   the signed object. Register the key at the IdP through the client JWKS URL from the
   diagnostics page; if you upload the certificate instead, leave **Key ID** empty (or
   set it to the id the IdP shows for it), since the IdP names an uploaded key itself.
+- **Signed authorization response** (JARM) - the IdP returns the code, state and issuer
+  in a JWT it signs (`query.jwt`, or `form_post.jwt` with form_post), verified with its
+  keys before anything in it is used. Once on, an unsigned response is refused rather
+  than read the plain way.
 - **Extra authorization parameters** - for things like `prompt=login`.
 - **Requested claims** - the OIDC `claims` request parameter, as JSON, for an individual
   claim the IdP does not send by default and no scope covers:

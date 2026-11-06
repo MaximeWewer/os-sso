@@ -129,7 +129,9 @@ class OidcController extends ApiControllerBase
             // Recover this login's in-flight record by the state the IdP echoes back
             // (single use). Trust the provider recorded at startLogin over any query
             // param, so a crafted callback URL cannot steer which provider validates.
-            $state = (string)($response['state'] ?? '');
+            // With JARM the state sits inside the signed response: read it unverified,
+            // only to find the flow -- the protocol verifies the JWT, then the state.
+            $state = (string)($response['state'] ?? OidcProtocol::peekJarmState((string)($response['response'] ?? '')));
             $flow = $this->consumeFlow($state);
             $provider = is_array($flow) && $flow['provider'] !== ''
                 ? (string)$flow['provider']
@@ -466,6 +468,7 @@ class OidcController extends ApiControllerBase
             'form_post' => $auth->ssoFormPost,
             'use_par' => $auth->ssoUsePar,
             'signed_request' => $auth->ssoSignedRequest,
+            'jarm' => $auth->ssoJarm,
             'required_acr' => $auth->ssoRequiredAcr,
             'extra_params' => $auth->ssoExtraParams,
             'claims_request' => $auth->ssoClaimsRequest,

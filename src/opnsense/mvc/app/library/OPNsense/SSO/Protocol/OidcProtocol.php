@@ -70,6 +70,8 @@ final class OidcProtocol implements ProtocolInterface
     private bool $usePar;
     /** send the authorization request as a signed request object (JAR, RFC 9101) */
     private bool $signedRequest;
+    /** have the IdP sign the authorization response (JARM) */
+    private bool $jarm;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -110,6 +112,7 @@ final class OidcProtocol implements ProtocolInterface
         $this->graphOverage = (bool)($cfg['graph_overage'] ?? false);
         $this->usePar = (bool)($cfg['use_par'] ?? false);
         $this->signedRequest = (bool)($cfg['signed_request'] ?? false);
+        $this->jarm = (bool)($cfg['jarm'] ?? false);
         $this->clientAuth = new ClientAuth([
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
@@ -173,6 +176,10 @@ final class OidcProtocol implements ProtocolInterface
         if ($this->formPost) {
             // Keep the code out of the URL (browser history, Referer, proxy logs).
             $params['response_mode'] = 'form_post';
+        }
+        if ($this->jarm) {
+            // The same transport, the response signed by the IdP (JARM).
+            $params['response_mode'] = $this->formPost ? 'form_post.jwt' : 'query.jwt';
         }
         if (!empty($this->requiredAcr)) {
             // Ask for the context we are going to insist on in validateIdToken. Order is
@@ -332,6 +339,10 @@ final class OidcProtocol implements ProtocolInterface
 
     public function handleCallback(array $request): NormalizedIdentity
     {
+        if ($this->jarm) {
+            // Everything below reads the verified claims, never the raw query.
+            $request = $this->decodeJarm($this->discover(), $request);
+        }
         // Snapshot AND clear all single-use material up front, so a failure midway
         // can never leave reusable state/nonce/verifier behind in the session.
         $sessionState = (string)($_SESSION[$this->skey('state')] ?? '');
@@ -387,6 +398,69 @@ final class OidcProtocol implements ProtocolInterface
         $merged = $this->resolveGroupOverage($disco, $merged);
 
         return $this->toIdentity($merged);
+    }
+
+    /**
+     * The `state` inside a JARM response, unverified, '' when there is none.
+     *
+     * Only to find the in-flight login it belongs to before the provider -- and so the
+     * keys to verify with -- is known. Nothing is trusted from it: the same value in a
+     * plain response comes straight from an attacker-controllable URL, and decodeJarm()
+     * verifies the JWT before the state is compared with the session.
+     */
+    public static function peekJarmState(string $jwt): string
+    {
+        $parts = explode('.', $jwt);
+        if (count($parts) !== 3) {
+            return '';
+        }
+        $claims = json_decode((string)base64_decode(strtr($parts[1], '-_', '+/')), true);
+        return is_array($claims) && is_string($claims['state'] ?? null) ? $claims['state'] : '';
+    }
+
+    /**
+     * Verify a JARM authorization response and return its claims (code, state, iss...).
+     *
+     * Signed by the IdP with the keys and algorithms it publishes for that purpose; `iss`
+     * must be the discovered issuer, `aud` this client, and `exp` present -- an unexpiring
+     * response could be replayed. With JARM on, a response that is not a signed JWT is
+     * refused rather than read the plain way: that would be a downgrade anyone on the path
+     * could choose. An encrypted (JWE) response is refused too: os-sso holds no key for it.
+     *
+     * @return array<string,mixed>
+     */
+    private function decodeJarm(array $disco, array $request): array
+    {
+        $jwt = (string)($request['response'] ?? '');
+        if ($jwt === '' || substr_count($jwt, '.') !== 2) {
+            throw new \RuntimeException('OIDC: JARM is on, but the authorization response is not a signed JWT');
+        }
+        $this->assertAsymmetricAlg($jwt, 'authorization response');
+        $field = 'authorization_signing_alg_values_supported';
+        try {
+            $claims = JWT::decode($jwt, $this->jwks($disco, false, $jwt, $field));
+        } catch (\UnexpectedValueException $e) {
+            if (stripos($e->getMessage(), 'kid') === false) {
+                throw $e;
+            }
+            $claims = JWT::decode($jwt, $this->jwks($disco, true, $jwt, $field));
+        }
+        if (!isset($claims->iss) || $claims->iss !== $disco['issuer']) {
+            throw new \RuntimeException('OIDC: the signed authorization response comes from another issuer');
+        }
+        if (!in_array($this->clientId, (array)($claims->aud ?? []), true)) {
+            throw new \RuntimeException('OIDC: the signed authorization response is not for this client');
+        }
+        if (!isset($claims->exp)) {
+            throw new \RuntimeException('OIDC: the signed authorization response has no exp');
+        }
+        $out = [];
+        foreach ((array)$claims as $name => $value) {
+            if (is_scalar($value)) {
+                $out[$name] = (string)$value;
+            }
+        }
+        return $out;
     }
 
     /**

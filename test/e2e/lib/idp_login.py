@@ -140,12 +140,13 @@ def follow_to_firewall(session, response, gui, resume=None):
             response = session.get(target, allow_redirects=False)
             continue
 
-        form = re.search(r'action="([^"]+)"[^>]*>(.*?)</form>', response.text, re.S)
+        # Case-insensitive: Keycloak's form_post.jwt page writes ACTION/NAME/VALUE.
+        form = re.search(r'action="([^"]+)"[^>]*>(.*?)</form>', response.text, re.S | re.I)
         if form and gui in html.unescape(form.group(1)):
             fields = {
                 name: html.unescape(value)
                 for name, value in re.findall(
-                    r'name="([^"]+)"[^>]*value="([^"]*)"', form.group(2)
+                    r'name="([^"]+)"[^>]*value="([^"]*)"', form.group(2), re.I
                 )
             }
             return deliver(session, html.unescape(form.group(1)), fields)
@@ -171,8 +172,16 @@ def edit_callback(url):
         return url
     parts = urllib.parse.urlsplit(url)
     query = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    received = dict(query)
     query = [(k, v) for k, v in query if k not in CALLBACK_EDITS]
-    query += [(k, v) for k, v in CALLBACK_EDITS.items() if v != ""]
+    for name, value in CALLBACK_EDITS.items():
+        if value == "@corrupt":
+            # Flip the last character of what the IdP sent: breaks a signature, keeps
+            # the shape of the value.
+            original = received.get(name, "")
+            value = original[:-1] + ("A" if original[-1:] != "A" else "B") if original else ""
+        if value != "":
+            query.append((name, value))
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
 
 
@@ -240,7 +249,7 @@ def main():
         action="append",
         default=[],
         help="name=value: set (or, with an empty value, remove) a parameter of the OIDC "
-        "callback before it reaches the firewall",
+        "callback before it reaches the firewall; value @corrupt alters the received one",
     )
     args = parser.parse_args()
     for edit in args.callback_param:

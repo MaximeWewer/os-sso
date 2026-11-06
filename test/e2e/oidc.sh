@@ -329,6 +329,21 @@ if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
     asjson '{"sso_private_key":""}'
 fi
 
+# --- 2d. signed authorization response (JARM) ------------------------------------
+# Keycloak signs the response when asked (query.jwt, form_post.jwt). Once JARM is on, a
+# response stripped of its JWT or with a broken signature must be refused.
+if [ "$IDP" = "keycloak" ]; then
+    echo ">>> case 2d: signed authorization response (JARM)"
+    asjson '{"sso_jarm":"1"}'
+    vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+    check "a signed response (query.jwt) logs in" 302 "$(login "$W/jar-jarm1")"
+    check "a response stripped of its JWT is refused" 400 "$(login "$W/jar-jarm2" --callback-param response=)"
+    check "a response whose signature was altered is refused" 400 "$(login "$W/jar-jarm3" --callback-param response=@corrupt)"
+    asjson '{"sso_form_post":"1"}'
+    check "and over form_post.jwt" 302 "$(login "$W/jar-jarm4")"
+    asjson '{"sso_form_post":"","sso_jarm":""}'
+fi
+
 # --- 10b. front-channel logout --------------------------------------------------
 # What Entra ID offers instead of back-channel: a sign-out at the IdP loads our page in
 # an iframe with the IdP session id. Keycloak is set up for it (setup-keycloak.sh); the
