@@ -33,7 +33,10 @@ fi
 # not '/': see OidcController::loggedoutAction).
 "${KC[@]}" update "clients/$CID" -r "$R" \
   -s "redirectUris=[\"$SP_BASE/api/sso/oidc/callback\"]" -s 'webOrigins=["+"]' \
-  -s "attributes.\"post.logout.redirect.uris\"=$SP_BASE/api/sso/oidc/loggedout" 2>/dev/null || true
+  -s "attributes.\"post.logout.redirect.uris\"=$SP_BASE/api/sso/oidc/loggedout" \
+  -s frontchannelLogout=true \
+  -s "attributes.\"frontchannel.logout.url\"=$SP_BASE/api/sso/oidc/frontchannel?provider=keycloak" \
+  -s 'attributes."frontchannel.logout.session.required"=true' 2>/dev/null || true
 SECRET=$("${KC[@]}" get "clients/$CID/client-secret" -r "$R" 2>/dev/null | grep -o '"value"[^,]*' | cut -d'"' -f4)
 echo "oidc_client_uuid=$CID"
 echo "oidc_client_secret=$SECRET"

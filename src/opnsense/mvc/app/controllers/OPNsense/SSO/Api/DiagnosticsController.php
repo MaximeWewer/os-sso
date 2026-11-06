@@ -282,6 +282,8 @@ class DiagnosticsController extends ApiControllerBase
                 $urls = [
                     'Redirect / callback' => $base . '/api/sso/oidc/callback',
                     'Back-channel logout' => $base . '/api/sso/oidc/backchannel' . $q,
+                    // Entra ID only offers this one (no back-channel); register it there.
+                    'Front-channel logout' => $base . '/api/sso/oidc/frontchannel' . $q,
                     'Post-logout redirect' => $base . OidcProtocol::POST_LOGOUT_PATH,
                     // Only of interest with private_key_jwt, but cheap to always show:
                     // it is where the IdP reads our client public key from.

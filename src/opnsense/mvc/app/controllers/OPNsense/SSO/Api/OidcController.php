@@ -323,6 +323,45 @@ class OidcController extends ApiControllerBase
         return '';
     }
 
+    /**
+     * GET /api/sso/oidc/frontchannel?provider=<name>&iss=...&sid=... -- OIDC Front-Channel
+     * Logout.
+     *
+     * The IdP loads this in an iframe when a session ends on its side, and ends ours for
+     * the same IdP session. It is the logout Entra ID offers (it has no back-channel), so
+     * without it a sign-out at Entra left the WebGUI session open until it idled out.
+     * The page must be frameable by the IdP, and by the IdP only.
+     */
+    public function frontchannelAction()
+    {
+        $this->response->setHeader('Cache-Control', 'no-store');
+        $this->response->setHeader('Content-Type', 'text/html; charset=UTF-8');
+        $this->response->setHeader('X-Content-Type-Options', 'nosniff');
+        try {
+            RateLimiter::hit('oidc-frontchannel', $this->clientIp(), 120);
+            $provider = $this->request->get('provider');
+            $auth = $this->authServer($provider);
+            $protocol = $this->protocolFor($provider, $auth);
+            $this->response->setHeader(
+                'Content-Security-Policy',
+                "default-src 'none'; frame-ancestors " . (implode(' ', $protocol->frontChannelOrigins()) ?: "'none'")
+            );
+            $sid = $protocol->frontChannelSid($_GET);
+            $ended = SessionRegistry::destroyForSubject($protocol->getIssuer(), '', $sid);
+            syslog(LOG_NOTICE, sprintf(
+                'os-sso oidc: front-channel logout from %s ended %d session(s)',
+                (string)$provider,
+                $ended
+            ));
+        } catch (\Throwable $e) {
+            syslog(LOG_ERR, 'os-sso oidc frontchannel: ' . $e->getMessage());
+            $this->response->setStatusCode(400, 'Bad Request');
+            return '';
+        }
+        $this->response->setStatusCode(200, 'OK');
+        return '<!doctype html><html><head><meta charset="utf-8"><title>Signed out</title></head><body></body></html>';
+    }
+
     /** GET /api/sso/oidc/logout -- RP-initiated Single Logout. */
     public function logoutAction()
     {

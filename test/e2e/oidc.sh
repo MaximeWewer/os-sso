@@ -272,6 +272,26 @@ check "garbage logout_token refused" 400 \
 check "no logout_token refused" 400 \
     "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$GUI/api/sso/oidc/backchannel?provider=$PROVIDER")"
 
+# --- 10b. front-channel logout --------------------------------------------------
+# What Entra ID offers instead of back-channel: a sign-out at the IdP loads our page in
+# an iframe with the IdP session id. Keycloak is set up for it (setup-keycloak.sh); the
+# helper signs out there from another client of the same session, as a user leaving
+# some other application would, and loads the iframes Keycloak renders.
+echo ">>> case 10b: front-channel logout"
+check "a request without sid is refused" 400 \
+    "$(curl -sk -o /dev/null -w '%{http_code}' "$GUI/api/sso/oidc/frontchannel?provider=$PROVIDER")"
+if [ "$IDP" = "keycloak" ]; then
+    vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+    check "login for the front-channel case" 302 "$(login "$W/jar-fc")"
+    python3 lib/kc_frontchannel.py "$W/jar-fc" "https://keycloak.test:9443/realms/opnsense" > "$W/fc.out" 2>&1
+    grep -q "frontchannel?provider=$PROVIDER" "$W/fc.out" \
+        && ok "a sign-out at the IdP frames our front-channel page" \
+        || ko "no front-channel iframe ($(head -c 200 "$W/fc.out"))"
+    grep -q "frame-ancestors https://keycloak.test:9443" "$W/fc.out" \
+        && ok "and only the IdP may frame it" || ko "unexpected framing policy ($(grep CSP "$W/fc.out"))"
+    not_live "$W/jar-fc" "the firewall session ends with the IdP session"
+fi
+
 # --- 11. service scoping --------------------------------------------------------
 # A provider narrowed to the portal must stop being a WebGUI door -- button and
 # endpoint both, since the button is only the part an attacker does not need.

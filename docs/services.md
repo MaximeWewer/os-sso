@@ -170,6 +170,14 @@ lifetime) an open session survives until it idles out. The endpoint takes only a
 `logout_token`: issuer, audience, `iat` freshness, the backchannel-logout event, absence
 of a `nonce` and single-use `jti` are all checked before any session is ended.
 
+**Front-channel logout (OIDC).** For an IdP without back-channel logout - **Entra ID**,
+whose only option is a *Front-channel logout URL* - register
+`https://<opnsense>/api/sso/oidc/frontchannel?provider=<name>` instead. The IdP loads it in
+an iframe when the user signs out there, and the firewall ends the sessions of that IdP
+session. Nothing signs that request, so it relies on the IdP session id: the IdP must send
+`sid` (Keycloak: *Front-channel logout session required*), and an `iss` it sends must be
+the discovered issuer exactly. The page can be framed by the IdP's origin only.
+
 ## API access (not SSO)
 
 The OPNsense **API** keeps using its own key/secret credentials - os-sso does not turn an

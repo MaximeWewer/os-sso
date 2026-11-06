@@ -588,6 +588,56 @@ final class OidcProtocol implements ProtocolInterface
         return ['sub' => $sub, 'sid' => $sid];
     }
 
+    /**
+     * The IdP session a front-channel logout names (OIDC Front-Channel Logout 1.0).
+     *
+     * The IdP renders our frontchannel_logout_uri in an iframe when a session ends on its
+     * side -- the only logout Entra ID offers, which has no back-channel. Nothing signs
+     * that request: per the spec, `iss` and `sid` in the query are the whole of it, and
+     * `sid` (an unguessable IdP session id) is what makes it safe to honour. So `sid` is
+     * required -- our session cookie is SameSite=Lax and never reaches a third-party
+     * iframe, so without it there is nothing to identify -- while `iss`, when sent, must
+     * be the discovered issuer exactly; when absent, the provider in the registered URL
+     * already says which IdP this is.
+     *
+     * @param array<string,mixed> $query the request's query parameters
+     * @return string the `sid` whose sessions are to end
+     */
+    public function frontChannelSid(array $query): string
+    {
+        $disco = $this->discover();
+        $iss = $query['iss'] ?? null;
+        $sid = $query['sid'] ?? null;
+        if ($iss !== null && $iss !== $disco['issuer']) {
+            throw new \RuntimeException('OIDC front-channel logout: issuer mismatch');
+        }
+        if (!is_string($sid) || preg_match('/^[\x21-\x7e]{1,255}$/D', $sid) !== 1) {
+            throw new \RuntimeException(
+                'OIDC front-channel logout: no usable sid (have the IdP send the session id with the request)'
+            );
+        }
+        return $sid;
+    }
+
+    /**
+     * Who may frame the front-channel logout page: the IdP's own origins (its issuer and
+     * authorization endpoint), and nobody else.
+     *
+     * @return string[]
+     */
+    public function frontChannelOrigins(): array
+    {
+        $disco = $this->discover();
+        $origins = [];
+        foreach ([(string)$disco['issuer'], (string)($disco['authorization_endpoint'] ?? '')] as $url) {
+            $origin = \OPNsense\SSO\HtmlPage::originOf($url);
+            if ($origin !== '' && !in_array($origin, $origins, true)) {
+                $origins[] = $origin;
+            }
+        }
+        return $origins;
+    }
+
     /** Accept each logout token's jti once, so a captured one cannot be re-fired. */
     private function guardLogoutReplay(string $jti): void
     {
