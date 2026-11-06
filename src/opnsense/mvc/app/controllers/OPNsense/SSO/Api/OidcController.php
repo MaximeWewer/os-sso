@@ -22,6 +22,7 @@ use OPNsense\SSO\HtmlPage;
 use OPNsense\SSO\LogoutGuard;
 use OPNsense\SSO\NavigationGuard;
 use OPNsense\SSO\RateLimiter;
+use OPNsense\SSO\RequestObjectStore;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\ServiceScope;
 use OPNsense\SSO\SiteUrl;
@@ -284,6 +285,30 @@ class OidcController extends ApiControllerBase
     }
 
     /**
+     * GET /api/sso/oidc/request?id=<id> -- a signed request object, fetched by the IdP
+     * when the authorization request names it by reference (JAR request_uri, RFC 9101
+     * section 5.2). Served as long as it is valid (RequestObjectStore::TTL), not once:
+     * it is the same signed object a by-value request puts in the browser URL.
+     */
+    public function requestAction()
+    {
+        $this->response->setHeader('Cache-Control', 'no-store');
+        try {
+            RateLimiter::hit('oidc-request', $this->clientIp(), 120);
+            $jwt = RequestObjectStore::get((string)$this->request->get('id'));
+        } catch (\Throwable $e) {
+            syslog(LOG_NOTICE, 'os-sso oidc request object: ' . $e->getMessage());
+            $jwt = null;
+        }
+        if ($jwt === null) {
+            $this->response->setStatusCode(404, 'Not Found');
+            return '';
+        }
+        $this->response->setContentType('application/oauth-authz-req+jwt');
+        return $jwt;
+    }
+
+    /**
      * POST /api/sso/oidc/backchannel?provider=<name> -- OIDC Back-Channel Logout.
      *
      * The IdP calls this server-to-server when a session ends on its side, so that a
@@ -468,6 +493,8 @@ class OidcController extends ApiControllerBase
             'form_post' => $auth->ssoFormPost,
             'use_par' => $auth->ssoUsePar,
             'signed_request' => $auth->ssoSignedRequest,
+            'request_uri_base' => $auth->ssoRequestByReference
+                ? $this->baseUrlFor($auth) . '/api/sso/oidc/request' : '',
             'jarm' => $auth->ssoJarm,
             'dpop' => $auth->ssoDpop,
             'required_acr' => $auth->ssoRequiredAcr,

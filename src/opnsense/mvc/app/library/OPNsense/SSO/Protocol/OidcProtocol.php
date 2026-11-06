@@ -11,6 +11,7 @@ use Firebase\JWT\JWT;
 use OPNsense\SSO\ClaimPath;
 use OPNsense\SSO\ClientAuth;
 use OPNsense\SSO\DPoP;
+use OPNsense\SSO\RequestObjectStore;
 use OPNsense\SSO\JwkSet;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\NormalizedIdentity;
@@ -71,6 +72,8 @@ final class OidcProtocol implements ProtocolInterface
     private bool $usePar;
     /** send the authorization request as a signed request object (JAR, RFC 9101) */
     private bool $signedRequest;
+    /** Where the IdP fetches a request object by reference; '' sends it by value. */
+    private string $requestUriBase;
     /** have the IdP sign the authorization response (JARM) */
     private bool $jarm;
     /** bind the access token to an ephemeral key with DPoP proofs (RFC 9449) */
@@ -117,6 +120,7 @@ final class OidcProtocol implements ProtocolInterface
         $this->graphOverage = (bool)($cfg['graph_overage'] ?? false);
         $this->usePar = (bool)($cfg['use_par'] ?? false);
         $this->signedRequest = (bool)($cfg['signed_request'] ?? false);
+        $this->requestUriBase = (string)($cfg['request_uri_base'] ?? '');
         $this->jarm = (bool)($cfg['jarm'] ?? false);
         $this->useDpop = (bool)($cfg['dpop'] ?? false);
         $this->clientAuth = new ClientAuth([
@@ -216,6 +220,13 @@ final class OidcProtocol implements ProtocolInterface
                 'client_id' => $this->clientId,
                 'request_uri' => $this->pushAuthorizationRequest($disco, $params),
             ]);
+        }
+        if (isset($params['request']) && $this->requestUriBase !== '') {
+            // By reference (RFC 9101 section 5.2): the IdP fetches the object from us, and
+            // the browser URL carries a short link instead of the whole JWT. PAR, above,
+            // does the same job without the IdP calling back, so it wins when both are on.
+            $params['request_uri'] = $this->requestUriBase . '?id=' . RequestObjectStore::put($params['request']);
+            unset($params['request']);
         }
         return $disco['authorization_endpoint'] . '?' . http_build_query($params);
     }

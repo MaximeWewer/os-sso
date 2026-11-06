@@ -64,6 +64,10 @@ endpoint is used automatically.
   the signed object. Register the key at the IdP through the client JWKS URL from the
   diagnostics page; if you upload the certificate instead, leave **Key ID** empty (or
   set it to the id the IdP shows for it), since the IdP names an uploaded key itself.
+  Without PAR, **Request object by reference** puts only a link in the browser URL
+  (`request_uri`) and lets the IdP fetch the object from the firewall for two minutes:
+  the IdP must reach the firewall over HTTPS it trusts, and some (Keycloak) want the
+  **Request object URI** from the diagnostics page registered.
 - **Signed authorization response** (JARM) - the IdP returns the code, state and issuer
   in a JWT it signs (`query.jwt`, or `form_post.jwt` with form_post), verified with its
   keys before anything in it is used. Once on, an unsigned response is refused rather

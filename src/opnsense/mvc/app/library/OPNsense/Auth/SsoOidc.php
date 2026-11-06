@@ -40,6 +40,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoExtraParams = null;
     public $ssoClaimsRequest = null;
     public $ssoSignedRequest = false;
+    public $ssoRequestByReference = false;
     public $ssoJarm = false;
     public $ssoDpop = false;
     public $ssoSessionLifetime = 0;
@@ -100,6 +101,7 @@ class SsoOidc extends Local implements IAuthConnector
         $this->ssoFormPost = !empty($config['sso_form_post']);
         $this->ssoUsePar = !empty($config['sso_use_par']);
         $this->ssoSignedRequest = !empty($config['sso_signed_request']);
+        $this->ssoRequestByReference = !empty($config['sso_request_by_reference']);
         $this->ssoJarm = !empty($config['sso_jarm']);
         $this->ssoDpop = !empty($config['sso_dpop']);
         $this->ssoGraphOverage = !empty($config['sso_graph_overage']);
@@ -196,6 +198,14 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'below (RFC 9101), so the IdP knows it is untouched and comes from this client. Uses the '
                     . 'same key and algorithm as private_key_jwt: register its certificate at the IdP, or point '
                     . 'the IdP at the client JWKS URL from the diagnostics page. Combines with PAR.'),
+                'type' => 'checkbox',
+            ],
+            'sso_request_by_reference' => [
+                'name' => gettext('Request object by reference'),
+                'help' => gettext('With a signed request object and without PAR: put only a link to it in the '
+                    . 'browser URL (request_uri, RFC 9101) and let the IdP fetch it from the firewall, which '
+                    . 'must then be reachable from the IdP over HTTPS it trusts. Keeps long requests under URL '
+                    . 'length limits. Some IdPs want the URL registered: it is listed on the diagnostics page.'),
                 'type' => 'checkbox',
             ],
             'sso_jarm' => [

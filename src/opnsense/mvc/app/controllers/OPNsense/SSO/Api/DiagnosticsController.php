@@ -288,6 +288,8 @@ class DiagnosticsController extends ApiControllerBase
                     // Only of interest with private_key_jwt, but cheap to always show:
                     // it is where the IdP reads our client public key from.
                     'Client JWKS' => $base . '/api/sso/oidc/jwks' . $q,
+                    // Only with a request object by reference; Keycloak wants it registered.
+                    'Request object URI' => $base . '/api/sso/oidc/request',
                     // What the login button opens; the way in when the button is hidden,
                     // and the "initiate login URI" an IdP app launcher wants.
                     'Login (direct link)' => $base . '/api/sso/oidc/login' . $q,

@@ -320,6 +320,17 @@ if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
     asjson '{"sso_use_par":"1"}'
     check "and pushed by PAR" 302 "$(login "$W/jar-jar2")"
     asjson '{"sso_use_par":""}'
+    # By reference: Keycloak takes only a request_uri, which it must have registered,
+    # and fetches the object from the firewall over the lab-CA HTTPS.
+    kcadm update "clients/$KCID" -r opnsense -s 'attributes."request.object.required"=request_uri only' \
+        -s "attributes.\"request.uris\"=$GUI/api/sso/oidc/request*" >/dev/null 2>&1
+    check "a request object passed by value fails where the IdP wants a request_uri" 000 "$(login "$W/jar-jar5")"
+    asjson '{"sso_request_by_reference":"1"}'
+    check "and passes by reference, fetched by the IdP from the firewall" 302 "$(login "$W/jar-jar6")"
+    check "an id the firewall did not issue finds nothing" 404 \
+        "$(curl -sk -o /dev/null -w '%{http_code}' "$GUI/api/sso/oidc/request?id=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")"
+    asjson '{"sso_request_by_reference":""}'
+    kcadm update "clients/$KCID" -r opnsense -s 'attributes."request.object.required"=request or request_uri' >/dev/null 2>&1
     kccert "$W/other.crt"
     check "a request object signed with a key the IdP does not hold fails" 000 "$(login "$W/jar-jar3")"
     asjson '{"sso_signed_request":""}'
