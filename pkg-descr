@@ -15,6 +15,15 @@ Features:
     client_secret_jwt, private_key_jwt (we serve the public JWKS) or mutual TLS.
     The IdP's MFA context (acr) and re-authentication age (max_age) are checked
     on the way back, not merely requested.
+  * OIDC hardening, each optional: pushed authorization requests (PAR),
+    signed request objects (JAR, by value or by reference), signed responses
+    (JARM), DPoP-bound codes and access tokens, requested claims. The response
+    issuer (RFC 9207) and token types (RFC 8725) are always checked.
+  * SAML: signed (and optionally encrypted) assertions, signed AuthnRequests,
+    metadata import and generation (optionally signed, for federations).
+  * Single Logout: back-channel and front-channel logout, SAML SLO, SCIM and
+    the diagnostics page end the WebGUI session, the portal client and the
+    VPN tunnel alike.
   * IdP group -> OPNsense group mapping (privileges resolved by the ACL),
     nested claims and Entra ID group-overage included.
   * SCIM 2.0 provisioning: the IdP pushes account creations, updates and
@@ -22,6 +31,7 @@ Features:
     ended - when the directory says so, rather than at their next login
     attempt. Bearer token plus source-address gated. It never touches a
     privileged account or one owning a local password, and a SCIM delete
-    deactivates instead of removing.
+    deactivates instead of removing. Groups the directory pushes can be
+    created on demand when allowed, always without privileges.
 
 The local password path (+ native TOTP) stays active as break-glass.
