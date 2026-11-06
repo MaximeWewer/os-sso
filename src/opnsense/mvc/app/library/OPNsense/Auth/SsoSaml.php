@@ -50,6 +50,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoGroupMap = null;
     public $ssoGroupSync = false;
     public $ssoButtonLabel = null;
+    public $ssoHideButton = false;
     public $ssoBaseUrl = null;
     public $ssoLoginRedirect = null;
 
@@ -100,6 +101,7 @@ class SsoSaml extends Local implements IAuthConnector
             $this->ssoSessionLifetime = (int)$config['sso_session_lifetime'];
         }
         $this->ssoGroupSync = !empty($config['sso_group_sync']);
+        $this->ssoHideButton = !empty($config['sso_hide_button']);
         $this->ssoWantMessagesSigned = !empty($config['sso_want_messages_signed']);
         $this->ssoAllowSha1 = !empty($config['sso_allow_sha1']);
         $this->ssoAuthnPostBinding = !empty($config['sso_authn_post_binding']);
@@ -404,6 +406,13 @@ class SsoSaml extends Local implements IAuthConnector
                 'name' => gettext('Login button label'),
                 'help' => gettext('Text shown on the login-page button (defaults to the server name).'),
                 'type' => 'text',
+            ],
+            'sso_hide_button' => [
+                'name' => gettext('Hide login button'),
+                'help' => gettext('Do not offer this provider on the WebGUI login page. Logins started elsewhere still '
+                    . 'work: a link to its login URL (Diagnostics lists it) or, with IdP-initiated login '
+                    . 'allowed, the IdP\'s app portal. Unticking webgui in Applies to would refuse those too.'),
+                'type' => 'checkbox',
             ],
             'sso_base_url' => [
                 'name' => gettext('Base URL'),

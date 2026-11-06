@@ -22,3 +22,8 @@ $discovery->setValue($protocol, ['end_session_endpoint' => 'https://idp.example/
 $logoutUrl = $protocol->buildLogoutUrl('id-token-hint', 'https://firewall.example' . OidcProtocol::POST_LOGOUT_PATH);
 parse_str((string)parse_url($logoutUrl, PHP_URL_QUERY), $logoutParameters);
 eq($urls['Post-logout redirect'], $logoutParameters['post_logout_redirect_uri'], 'the documented IdP registration matches the actual logout request');
+
+// With its login button hidden, the direct link is how users get in: it must be listed.
+eq('https://firewall.example/api/sso/oidc/login?provider=idp', $urls['Login (direct link)'], 'diagnostics gives the OIDC login link');
+$samlUrls = $urlsFor->invoke($diagnostics, 'saml', 'https://firewall.example', 'idp');
+eq('https://firewall.example/api/sso/saml/login?provider=idp', $samlUrls['Login (direct link)'], 'and the SAML one');

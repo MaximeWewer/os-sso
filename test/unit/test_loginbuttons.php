@@ -59,3 +59,17 @@ falsy(isset($portal['sso-separator']), 'without a separator for an empty WebGUI 
 
 $portalOnly = loginProviders([['type' => 'oidc', 'name' => 'guest', 'sso_services' => 'portal']]);
 eq(['sso-cp-oidc-guest'], array_keys($portalOnly), 'a portal-only setup still reaches the portal');
+
+T::group('Login page: OIDC and SAML buttons can be hidden too');
+
+// Their buttons work when clicked; hiding one is about the page, for a provider users
+// reach another way (a direct link, an IdP app launcher, IdP-initiated SAML).
+$idps = loginProviders([
+    ['type' => 'oidc', 'name' => 'kc', 'sso_services' => 'webgui', 'sso_hide_button' => '1'],
+    ['type' => 'saml', 'name' => 'adfs', 'sso_services' => 'webgui,portal', 'sso_hide_button' => '1'],
+    ['type' => 'oidc', 'name' => 'entra', 'sso_services' => 'webgui'],
+]);
+falsy(isset($idps['sso-oidc-kc']), 'a hidden OIDC button is gone');
+falsy(isset($idps['sso-saml-adfs']), 'so is a hidden SAML one');
+truthy(isset($idps['sso-oidc-entra']), 'the provider left visible keeps its button');
+truthy(isset($idps['sso-cp-saml-adfs']), 'and hiding the WebGUI button leaves the portal offer alone');

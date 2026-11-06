@@ -286,6 +286,9 @@ class DiagnosticsController extends ApiControllerBase
                     // Only of interest with private_key_jwt, but cheap to always show:
                     // it is where the IdP reads our client public key from.
                     'Client JWKS' => $base . '/api/sso/oidc/jwks' . $q,
+                    // What the login button opens; the way in when the button is hidden,
+                    // and the "initiate login URI" an IdP app launcher wants.
+                    'Login (direct link)' => $base . '/api/sso/oidc/login' . $q,
                 ];
                 break;
             case 'saml':
@@ -293,6 +296,7 @@ class DiagnosticsController extends ApiControllerBase
                     'ACS' => $base . '/api/sso/saml/acs' . $q,
                     'EntityID / metadata' => $base . '/api/sso/saml/metadata' . $q,
                     'SLO' => $base . '/api/sso/saml/slo' . $q,
+                    'Login (direct link)' => $base . '/api/sso/saml/login' . $q,
                 ];
                 break;
             default:
