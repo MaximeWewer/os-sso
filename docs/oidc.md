@@ -67,6 +67,12 @@ where groups usually come from, and a response os-sso cannot read is a login tha
 with none of them - which now says so in the log instead of looking like an IdP that
 sends no groups at all.
 
+The **issuer of the authorization response** (RFC 9207) is checked without any setting:
+an `iss` the IdP sends back with the code must be the discovered issuer exactly, and when
+the IdP declares it always sends one (`authorization_response_iss_parameter_supported`,
+as Keycloak does), a response without it is refused. With several providers configured
+that closes the mix-up attack, where one IdP's response is passed off as another's.
+
 **Deliberately absent.** A **request object** (JAR) adds little once PAR keeps the request
 off the browser entirely; **refresh tokens** would be an offline credential for calls
 os-sso never makes; **DPoP** binds access tokens the firewall does not keep; and an

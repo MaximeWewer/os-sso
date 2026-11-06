@@ -268,6 +268,9 @@ final class OidcProtocol implements ProtocolInterface
         if ($sessionState === '' || !hash_equals($sessionState, (string)($request['state'] ?? ''))) {
             throw new \RuntimeException('OIDC: state mismatch (possible CSRF)');
         }
+        $disco = $this->discover();
+        // Before the error branch: an error response names its issuer too (RFC 9207).
+        $this->assertResponseIssuer($disco, $request);
         if (!empty($request['error'])) {
             throw new \RuntimeException('OIDC: IdP returned error: ' . (string)$request['error']);
         }
@@ -276,7 +279,6 @@ final class OidcProtocol implements ProtocolInterface
             throw new \RuntimeException('OIDC: missing authorization code');
         }
 
-        $disco = $this->discover();
         $tokens = $this->exchangeCode($disco, $code, $verifier);
         $idToken = (string)($tokens['id_token'] ?? '');
         if ($idToken === '') {
@@ -310,6 +312,30 @@ final class OidcProtocol implements ProtocolInterface
         $merged = $this->resolveGroupOverage($disco, $merged);
 
         return $this->toIdentity($merged);
+    }
+
+    /**
+     * The authorization response must come from the IdP we sent the user to (RFC 9207).
+     *
+     * With several providers configured, a mix-up attack swaps one IdP's response for
+     * another's, so that a code minted by a provider the attacker controls is redeemed
+     * at an honest one, or the reverse. The state already ties the response to the
+     * provider this login was started with; the `iss` parameter is the IdP saying so
+     * itself. When it is sent it must be the discovered issuer exactly, and when the IdP
+     * declares it always sends one (authorization_response_iss_parameter_supported), a
+     * response without it is refused -- something stripped it.
+     */
+    private function assertResponseIssuer(array $disco, array $response): void
+    {
+        if (array_key_exists('iss', $response)) {
+            if (!is_string($response['iss']) || $response['iss'] !== $disco['issuer']) {
+                throw new \RuntimeException('OIDC: the authorization response comes from another issuer (RFC 9207)');
+            }
+            return;
+        }
+        if (!empty($disco['authorization_response_iss_parameter_supported'])) {
+            throw new \RuntimeException('OIDC: the authorization response has no iss, which this IdP always sends (RFC 9207)');
+        }
     }
 
     /* ---- Entra ID group overage ---------------------------------------- */

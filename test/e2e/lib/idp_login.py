@@ -136,7 +136,7 @@ def follow_to_firewall(session, response, gui, resume=None):
         if response.status_code in (301, 302, 303, 307, 308):
             target = urllib.parse.urljoin(response.url, response.headers["location"])
             if target.startswith(gui):
-                return session.get(target, allow_redirects=False)
+                return session.get(edit_callback(target), allow_redirects=False)
             response = session.get(target, allow_redirects=False)
             continue
 
@@ -158,6 +158,22 @@ def follow_to_firewall(session, response, gui, resume=None):
             f"stuck at {response.url} ({response.status_code}), no way back to {gui}"
         )
     raise CeremonyError("too many redirects on the way back")
+
+
+# --callback-param edits: name -> value ('' removes the parameter). Lets a suite tamper
+# with what the IdP sent back (iss, response...) and see the firewall refuse it.
+CALLBACK_EDITS = {}
+
+
+def edit_callback(url):
+    """Apply --callback-param to the redirect that lands on the firewall."""
+    if not CALLBACK_EDITS:
+        return url
+    parts = urllib.parse.urlsplit(url)
+    query = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    query = [(k, v) for k, v in query if k not in CALLBACK_EDITS]
+    query += [(k, v) for k, v in CALLBACK_EDITS.items() if v != ""]
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
 
 
 # Set when --capture is in play: the SAMLResponse is written here and never posted.
@@ -219,7 +235,17 @@ def main():
         help="SAML only: write the SAMLResponse here instead of posting it to the ACS, "
         "so a suite can replay it or post it by hand",
     )
+    parser.add_argument(
+        "--callback-param",
+        action="append",
+        default=[],
+        help="name=value: set (or, with an empty value, remove) a parameter of the OIDC "
+        "callback before it reaches the firewall",
+    )
     args = parser.parse_args()
+    for edit in args.callback_param:
+        name, _, value = edit.partition("=")
+        CALLBACK_EDITS[name] = value
 
     session = requests.Session()
     session.verify = False

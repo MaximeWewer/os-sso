@@ -56,7 +56,7 @@ not_live(){ authed "$1" && ko "$2 (session still authenticated)" || ok "$2"; }
 login() {
     python3 lib/idp_login.py --gui "$GUI" --provider "$PROVIDER" \
         --protocol oidc --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" \
-        --jar "$1" | tail -1
+        --jar "$1" "${@:2}" | tail -1
 }
 
 echo "=== os-sso OIDC end-to-end ($GUI, idp=$IDP, provider=$PROVIDER) ==="
@@ -66,6 +66,16 @@ vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
 echo ">>> case 1: full browser login"
 check "callback -> 302" 302 "$(login "$W/jar")"
 is_live "$W/jar" "session reaches an authenticated API"
+
+# --- 1b. the response names its issuer (RFC 9207) ------------------------------
+# A mix-up attack swaps one IdP's response for another's. Keycloak sends iss and says so
+# in its discovery document, so a response naming another issuer, or none, is refused.
+echo ">>> case 1b: the authorization response names its issuer (RFC 9207)"
+vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+check "a response naming another issuer is refused" 400 \
+    "$(login "$W/jar-iss1" --callback-param iss=https://evil.example/realms/opnsense)"
+check "a response with its iss stripped is refused" 400 \
+    "$(login "$W/jar-iss2" --callback-param iss=)"
 
 # --- 2. the authorization request ---------------------------------------------
 echo ">>> case 2: authorization request parameters"
