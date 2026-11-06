@@ -69,9 +69,11 @@ endpoint is used automatically.
   keys before anything in it is used. Once on, an unsigned response is refused rather
   than read the plain way.
 - **DPoP-bound access token** (RFC 9449) - the access token is bound to a key the
-  firewall holds, generated per login and never stored: the token request and the
-  userinfo call carry DPoP proofs, and an intercepted token is useless alone. A server
-  nonce (`DPoP-Nonce`) is honoured. Nothing to register at the IdP.
+  firewall holds, generated when the login starts and dropped at its callback: the
+  authorization request names it (`dpop_jkt`), so the code itself is bound and a stolen
+  one cannot be redeemed; the token request and the userinfo call carry DPoP proofs, and
+  an intercepted token is useless alone. A server nonce (`DPoP-Nonce`) is honoured.
+  Nothing to register at the IdP.
 - **Extra authorization parameters** - for things like `prompt=login`.
 - **Requested claims** - the OIDC `claims` request parameter, as JSON, for an individual
   claim the IdP does not send by default and no scope covers:

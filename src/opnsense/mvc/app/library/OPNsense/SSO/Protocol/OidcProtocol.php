@@ -196,6 +196,14 @@ final class OidcProtocol implements ProtocolInterface
             // Individual claims no scope covers (OIDC Core section 5.5).
             $params['claims'] = $this->claimsRequest;
         }
+        if ($this->useDpop) {
+            // Bind the code to this login's DPoP key from the start (RFC 9449 section 10):
+            // a code stolen on the way back cannot be redeemed without the key. The key
+            // waits in the session for the callback.
+            $dpop = new DPoP();
+            $_SESSION[$this->skey('dpop')] = $dpop->privateKeyPem();
+            $params['dpop_jkt'] = $dpop->thumbprint();
+        }
         // Operator extras (prompt, login_hint, ui_locales...). parseExtra
         // already dropped anything that would overwrite a parameter we depend on.
         $params += $this->extraParams;
@@ -326,6 +334,8 @@ final class OidcProtocol implements ProtocolInterface
             'acr_values',
             // claims has its own field, which validates the JSON.
             'claims',
+            // dpop_jkt names the key this login generated; any other would break DPoP.
+            'dpop_jkt',
         ];
         $out = [];
         foreach (preg_split('/[,\r\n]+/', $spec) ?: [] as $pair) {
@@ -354,7 +364,13 @@ final class OidcProtocol implements ProtocolInterface
         $sessionState = (string)($_SESSION[$this->skey('state')] ?? '');
         $sessionNonce = (string)($_SESSION[$this->skey('nonce')] ?? '');
         $verifier = (string)($_SESSION[$this->skey('verifier')] ?? '');
-        unset($_SESSION[$this->skey('state')], $_SESSION[$this->skey('nonce')], $_SESSION[$this->skey('verifier')]);
+        $dpopKey = (string)($_SESSION[$this->skey('dpop')] ?? '');
+        unset(
+            $_SESSION[$this->skey('state')],
+            $_SESSION[$this->skey('nonce')],
+            $_SESSION[$this->skey('verifier')],
+            $_SESSION[$this->skey('dpop')]
+        );
 
         // state: anti-CSRF, single use.
         if ($sessionState === '' || !hash_equals($sessionState, (string)($request['state'] ?? ''))) {
@@ -371,8 +387,9 @@ final class OidcProtocol implements ProtocolInterface
             throw new \RuntimeException('OIDC: missing authorization code');
         }
 
-        // One key per login: it lives exactly as long as the access token is used here.
-        $this->dpop = $this->useDpop ? new DPoP() : null;
+        // The key this login started with (the code is bound to it); a fresh one only
+        // for a login begun before DPoP was turned on, which an IdP binding codes refuses.
+        $this->dpop = $this->useDpop ? new DPoP($dpopKey) : null;
         $tokens = $this->exchangeCode($disco, $code, $verifier);
         $idToken = (string)($tokens['id_token'] ?? '');
         if ($idToken === '') {
