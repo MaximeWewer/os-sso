@@ -58,6 +58,8 @@ login() {
         --protocol oidc --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" \
         --jar "$1" "${@:2}" | tail -1
 }
+# The Keycloak admin password the container was started with (test/idp/keycloak/.env).
+kc_admin_password() { docker exec keycloak printenv KC_BOOTSTRAP_ADMIN_PASSWORD 2>/dev/null; }
 # Set provider fields from a JSON object (JSON and PEM values survive the nested quoting).
 asjson() { vm "php /home/vagrant/os-sso/test/vagrant/set_authserver_json.php $PROVIDER b64:$(printf '%s' "$1" | base64 | tr -d '\n')" >/dev/null; }
 
@@ -305,7 +307,7 @@ fi
 if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
     echo ">>> case 2c: signed request object (JAR)"
     kcadm() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
-    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
+    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password "$(kc_admin_password)" >/dev/null 2>&1
     KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
     openssl req -x509 -newkey rsa:2048 -nodes -keyout "$W/jar.key" -out "$W/jar.crt" -days 1 -subj /CN=jar 2>/dev/null
     openssl req -x509 -newkey rsa:2048 -nodes -keyout "$W/other.key" -out "$W/other.crt" -days 1 -subj /CN=other 2>/dev/null
@@ -364,7 +366,7 @@ fi
 if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
     echo ">>> case 2e: DPoP-bound access token"
     kcadm() { docker exec -i keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
-    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
+    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password "$(kc_admin_password)" >/dev/null 2>&1
     KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
     kcadm update "clients/$KCID" -r opnsense -s 'attributes."dpop.bound.access.tokens"=true' >/dev/null 2>&1
     printf '%s' '{"profiles":[{"name":"dpop-code-binding","executors":[{"executor":"dpop-bind-enforcer","configuration":{"auto-configure":"true","allow-only-refresh-token-binding":"false","enforce-authorization-code-binding-to-dpop":"true"}}]}]}' \
@@ -422,7 +424,7 @@ if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
     echo ">>> case 10c: a real back-channel logout from Keycloak"
     # No -i: with stdin attached, "kcadm create" reads it as the request body.
     kcadm() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
-    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
+    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password "$(kc_admin_password)" >/dev/null 2>&1
     KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
     KCUSER=$(kcadm get users -r opnsense -q username="$IDP_USER" --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
     # Keycloak sends one logout token per open session: clear those of the earlier cases
