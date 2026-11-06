@@ -73,6 +73,11 @@ the IdP declares it always sends one (`authorization_response_iss_parameter_supp
 as Keycloak does), a response without it is refused. With several providers configured
 that closes the mix-up attack, where one IdP's response is passed off as another's.
 
+**Token types** (RFC 8725 explicit typing) are checked where the IdP declares them: an ID
+token or a signed userinfo response declaring another kind (`logout+jwt`, `at+jwt`,
+`dpop+jwt`, `secevent+jwt`) is refused, and a back-channel logout token may declare only
+`logout+jwt` or the generic `JWT`. A token without `typ` is accepted, as most IdPs send.
+
 **Deliberately absent.** A **request object** (JAR) adds little once PAR keeps the request
 off the browser entirely; **refresh tokens** would be an offline credential for calls
 os-sso never makes; **DPoP** binds access tokens the firewall does not keep; and an

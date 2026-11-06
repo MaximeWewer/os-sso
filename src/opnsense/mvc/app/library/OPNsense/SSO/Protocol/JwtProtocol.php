@@ -13,6 +13,7 @@ use OPNsense\SSO\ClaimPath;
 use OPNsense\SSO\JwkSet;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
+use OPNsense\SSO\TokenType;
 
 /**
  * Forward-auth provider: validates a signed JWT handed over by a TRUSTED upstream
@@ -94,6 +95,10 @@ final class JwtProtocol
         if ($jwt === '') {
             throw new \RuntimeException('JWT: empty token');
         }
+        // Explicit typing (RFC 8725): a logout token, a DPoP proof or a security event is
+        // not a login, whatever it carries. An access token (at+jwt) is: proxies such as
+        // oauth2-proxy forward exactly that.
+        TokenType::refuse($jwt, [TokenType::LOGOUT, TokenType::DPOP, TokenType::SECEVENT], 'JWT');
         // decode() enforces signature + exp/nbf and rejects alg:none. Each key carries
         // its own algorithm, so the token cannot downgrade to a different alg.
         try {

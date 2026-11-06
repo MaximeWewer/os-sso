@@ -39,3 +39,11 @@ tokens:
 - **Single-use tokens** - accept each token once (keyed on `jti` when present). Only if
   the proxy mints a fresh token per login; if it reuses one token for the whole session
   (the usual oauth2-proxy setup), the second login would be refused.
+
+## Token types
+
+A token that declares another kind in its `typ` header (RFC 8725 explicit typing) is
+refused, whatever it carries: a back-channel logout token (`logout+jwt`), a DPoP proof
+(`dpop+jwt`) or a security event (`secevent+jwt`) is not a login. An access token
+(`at+jwt`) is accepted - that is what proxies such as oauth2-proxy forward - and so is a
+token with no `typ` or the generic `JWT`.

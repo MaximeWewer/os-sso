@@ -133,6 +133,16 @@ JWT_TRUSTED='127.0.0.1' JWT_REQUIRED_GROUPS='admins' JWT_PUBKEY="$(cat "$W/pub.p
 check "login allowed with the required group" 302 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $GATED")"
 JWT_TRUSTED='127.0.0.1' JWT_PUBKEY="$(cat "$W/pub.pem")" php "$H/add_jwt_authserver.php" >/dev/null
 
+echo ">>> case 13: explicit typing (RFC 8725)"
+# Same signer, same claims: only the declared kind differs. A logout token or a DPoP
+# proof is not a login; an access token is what proxies such as oauth2-proxy forward.
+LOGOUT_TYPED=$(PRIV="$W/priv.pem" JWT_TYP='logout+jwt' php "$H/sign_jwt.php")
+check "a token typed logout+jwt is refused" 400 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $LOGOUT_TYPED")"
+DPOP_TYPED=$(PRIV="$W/priv.pem" JWT_TYP='dpop+jwt' php "$H/sign_jwt.php")
+check "a token typed dpop+jwt is refused" 400 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $DPOP_TYPED")"
+ACCESS_TYPED=$(PRIV="$W/priv.pem" JWT_TYP='at+jwt' php "$H/sign_jwt.php")
+check "an access token (at+jwt) is accepted" 302 "$(code GET "$GUI/api/sso/jwt/login?provider=jwttest" "$HDR: $ACCESS_TYPED")"
+
 echo ""
 echo ">>> RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

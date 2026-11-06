@@ -31,4 +31,6 @@ $payload = [
 if (getenv('JWT_NO_IAT') === '1') {
     unset($payload['iat']);
 }
-echo JWT::encode($payload, $priv, 'RS256');
+// JWT_TYP sets the header typ, to exercise explicit typing (RFC 8725).
+$head = getenv('JWT_TYP') ? ['typ' => getenv('JWT_TYP')] : null;
+echo JWT::encode($payload, $priv, 'RS256', null, $head);

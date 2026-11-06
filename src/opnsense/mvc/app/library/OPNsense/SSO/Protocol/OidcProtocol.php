@@ -14,6 +14,7 @@ use OPNsense\SSO\JwkSet;
 use OPNsense\SSO\ReturnUrl;
 use OPNsense\SSO\NormalizedIdentity;
 use OPNsense\SSO\StateDir;
+use OPNsense\SSO\TokenType;
 
 /**
  * Hand-rolled OpenID Connect Relying Party on top of firebase/php-jwt.
@@ -37,6 +38,8 @@ final class OidcProtocol implements ProtocolInterface
     private const DISCO_TTL = 3600;       // discovery document cache TTL
     private const JWKS_TTL = 3600;        // JWKS cache TTL (refetched early on kid miss)
     private const LOGOUT_TOKEN_TTL = 300; // max age of a back-channel logout token
+    /** Token kinds (RFC 8725 explicit typing) that are never an ID token or userinfo. */
+    private const NOT_ID_TOKENS = [TokenType::LOGOUT, TokenType::ACCESS, TokenType::DPOP, TokenType::SECEVENT];
 
     private string $issuer;
     private string $clientId;
@@ -579,6 +582,7 @@ final class OidcProtocol implements ProtocolInterface
     {
         $disco = $this->discover();
         $this->assertAsymmetricAlg($jwt);
+        TokenType::allowOnly($jwt, [TokenType::LOGOUT, TokenType::GENERIC], 'OIDC logout');
         try {
             $claims = JWT::decode($jwt, $this->jwks($disco, false, $jwt));
         } catch (\UnexpectedValueException $e) {
@@ -705,6 +709,9 @@ final class OidcProtocol implements ProtocolInterface
         // symmetric HS* alg if the issuer's JWKS ever exposed an "oct" key -- so
         // reject HS*/none on the header up front, mirroring the JWT forward-auth path.
         $this->assertAsymmetricAlg($idToken);
+        // A token declaring another kind (a logout token, an access token...) is not an
+        // ID token, whatever its claims look like.
+        TokenType::refuse($idToken, self::NOT_ID_TOKENS, 'OIDC id_token');
         // decode() enforces signature + exp/nbf/iat and rejects alg:none. The key
         // set carries each key's algorithm, so a JWKS public key can never be
         // abused as an HMAC secret (alg-confusion) -- we never pass a string key.
@@ -1149,6 +1156,7 @@ final class OidcProtocol implements ProtocolInterface
             throw new \RuntimeException('the response is neither JSON nor a signed JWT');
         }
         $this->assertAsymmetricAlg($jwt, 'userinfo response');
+        TokenType::refuse($jwt, self::NOT_ID_TOKENS, 'signed userinfo');
         try {
             $claims = JWT::decode($jwt, $this->jwks($disco, false, $jwt, 'userinfo_signing_alg_values_supported'));
         } catch (\UnexpectedValueException $e) {
