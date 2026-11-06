@@ -345,24 +345,36 @@ if [ "$IDP" = "keycloak" ]; then
 fi
 
 # --- 2e. DPoP-bound access token (RFC 9449) ----------------------------------------
-# Keycloak is told to require DPoP for this client. With DPoP on, the token request and
-# the userinfo call both carry proofs: the login passes and no userinfo failure is
-# logged (a DPoP-bound token presented as Bearer would be refused there). Off, the token
-# request itself is refused.
+# Keycloak is told to require DPoP-bound tokens and codes (a client policy enforcing code
+# binding, so the authorization request must carry dpop_jkt), and the lab proxy's DPoP
+# gate (test/idp/proxy/dpop_nonce.py) asks for a nonce at the token and userinfo
+# endpoints. One login then exercises all of it: the code bound to the login key, the
+# token request and the userinfo call each retried with the server nonce.
 if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
     echo ">>> case 2e: DPoP-bound access token"
-    kcadm() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
+    kcadm() { docker exec -i keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
     kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
     KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
     kcadm update "clients/$KCID" -r opnsense -s 'attributes."dpop.bound.access.tokens"=true' >/dev/null 2>&1
+    printf '%s' '{"profiles":[{"name":"dpop-code-binding","executors":[{"executor":"dpop-bind-enforcer","configuration":{"auto-configure":"true","allow-only-refresh-token-binding":"false","enforce-authorization-code-binding-to-dpop":"true"}}]}]}' \
+        | kcadm update client-policies/profiles -r opnsense -f - >/dev/null 2>&1
+    printf '%s' '{"policies":[{"name":"dpop-code-binding","enabled":true,"conditions":[{"condition":"client-access-type","configuration":{"type":["confidential"]}}],"profiles":["dpop-code-binding"]}]}' \
+        | kcadm update client-policies/policies -r opnsense -f - >/dev/null 2>&1
     asjson '{"sso_dpop":"1"}'
     vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
     UI_BEFORE=$(vm "grep -ah \"userinfo request failed\" /var/log/system/system_*.log /var/log/audit/audit_*.log | grep -vc COMMAND")
-    check "a DPoP-bound login passes where the IdP requires DPoP" 302 "$(login "$W/jar-dpop1")"
+    GATE_FROM=$(docker logs idp-dpop-nonce 2>&1 | wc -l)
+    check "a DPoP login passes where the IdP binds codes and tokens" 302 "$(login "$W/jar-dpop1")"
+    GATE=$(docker logs idp-dpop-nonce 2>&1 | tail -n +$((GATE_FROM + 1)))
     UI_AFTER=$(vm "grep -ah \"userinfo request failed\" /var/log/system/system_*.log /var/log/audit/audit_*.log | grep -vc COMMAND")
-    check "and the userinfo call is accepted with its DPoP proof" "$UI_BEFORE" "$UI_AFTER"
+    printf '%s' "$GATE" | grep -q 'passed POST .*/token with the nonce -> 200' \
+        && ok "the token request was retried with the server nonce" || ko "no nonce retry at the token endpoint ($GATE)"
+    printf '%s' "$GATE" | grep -q 'passed GET .*/userinfo with the nonce -> 200' \
+        && ok "and so was the userinfo call" || ko "no nonce retry at userinfo ($GATE)"
+    check "and userinfo was not lost on the way" "$UI_BEFORE" "$UI_AFTER"
     asjson '{"sso_dpop":""}'
-    check "without DPoP the token request is refused" 400 "$(login "$W/jar-dpop2")"
+    check "without DPoP the login is refused" 000 "$(login "$W/jar-dpop2")"
+    printf '%s' '{"policies":[]}' | kcadm update client-policies/policies -r opnsense -f - >/dev/null 2>&1
     kcadm update "clients/$KCID" -r opnsense -s 'attributes."dpop.bound.access.tokens"=false' >/dev/null 2>&1
 fi
 

@@ -13,8 +13,19 @@ authentik.test:9443 {
 
 keycloak.test:9443 {
 	tls /certs/keycloak.test.crt /certs/keycloak.test.key
-	reverse_proxy keycloak:8080 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Port 9443
+	# Token and userinfo go through the DPoP nonce gate (dpop_nonce.py), which hands
+	# requests without DPoP straight on to Keycloak.
+	@dpop path_regexp ^/realms/[^/]+/protocol/openid-connect/(token|userinfo)$
+	handle @dpop {
+		reverse_proxy dpop-nonce:8000 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Port 9443
+		}
+	}
+	handle {
+		reverse_proxy keycloak:8080 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Port 9443
+		}
 	}
 }

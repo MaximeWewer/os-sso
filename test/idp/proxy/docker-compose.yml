@@ -19,3 +19,13 @@ services:
       - ../certs:/certs:ro
     ports:
       - "0.0.0.0:9443:9443"
+
+  # Lab only: asks for a DPoP nonce at Keycloak's token and userinfo endpoints, which
+  # Keycloak itself never does there (see dpop_nonce.py and the Caddyfile route).
+  dpop-nonce:
+    image: docker.io/library/python:3-alpine
+    container_name: idp-dpop-nonce
+    restart: unless-stopped
+    command: ["python", "-u", "/srv/dpop_nonce.py"]
+    volumes:
+      - ./dpop_nonce.py:/srv/dpop_nonce.py:ro
