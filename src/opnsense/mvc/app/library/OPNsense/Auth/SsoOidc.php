@@ -39,6 +39,7 @@ class SsoOidc extends Local implements IAuthConnector
     public $ssoGraphOverage = false;
     public $ssoExtraParams = null;
     public $ssoClaimsRequest = null;
+    public $ssoSignedRequest = false;
     public $ssoSessionLifetime = 0;
     public $ssoScimEnabled = false;
     public $ssoScimToken = null;
@@ -96,6 +97,7 @@ class SsoOidc extends Local implements IAuthConnector
         $this->ssoUsePkce = !empty($config['sso_use_pkce']);
         $this->ssoFormPost = !empty($config['sso_form_post']);
         $this->ssoUsePar = !empty($config['sso_use_par']);
+        $this->ssoSignedRequest = !empty($config['sso_signed_request']);
         $this->ssoGraphOverage = !empty($config['sso_graph_overage']);
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
             $this->ssoMaxAge = (int)$config['sso_max_age'];
@@ -182,6 +184,14 @@ class SsoOidc extends Local implements IAuthConnector
                     . 'challenge, and none of them can be altered on the way. Needs an IdP that publishes a '
                     . 'pushed_authorization_request_endpoint; it is used automatically, whatever this box '
                     . 'says, when the IdP declares it requires PAR.'),
+                'type' => 'checkbox',
+            ],
+            'sso_signed_request' => [
+                'name' => gettext('Signed request object (JAR)'),
+                'help' => gettext('Send the authorization request as a JWT signed with the client private key '
+                    . 'below (RFC 9101), so the IdP knows it is untouched and comes from this client. Uses the '
+                    . 'same key and algorithm as private_key_jwt: register its certificate at the IdP, or point '
+                    . 'the IdP at the client JWKS URL from the diagnostics page. Combines with PAR.'),
                 'type' => 'checkbox',
             ],
             'sso_required_acr' => [

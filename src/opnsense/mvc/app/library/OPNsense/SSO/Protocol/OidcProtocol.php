@@ -68,6 +68,8 @@ final class OidcProtocol implements ProtocolInterface
     private bool $graphOverage;
     /** push the authorization request to the IdP instead of sending it through the browser */
     private bool $usePar;
+    /** send the authorization request as a signed request object (JAR, RFC 9101) */
+    private bool $signedRequest;
 
     /** @var array<string,mixed>|null cached discovery document */
     private ?array $discovery = null;
@@ -107,6 +109,7 @@ final class OidcProtocol implements ProtocolInterface
             ?? throw new \RuntimeException('OIDC: the requested claims are not a valid claims request'));
         $this->graphOverage = (bool)($cfg['graph_overage'] ?? false);
         $this->usePar = (bool)($cfg['use_par'] ?? false);
+        $this->signedRequest = (bool)($cfg['signed_request'] ?? false);
         $this->clientAuth = new ClientAuth([
             'client_id' => $this->clientId,
             'client_secret' => $this->clientSecret,
@@ -183,6 +186,9 @@ final class OidcProtocol implements ProtocolInterface
         // Operator extras (prompt, login_hint, ui_locales...). parseExtra
         // already dropped anything that would overwrite a parameter we depend on.
         $params += $this->extraParams;
+        if ($this->signedRequest) {
+            $params = $this->requestObject($disco, $params);
+        }
 
         if ($this->usePar($disco)) {
             return $disco['authorization_endpoint'] . '?' . http_build_query([
@@ -191,6 +197,40 @@ final class OidcProtocol implements ProtocolInterface
             ]);
         }
         return $disco['authorization_endpoint'] . '?' . http_build_query($params);
+    }
+
+    /**
+     * Wrap the authorization request in a signed request object (JAR, RFC 9101).
+     *
+     * Every parameter -- redirect_uri, scope, state, nonce, PKCE challenge, acr_values --
+     * travels inside a JWT signed with the client key, so nothing between the firewall and
+     * the IdP can alter it, and the IdP knows it was this client that asked. PAR already
+     * keeps the request off the browser; JAR proves its origin as well, and the two
+     * combine (the request object is what gets pushed).
+     *
+     * client_id, response_type and scope are repeated in the clear: RFC 9101 needs only
+     * client_id, but OIDC Core 6.1 has the IdP check the other two against the object.
+     *
+     * @param array<string,string> $params
+     * @return array<string,string>
+     */
+    private function requestObject(array $disco, array $params): array
+    {
+        $now = time();
+        $object = $params + [
+            'iss' => $this->clientId,
+            'aud' => (string)$disco['issuer'],
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + 300,
+            'jti' => $this->randomToken(16),
+        ];
+        return [
+            'client_id' => $this->clientId,
+            'response_type' => $params['response_type'],
+            'scope' => $params['scope'],
+            'request' => $this->clientAuth->signAsClient($object, ['typ' => 'oauth-authz-req+jwt']),
+        ];
     }
 
     /**

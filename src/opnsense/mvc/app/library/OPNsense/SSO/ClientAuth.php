@@ -299,6 +299,37 @@ final class ClientAuth
     }
 
     /**
+     * Sign a JWT with the client key, as this client (a JAR request object).
+     *
+     * The same key and algorithm as private_key_jwt, so one registration at the IdP (a
+     * certificate, or our /api/sso/oidc/jwks) covers both. Asymmetric only: a request
+     * object signed with the client secret proves nothing the IdP could not forge.
+     *
+     * @param array<string,mixed> $claims
+     * @param array<string,string> $header extra header members (typ)
+     */
+    public function signAsClient(array $claims, array $header = []): string
+    {
+        if ($this->privateKey === '') {
+            throw new \RuntimeException('OIDC: a signed request object needs a client private key');
+        }
+        if (!in_array($this->assertionAlg, self::ASYMMETRIC_ALGS, true)) {
+            throw new \RuntimeException(sprintf(
+                'OIDC: %s is not an asymmetric signing algorithm (a signed request object accepts %s)',
+                $this->assertionAlg,
+                implode(', ', self::ASYMMETRIC_ALGS)
+            ));
+        }
+        return JWT::encode(
+            $claims,
+            $this->privateKey,
+            $this->assertionAlg,
+            $this->privateKeyId !== '' ? $this->privateKeyId : null,
+            $header
+        );
+    }
+
+    /**
      * The public half of the private_key_jwt key, as a JWKS document.
      *
      * Registering a public key by hand means getting it out of the box somehow; served

@@ -58,6 +58,12 @@ endpoint is used automatically.
 - **Pushed authorization requests** (PAR, RFC 9126) - the request goes over the back
   channel and the browser only carries an opaque reference. Used automatically when the
   IdP declares it requires them.
+- **Signed request object** (JAR, RFC 9101) - the whole authorization request travels
+  as a JWT signed with the client private key (the one private_key_jwt uses), so the IdP
+  knows it is untouched and comes from this client. Combines with PAR, which then pushes
+  the signed object. Register the key at the IdP through the client JWKS URL from the
+  diagnostics page; if you upload the certificate instead, leave **Key ID** empty (or
+  set it to the id the IdP shows for it), since the IdP names an uploaded key itself.
 - **Extra authorization parameters** - for things like `prompt=login`.
 - **Requested claims** - the OIDC `claims` request parameter, as JSON, for an individual
   claim the IdP does not send by default and no scope covers:
@@ -83,8 +89,7 @@ token or a signed userinfo response declaring another kind (`logout+jwt`, `at+jw
 `dpop+jwt`, `secevent+jwt`) is refused, and a back-channel logout token may declare only
 `logout+jwt` or the generic `JWT`. A token without `typ` is accepted, as most IdPs send.
 
-**Deliberately absent.** A **request object** (JAR) adds little once PAR keeps the request
-off the browser entirely; **refresh tokens** would be an offline credential for calls
+**Deliberately absent.** **Refresh tokens** would be an offline credential for calls
 os-sso never makes; **DPoP** binds access tokens the firewall does not keep; and an
 **encrypted ID token or userinfo response** (JWE) is a decryption key to hold for
 something that already travels inside TLS to a back-channel endpoint.

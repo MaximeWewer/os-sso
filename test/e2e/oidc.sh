@@ -58,6 +58,8 @@ login() {
         --protocol oidc --idp "$IDP" --user "$IDP_USER" --password "$IDP_PASS" \
         --jar "$1" "${@:2}" | tail -1
 }
+# Set provider fields from a JSON object (JSON and PEM values survive the nested quoting).
+asjson() { vm "php /home/vagrant/os-sso/test/vagrant/set_authserver_json.php $PROVIDER b64:$(printf '%s' "$1" | base64 | tr -d '\n')" >/dev/null; }
 
 echo "=== os-sso OIDC end-to-end ($GUI, idp=$IDP, provider=$PROVIDER) ==="
 
@@ -288,13 +290,43 @@ check "no logout_token refused" 400 \
 # passes only if the claims request reached the IdP and its answer came back.
 if [ "$IDP" = "keycloak" ]; then
     echo ">>> case 2b: requested claims (claims parameter)"
-    asjson() { vm "php /home/vagrant/os-sso/test/vagrant/set_authserver_json.php $PROVIDER b64:$(printf '%s' "$1" | base64 | tr -d '\n')" >/dev/null; }
     asjson '{"sso_groups_claim":"fw_role","sso_required_groups":"fw-claims-ok","sso_claims_request":"{\"id_token\":{\"fw_role\":{\"essential\":true,\"value\":\"fw-claims-ok\"}}}"}'
     vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
     check "the requested claim satisfies the group gate" 302 "$(login "$W/jar-claims1")"
     asjson '{"sso_claims_request":""}'
     check "without the claims request it is not there" 400 "$(login "$W/jar-claims2")"
     asjson '{"sso_groups_claim":"groups","sso_required_groups":""}'
+fi
+
+# --- 2c. signed request object (JAR, RFC 9101) -----------------------------------
+# Keycloak is told to require a signed request object and given our certificate; the
+# login then passes only with JAR on, and a certificate Keycloak does not hold fails it.
+# Registered by certificate, Keycloak names the key itself, hence no Key ID here.
+if [ "$IDP" = "keycloak" ] && command -v docker >/dev/null; then
+    echo ">>> case 2c: signed request object (JAR)"
+    kcadm() { docker exec keycloak /opt/keycloak/bin/kcadm.sh "$@"; }
+    kcadm config credentials --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1
+    KCID=$(kcadm get clients -r opnsense -q clientId=opnsense-oidc --fields id --format csv --noquotes 2>/dev/null | tr -d '\r')
+    openssl req -x509 -newkey rsa:2048 -nodes -keyout "$W/jar.key" -out "$W/jar.crt" -days 1 -subj /CN=jar 2>/dev/null
+    openssl req -x509 -newkey rsa:2048 -nodes -keyout "$W/other.key" -out "$W/other.crt" -days 1 -subj /CN=other 2>/dev/null
+    kccert() { kcadm update "clients/$KCID" -r opnsense -s "attributes.\"jwt.credential.certificate\"=$(openssl x509 -in "$1" -outform DER | base64 -w0)" >/dev/null 2>&1; }
+    kcadm update "clients/$KCID" -r opnsense -s 'attributes."use.jwks.url"=false' \
+        -s 'attributes."request.object.signature.alg"=RS256' \
+        -s 'attributes."request.object.required"=request or request_uri' >/dev/null 2>&1
+    kccert "$W/jar.crt"
+    asjson "$(python3 -c 'import json,sys;print(json.dumps({"sso_private_key":open(sys.argv[1]).read(),"sso_signed_request":"1"}))' "$W/jar.key")"
+    vm "rm -f /var/db/os-sso/ratelimit/*.json" >/dev/null
+    check "a signed request object is accepted where the IdP requires one" 302 "$(login "$W/jar-jar1")"
+    asjson '{"sso_use_par":"1"}'
+    check "and pushed by PAR" 302 "$(login "$W/jar-jar2")"
+    asjson '{"sso_use_par":""}'
+    kccert "$W/other.crt"
+    check "a request object signed with a key the IdP does not hold fails" 000 "$(login "$W/jar-jar3")"
+    asjson '{"sso_signed_request":""}'
+    kccert "$W/jar.crt"
+    check "an unsigned request fails where the IdP requires one" 000 "$(login "$W/jar-jar4")"
+    kcadm update "clients/$KCID" -r opnsense -s 'attributes."request.object.required"=not required' >/dev/null 2>&1
+    asjson '{"sso_private_key":""}'
 fi
 
 # --- 10b. front-channel logout --------------------------------------------------
