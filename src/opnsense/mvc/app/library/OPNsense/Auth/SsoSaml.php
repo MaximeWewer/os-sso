@@ -31,6 +31,7 @@ class SsoSaml extends Local implements IAuthConnector
     public $ssoAllowSha1 = false;
     public $ssoAuthnPostBinding = false;
     public $ssoAuthnRequestsSigned = false;
+    public $ssoSignMetadata = false;
     public $ssoForceAuthn = false;
     public $ssoRequiredAcr = [];
     public $ssoMaxAge = 0;
@@ -106,6 +107,7 @@ class SsoSaml extends Local implements IAuthConnector
         $this->ssoAllowSha1 = !empty($config['sso_allow_sha1']);
         $this->ssoAuthnPostBinding = !empty($config['sso_authn_post_binding']);
         $this->ssoAuthnRequestsSigned = !empty($config['sso_authn_requests_signed']);
+        $this->ssoSignMetadata = !empty($config['sso_sign_metadata']);
         $this->ssoForceAuthn = !empty($config['sso_force_authn']);
         $this->ssoRequiredAcr = array_filter(array_map('trim', explode(',', $config['sso_required_acr'] ?? '')));
         if (isset($config['sso_max_age']) && $config['sso_max_age'] !== '') {
@@ -266,6 +268,14 @@ class SsoSaml extends Local implements IAuthConnector
                     . 'Needs the SP certificate and private key below. Required by some IdPs (ADFS in a '
                     . 'strict configuration, Keycloak with "Client signature required"); harmless '
                     . 'otherwise, since the IdP learns our signing certificate from the same metadata.'),
+                'type' => 'checkbox',
+            ],
+            'sso_sign_metadata' => [
+                'name' => gettext('Sign the SP metadata'),
+                'help' => gettext('Sign the metadata document this firewall publishes, with the SP '
+                    . 'certificate and private key below. Required by federations that only load '
+                    . 'signed metadata (Shibboleth, eduGAIN); an IdP fed the metadata by hand does not '
+                    . 'need it.'),
                 'type' => 'checkbox',
             ],
             'sso_authn_post_binding' => [

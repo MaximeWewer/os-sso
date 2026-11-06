@@ -899,6 +899,15 @@ final class SamlProtocol implements ProtocolInterface
             );
         }
 
+        // A signed metadata document (federations load nothing else) is signed with the
+        // same SP pair, so it needs both halves too.
+        $signMetadata = !empty($this->cfg["sign_metadata"]);
+        if ($signMetadata && (empty($this->cfg["sp_key"]) || empty($this->cfg["sp_cert"]))) {
+            throw new \RuntimeException(
+                "SAML: signing the SP metadata requires an SP certificate and private key"
+            );
+        }
+
         $requiredAcr = array_values(array_filter(array_map('strval', (array) ($this->cfg["required_acr"] ?? []))));
 
         $security = [
@@ -917,6 +926,10 @@ final class SamlProtocol implements ProtocolInterface
             "requestedAuthnContextComparison" => "exact",
             "signatureAlgorithm" =>
                 "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+            // php-saml digests with SHA-1 unless told otherwise, for the metadata signature
+            // and the HTTP-POST AuthnRequest alike.
+            "digestAlgorithm" => "http://www.w3.org/2001/04/xmlenc#sha256",
+            "signMetadata" => $signMetadata,
             "rejectUnsolicitedResponsesWithInResponseTo" => true,
             "allowRepeatAttributeName" => true,
         ];

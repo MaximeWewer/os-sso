@@ -53,6 +53,8 @@ when your IdP emits OID-style names (`urn:oid:0.9.2342.19200300.100.1.1`).
 - **Sign the AuthnRequest** (needs the SP certificate + key) - required by ADFS in a strict
   configuration and by Keycloak with *Client signature required*; it also makes the SP
   metadata declare `AuthnRequestsSigned`.
+- **Sign the SP metadata** (needs the SP certificate + key) - for federations that only
+  load signed metadata (Shibboleth, eduGAIN). Signed with SHA-256, digest included.
 - **HTTP-POST binding** for the AuthnRequest, when the IdP will not take a redirect.
 - **Encrypted assertions** (needs the SP certificate + key).
 - **IdP-initiated login** - an unsolicited assertion proves nothing about who asked to log

@@ -533,6 +533,7 @@ class SamlController extends ApiControllerBase
             'allow_sha1' => (bool)$auth->ssoAllowSha1,
             'authn_post_binding' => (bool)$auth->ssoAuthnPostBinding,
             'authn_requests_signed' => (bool)$auth->ssoAuthnRequestsSigned,
+            'sign_metadata' => (bool)$auth->ssoSignMetadata,
             'force_authn' => (bool)$auth->ssoForceAuthn,
             'max_age' => (int)$auth->ssoMaxAge,
             'required_acr' => (array)$auth->ssoRequiredAcr,
