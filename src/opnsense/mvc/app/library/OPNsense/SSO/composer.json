@@ -5,7 +5,7 @@
   "require": {
     "php": ">=8.3",
     "firebase/php-jwt": "^7.2",
-    "onelogin/php-saml": "^4.4"
+    "onelogin/php-saml": "^4.5"
   },
   "config": {
     "vendor-dir": "vendor",
