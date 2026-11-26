@@ -392,6 +392,15 @@ final class ScimUsers
 
     private function assertMayTouch(\SimpleXMLElement $node): void
     {
+        if ($this->accounts->sharesUid($node)) {
+            // Shared uid, shared groups and records: writing to one writes to both
+            // (GHSA-wvvw-f723-h7ph). An administrator has to separate them first.
+            throw new ScimError(409, sprintf(
+                "'%s' shares uid %s with another local account; it is not managed until that is resolved",
+                (string)$node->name,
+                (string)$node->uid
+            ));
+        }
         if ($this->accounts->isPrivileged($node)) {
             throw new ScimError(403, sprintf(
                 "refusing to modify privileged account '%s' over SCIM",

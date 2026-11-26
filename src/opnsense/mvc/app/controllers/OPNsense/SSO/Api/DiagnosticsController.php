@@ -12,6 +12,7 @@ use OPNsense\Base\ApiControllerBase;
 use OPNsense\Core\Config;
 use OPNsense\SSO\SamlMetadata;
 use OPNsense\SSO\SessionRegistry;
+use OPNsense\SSO\LocalAccountWriter;
 use OPNsense\SSO\SiteUrl;
 use OPNsense\SSO\StateDir;
 use OPNsense\SSO\Protocol\OidcProtocol;
@@ -58,7 +59,13 @@ class DiagnosticsController extends ApiControllerBase
             ];
             $out[] = $row;
         }
-        return ['providers' => $out];
+        // Accounts sharing a uid share their groups and os-sso's records; logins and SCIM
+        // refuse them until an operator separates them (GHSA-wvvw-f723-h7ph).
+        $shared = [];
+        foreach ((new LocalAccountWriter())->sharedUids() as $uid => $names) {
+            $shared[] = ['uid' => (string)$uid, 'accounts' => $names];
+        }
+        return ['providers' => $out, 'shared_uids' => $shared];
     }
 
     /**

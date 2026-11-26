@@ -100,6 +100,16 @@ final class IdentityMapper
         }
 
         if ($node !== null) {
+            if ($this->accounts->sharesUid($node)) {
+                // Two accounts on one uid share their groups and os-sso's records: logging
+                // in would hand this user the other account's rights (GHSA-wvvw-f723-h7ph).
+                throw new \RuntimeException(sprintf(
+                    "SSO: account '%s' shares uid %s with another local account; refusing the login "
+                    . 'until an administrator gives one of them a uid of its own (see SSO Diagnostics)',
+                    (string)$node->name,
+                    (string)$node->uid
+                ));
+            }
             // The caller's required-groups gate has already passed, so if os-sso disabled
             // this account on an earlier refusal, the IdP has just said otherwise. Undo it
             // before the usability check below, which would otherwise refuse the very

@@ -44,6 +44,17 @@ account a directory pre-provisioned and nobody has logged into yet is already sp
 It governs only a first-time match by username or verified email; the durable subject
 stamp resolves either way.
 
+A new account gets a uid nothing has pointed at: above every account, every group member
+and every os-sso record. Releases up to 2026.11.1 took it from `system/nextuid`, a counter
+OPNsense 26.x no longer keeps, and could hand out the uid of an existing local account
+([GHSA-wvvw-f723-h7ph](https://github.com/MaximeWewer/os-sso/security/advisories/GHSA-wvvw-f723-h7ph)).
+Two accounts on one uid share their group memberships, `admins` included, so os-sso
+refuses them - SSO login, SCIM, deprovisioning - and lists them in **SSO Diagnostics**
+(and the system log on upgrade). To separate them, note the groups each one should
+have, delete the account that should not hold that uid - usually the one os-sso created -
+and check the remaining account's groups again, since a delete can drop its uid from
+them. The next login or SCIM push recreates the deleted account with a uid of its own.
+
 ## Groups
 
 An OPNsense group carrying **any ACL privilege** only ever gains members through an

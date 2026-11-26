@@ -49,14 +49,65 @@ final class LocalAccountWriter
         return null;
     }
 
+    /**
+     * The account with this uid -- or null when there is none, or when several accounts
+     * share it (see sharesUid()): there is then no telling which one is meant.
+     */
     public function findByUid(string $uid): ?\SimpleXMLElement
     {
+        $found = null;
         foreach ($this->users() as $user) {
             if ($uid !== '' && (string)($user->uid ?? '') === $uid) {
-                return $user;
+                if ($found !== null) {
+                    return null;
+                }
+                $found = $user;
             }
         }
-        return null;
+        return $found;
+    }
+
+    /**
+     * Does another account carry this account's uid?
+     *
+     * It must not happen, but did (GHSA-wvvw-f723-h7ph): os-sso once took uids from
+     * system/nextuid, a counter OPNsense 26.x no longer keeps, and so could hand out the
+     * uid of an existing local account. Two accounts on one uid share everything keyed
+     * by it -- group membership in core, and os-sso's own records (AccountStamps): the
+     * ownership marker and the IdP bindings. An IdP login could then land on the other
+     * account, and SCIM manage it. Every path that resolves an account treats such a
+     * pair as unusable until an operator separates them.
+     */
+    public function sharesUid(\SimpleXMLElement $node): bool
+    {
+        $uid = (string)($node->uid ?? '');
+        if ($uid === '') {
+            return false;
+        }
+        $count = 0;
+        foreach ($this->users() as $user) {
+            if ((string)($user->uid ?? '') === $uid) {
+                $count++;
+            }
+        }
+        return $count > 1;
+    }
+
+    /**
+     * The uids carried by more than one account, each with those accounts' names.
+     *
+     * @return array<string,string[]> uid => account names
+     */
+    public function sharedUids(): array
+    {
+        $byUid = [];
+        foreach ($this->users() as $user) {
+            $uid = (string)($user->uid ?? '');
+            if ($uid !== '') {
+                $byUid[$uid][] = (string)$user->name;
+            }
+        }
+        return array_filter($byUid, fn($names) => count($names) > 1);
     }
 
     public function findByEmail(string $email): ?\SimpleXMLElement
@@ -129,7 +180,9 @@ final class LocalAccountWriter
         }
         foreach ($this->users() as $user) {
             foreach ($this->subjectBindings($user) as $binding) {
-                if (hash_equals($binding, $subjectKey)) {
+                // A shared uid shares the binding too (it is kept per uid): it proves
+                // nothing about which of the accounts is the IdP user's.
+                if (hash_equals($binding, $subjectKey) && !$this->sharesUid($user)) {
                     return $user;
                 }
             }
@@ -172,7 +225,7 @@ final class LocalAccountWriter
         }
         foreach ($this->users() as $user) {
             $stamp = $this->stamp($user, $field);
-            if ($stamp !== '' && hash_equals($stamp, $value)) {
+            if ($stamp !== '' && hash_equals($stamp, $value) && !$this->sharesUid($user)) {
                 return $user;
             }
         }
@@ -224,6 +277,11 @@ final class LocalAccountWriter
      */
     public function isSsoManaged(\SimpleXMLElement $node): bool
     {
+        // Records are kept per uid: on a shared one they describe both accounts, so
+        // they cannot say this one is ours.
+        if ($this->sharesUid($node)) {
+            return false;
+        }
         return AccountStamps::value($node, self::OWNED_FIELD) === '1'
             || AccountStamps::value($node, 'sso_subject') !== ''
             || AccountStamps::value($node, 'scim_ref') !== ''
@@ -380,9 +438,35 @@ final class LocalAccountWriter
         }
     }
 
+    /**
+     * A uid nothing has ever pointed at: above every account, every group member and
+     * every os-sso record, and above system/nextuid where an older OPNsense keeps it.
+     *
+     * Never the lowest free one, as core's UidField picks: a uid that no account carries
+     * may still be listed in a group's <member> or own an os-sso record, left behind by
+     * a deleted account, and the new account would inherit both (GHSA-wvvw-f723-h7ph).
+     * Counting from system/nextuid alone handed out uids already in use wherever that
+     * counter is missing, which is everywhere on OPNsense 26.x.
+     */
     private function nextUid(\SimpleXMLElement $cnf): int
     {
-        $next = (int)($cnf->system->nextuid ?? 2000);
+        $next = max(2000, (int)($cnf->system->nextuid ?? 0));
+        foreach ($cnf->system->user ?? [] as $user) {
+            $next = max($next, (int)$user->uid + 1);
+        }
+        foreach ($cnf->system->group ?? [] as $group) {
+            foreach (GroupMembers::uids($group) as $uid) {
+                $next = max($next, (int)$uid + 1);
+            }
+        }
+        foreach ($cnf->OPNsense->SSO->accounts->account ?? [] as $record) {
+            $next = max($next, (int)$record['uid'] + 1);
+        }
+        if ($next > 65533) {
+            // FreeBSD reserves 65534 (nobody) and 65535; core's own range ends there.
+            throw new \RuntimeException('SSO: no unused uid left below 65534 for a new account');
+        }
+        // Kept for an OPNsense that still reads it, so it never hands this uid out.
         $cnf->system->nextuid = (string)($next + 1);
         return $next;
     }

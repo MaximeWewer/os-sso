@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: os-sso\n"
 "Report-Msgid-Bugs-To: https://github.com/MaximeWewer/os-sso/issues\n"
-"POT-Creation-Date: 2026-11-06 13:03+0100\n"
+"POT-Creation-Date: 2026-11-26 15:54+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1257,131 +1257,143 @@ msgstr ""
 msgid "Base URL not set (derived from the request Host)"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:77
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:85
 msgid "No SSO authentication server is configured yet."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:88
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:96
 msgid "Test"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:106
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:114
 msgid "reachable"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:112
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:120
 msgid "Nothing is open."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:124
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:132
 msgid "idle timeout only"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:126
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:134
 msgid "End this session now."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:127
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:135
 msgid "End"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:151
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:159
 msgid "End this SSO session? The user will have to sign in again."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:160
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:168
 msgid ""
 "End every open SSO session, including your own if you signed in through SSO?"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:167
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:175
 msgid "Ended"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:167
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:175
 msgid "session(s)."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:168
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:179
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:176
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:187
 msgid "Failed."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:178
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:186
 msgid "Dropped"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:178
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:186
 msgid "cached file(s)."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:199
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:207
 msgid "Refresh"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:202
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:210
 msgid ""
 "Drop the cached discovery documents, JWKS, SAML metadata and icons so the "
 "next login refetches them."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:203
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:211
 msgid "Flush caches"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:208
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:217
+msgid "Local accounts share a uid."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:218
+msgid ""
+"Accounts on the same uid share their group memberships, so each holds the "
+"privileges of the other. SSO logins and SCIM refuse these accounts until "
+"each has a uid of its own: review their groups, then delete and recreate the "
+"account that should not have that uid."
+msgstr ""
+
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:222
 msgid "Providers"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:213
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:227
 msgid "Name"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:214
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:228
 msgid "Type"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:215
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:229
 msgid "URLs to register at the IdP, and policy"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:216
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:230
 msgid "Connectivity"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:224
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:238
 msgid "Open SSO access"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:226
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:240
 msgid "End every session os-sso opened."
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:227
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:241
 msgid "End all"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:235
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:249
 msgid "User"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:236
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:250
 msgid "Access"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:237
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:251
 msgid "Provider"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:238
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:252
 msgid "IdP subject"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:239
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:253
 msgid "Signed in"
 msgstr ""
 
-#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:240
+#: src/opnsense/mvc/app/views/OPNsense/SSO/diagnostics.volt:254
 msgid "Expires"
 msgstr ""
 

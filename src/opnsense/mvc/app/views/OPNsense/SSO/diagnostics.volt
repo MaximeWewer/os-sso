@@ -72,6 +72,14 @@
         }
 
         function renderProviders(data) {
+            var $shared = $('#shared-uids').hide().find('ul').empty();
+            (data.shared_uids || []).forEach(function (entry) {
+                $shared.append('<li>uid <code>' + escapeHtml(entry.uid) + '</code>: '
+                    + entry.accounts.map(escapeHtml).join(', ') + '</li>');
+            });
+            if (data.shared_uids && data.shared_uids.length > 0) {
+                $('#shared-uids').show();
+            }
             var $body = $('#providers-body').empty();
             if (!data.providers || data.providers.length === 0) {
                 $body.append('<tr><td colspan="4"><em>{{ lang._("No SSO authentication server is configured yet.") }}</em></td></tr>');
@@ -203,6 +211,12 @@
                 <i class="fa fa-trash"></i> {{ lang._('Flush caches') }}
             </button>
             <span id="flush-result" class="text-muted" style="margin-left: 1em;"></span>
+        </div>
+
+        <div id="shared-uids" class="alert alert-danger" style="margin: 0 1em 1em; display: none;">
+            <strong>{{ lang._('Local accounts share a uid.') }}</strong>
+            {{ lang._('Accounts on the same uid share their group memberships, so each holds the privileges of the other. SSO logins and SCIM refuse these accounts until each has a uid of its own: review their groups, then delete and recreate the account that should not have that uid.') }}
+            <ul style="margin: 0.5em 0 0;"></ul>
         </div>
 
         <h2 style="padding-left: 0.6em;">{{ lang._('Providers') }}</h2>
